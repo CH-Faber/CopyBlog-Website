@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
+import { HeaderSearch } from "./header-search"
 
 const navItems = [
   { name: "首页", href: "/" },
   { name: "时间线", href: "/timeline" },
-  { name: "搜索", href: "/search" },
   { name: "书架", href: "/bookshelf" },
   { name: "友链", href: "/friends" },
   { name: "关于", href: "/about" },
@@ -53,14 +53,17 @@ export function Header() {
               <span className="absolute -bottom-1 left-0 w-0 h-px bg-primary transition-all duration-300 group-hover:w-full" />
             </a>
           ))}
+          <HeaderSearch />
         </nav>
 
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 -mr-2"
-          aria-label="Toggle menu"
-        >
+        {/* Mobile: Search + Menu Button */}
+        <div className="flex items-center gap-2 md:hidden">
+          <HeaderSearch />
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2"
+            aria-label="Toggle menu"
+          >
           <div className="w-5 h-4 flex flex-col justify-between">
             <span
               className={cn(
@@ -79,6 +82,7 @@ export function Header() {
             />
           </div>
         </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
