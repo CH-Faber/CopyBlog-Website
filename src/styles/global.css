@@ -153,28 +153,24 @@ html {
 
 /* Markdown extensions */
 .admonition {
-  border-left: 4px solid var(--admonitions-color-note);
-  background: var(--secondary);
-  padding: 1rem 1.25rem;
-  border-radius: 0.75rem;
+  border-left: 3px solid var(--admonitions-color-note);
+  background: transparent;
+  padding: 0.75rem 1rem;
   margin: 1.25rem 0;
   color: var(--foreground);
 }
 
 .admonition .bdm-title {
   font-weight: 600;
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  display: inline;
 }
 
-.admonition .bdm-title::before {
-  content: "";
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 999px;
-  background: currentColor;
+.admonition .bdm-title::after {
+  content: "：";
+}
+
+.admonition > p:first-of-type {
+  display: inline;
 }
 
 .admonition.bdm-tip {
@@ -219,7 +215,6 @@ html {
 
 .admonition.bdm-disclaimer {
   border-left-color: var(--admonitions-color-important);
-  background: var(--card);
 }
 
 .disclaimer-container .admonition + .admonition {
