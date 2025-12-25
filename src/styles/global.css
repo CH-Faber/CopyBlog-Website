@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
 @import "katex/dist/katex.min.css";
+@import "./transition.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -7,6 +8,7 @@
 
 :root {
   /* Red & White Apple-inspired theme */
+  --content-delay: 150ms;
   --background: oklch(0.995 0 0);
   --foreground: oklch(0.15 0 0);
   --card: oklch(1 0 0);

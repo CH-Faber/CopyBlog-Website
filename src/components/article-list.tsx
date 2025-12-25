@@ -139,7 +139,7 @@ export function ArticleList({
     <section className="px-6 py-16 bg-muted/30">
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
-        <div className="mb-10">
+        <div className="mb-10 onload-animation" style={{ animationDelay: "50ms" }}>
           <span className="text-primary text-sm font-medium tracking-wide uppercase mb-2 block">{subtitle}</span>
           <h2 className="font-serif text-3xl sm:text-4xl font-medium text-foreground">{title}</h2>
         </div>
@@ -147,19 +147,28 @@ export function ArticleList({
         {/* Main layout: Sidebar + Articles */}
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
-          <Sidebar
-            categories={categories}
-            tags={tags}
-            activeCategory={activeCategory}
-            onCategoryChange={setActiveCategory}
-            activeTag={activeTag}
-            onTagChange={setActiveTag}
-          />
+          <div className="onload-animation" style={{ animationDelay: "100ms" }}>
+            <Sidebar
+              categories={categories}
+              tags={tags}
+              activeCategory={activeCategory}
+              onCategoryChange={setActiveCategory}
+              activeTag={activeTag}
+              onTagChange={setActiveTag}
+            />
+          </div>
 
           {/* Article list - Single column */}
           <div className="flex-1 space-y-4">
             {filteredArticles.length > 0 ? (
-              filteredArticles.map((article) => <ArticleCard key={article.slug} article={article} />)
+              filteredArticles.map((article, index) => (
+                <ArticleCard
+                  key={article.slug}
+                  article={article}
+                  className="onload-animation"
+                  style={{ animationDelay: `calc(var(--content-delay) + ${index * 50}ms)` }}
+                />
+              ))
             ) : (
               <div className="text-center py-12 text-muted-foreground">暂无符合条件的文章</div>
             )}

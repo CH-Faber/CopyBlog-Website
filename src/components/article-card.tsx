@@ -1,15 +1,25 @@
 "use client"
 
+import type { CSSProperties } from "react"
 import { Calendar, Folder, Hash, ChevronRight } from "lucide-react"
 import type { ArticleMeta } from "./article-list"
+import { cn } from "@/lib/utils"
 
-export function ArticleCard({ article }: { article: ArticleMeta }) {
+export function ArticleCard({
+  article,
+  className,
+  style,
+}: {
+  article: ArticleMeta
+  className?: string
+  style?: CSSProperties
+}) {
   const primaryTag = article.tags?.[0] ?? "未标签"
   const wordCount = article.wordCount ? `${article.wordCount} 字` : "——"
   const readTime = article.readTime ?? "——"
 
   return (
-    <a href={`/posts/${article.slug}`} className="group block">
+    <a href={`/posts/${article.slug}`} className={cn("group block", className)} style={style}>
       <article className="relative bg-card border border-border/50 rounded-xl p-5 transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5">
         {/* Pinned indicator */}
         {article.pinned && (

@@ -1,6 +1,7 @@
 import { defineConfig } from "astro/config"
 import react from "@astrojs/react"
 import sitemap from "@astrojs/sitemap"
+import swup from "@swup/astro"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import rehypeComponents from "rehype-components"
 import rehypeKatex from "rehype-katex"
@@ -27,7 +28,22 @@ export default defineConfig({
   alias: {
     "@": "./src",
   },
-  integrations: [react(), sitemap()],
+  integrations: [
+    react(),
+    swup({
+      theme: false,
+      animationClass: "transition-swup-",
+      containers: ["#swup-container"],
+      smoothScrolling: true,
+      cache: true,
+      preload: true,
+      accessibility: true,
+      updateHead: true,
+      updateBodyClass: false,
+      globalInstance: true,
+    }),
+    sitemap(),
+  ],
   markdown: {
     remarkPlugins: [
       remarkMath,
