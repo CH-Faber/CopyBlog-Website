@@ -27,6 +27,8 @@ export type ArticleMeta = {
   pinned?: boolean
 }
 
+type SidebarCategory = { id: string; name: string; count: number }
+
 type PaginationMeta = {
   currentPage: number
   totalPages: number
@@ -89,17 +91,21 @@ export function ArticleList({
   subtitle = "Latest Posts",
   showViewAll = true,
   pagination,
+  sidebarCategories,
+  sidebarTags,
 }: {
   articles: ArticleMeta[]
   title?: string
   subtitle?: string
   showViewAll?: boolean
   pagination?: PaginationMeta
+  sidebarCategories?: SidebarCategory[]
+  sidebarTags?: string[]
 }) {
   const [activeCategory, setActiveCategory] = useState("all")
   const [activeTag, setActiveTag] = useState<string | null>(null)
 
-  const categories = useMemo(() => {
+  const computedCategories = useMemo(() => {
     const counts = new Map<string, { id: string; name: string; count: number }>()
     articles.forEach((article) => {
       if (!counts.has(article.category)) {
@@ -113,10 +119,22 @@ export function ArticleList({
     ]
   }, [articles])
 
-  const tags = useMemo(() => {
+  const categories = useMemo(() => {
+    if (!sidebarCategories || sidebarCategories.length === 0) {
+      return computedCategories
+    }
+    const hasAll = sidebarCategories.some((category) => category.id === "all")
+    if (hasAll) return sidebarCategories
+    const total = sidebarCategories.reduce((sum, category) => sum + category.count, 0)
+    return [{ id: "all", name: "全部", count: total }, ...sidebarCategories]
+  }, [computedCategories, sidebarCategories])
+
+  const computedTags = useMemo(() => {
     const allTags = articles.flatMap((article) => article.tags || [])
     return Array.from(new Set(allTags)).sort((a, b) => a.localeCompare(b))
   }, [articles])
+
+  const tags = sidebarTags && sidebarTags.length > 0 ? sidebarTags : computedTags
 
   const filteredArticles = articles.filter((article) => {
     const categoryMatch = activeCategory === "all" || article.category === activeCategory

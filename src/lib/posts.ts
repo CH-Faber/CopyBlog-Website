@@ -2,6 +2,7 @@ import { getCollection, type CollectionEntry } from "astro:content"
 import readingTime from "reading-time"
 
 export type PostEntry = CollectionEntry<"posts">
+export type SidebarCategory = { id: string; name: string; count: number }
 
 const stripMarkdown = (input: string) => {
   return input
@@ -74,4 +75,25 @@ export const toPostMeta = (post: PostEntry) => {
     image: post.data.image || undefined,
     pinned: post.data.pinned ?? false,
   }
+}
+
+export const buildSidebarMeta = (articles: { category: string; categoryLabel: string; tags: string[] }[]) => {
+  const counts = new Map<string, SidebarCategory>()
+  articles.forEach((article) => {
+    if (!counts.has(article.category)) {
+      counts.set(article.category, { id: article.category, name: article.categoryLabel, count: 0 })
+    }
+    counts.get(article.category)!.count += 1
+  })
+
+  const categories = [
+    { id: "all", name: "全部", count: articles.length },
+    ...Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name)),
+  ]
+
+  const tags = Array.from(new Set(articles.flatMap((article) => article.tags || []))).sort((a, b) =>
+    a.localeCompare(b),
+  )
+
+  return { categories, tags }
 }

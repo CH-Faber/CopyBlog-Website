@@ -5,7 +5,7 @@ import { ArticleList } from "@/components/article-list"
 import { Footer } from "@/components/footer"
 import { Header } from "@/components/header"
 import { PAGE_SIZE } from "@/lib/constants"
-import { getSortedPosts, toPostMeta } from "@/lib/posts"
+import { buildSidebarMeta, getSortedPosts, toPostMeta } from "@/lib/posts"
 
 const description = "探索金融、社会与人工智能的交汇点"
 
@@ -20,6 +20,9 @@ const { page } = Astro.props
 const currentPage = page.currentPage
 const totalPages = page.lastPage
 const articles = page.data
+const allPosts = await getSortedPosts()
+const allArticles = allPosts.map((post) => toPostMeta(post))
+const sidebarMeta = buildSidebarMeta(allArticles)
 const title =
   currentPage > 1
     ? `思维边界 | Boundary of Thought · 第 ${currentPage} 页`
@@ -37,6 +40,8 @@ const title =
         subtitle="All Posts"
         showViewAll={false}
         pagination={{ currentPage, totalPages, basePath: "/" }}
+        sidebarCategories={sidebarMeta.categories}
+        sidebarTags={sidebarMeta.tags}
       />
     </main>
     <Footer />

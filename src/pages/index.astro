@@ -5,14 +5,15 @@ import { Footer } from "@/components/footer"
 import { Header } from "@/components/header"
 import { Hero } from "@/components/hero"
 import { PAGE_SIZE } from "@/lib/constants"
-import { getSortedPosts, toPostMeta } from "@/lib/posts"
+import { buildSidebarMeta, getSortedPosts, toPostMeta } from "@/lib/posts"
 
 const title = "思维边界 | Boundary of Thought"
 const description = "探索金融、社会与人工智能的交汇点"
 const posts = await getSortedPosts()
-const articles = posts.map((post) => toPostMeta(post))
-const totalPages = Math.max(1, Math.ceil(articles.length / PAGE_SIZE))
-const pageArticles = articles.slice(0, PAGE_SIZE)
+const allArticles = posts.map((post) => toPostMeta(post))
+const totalPages = Math.max(1, Math.ceil(allArticles.length / PAGE_SIZE))
+const pageArticles = allArticles.slice(0, PAGE_SIZE)
+const sidebarMeta = buildSidebarMeta(allArticles)
 ---
 
 <BaseLayout {title} {description}>
@@ -27,6 +28,8 @@ const pageArticles = articles.slice(0, PAGE_SIZE)
         subtitle="All Posts"
         showViewAll={false}
         pagination={{ currentPage: 1, totalPages, basePath: "/" }}
+        sidebarCategories={sidebarMeta.categories}
+        sidebarTags={sidebarMeta.tags}
       />
     </main>
     <Footer />
