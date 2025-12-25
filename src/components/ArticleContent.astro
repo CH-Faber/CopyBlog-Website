@@ -63,9 +63,6 @@ const categoryLabel = data.category?.toString().trim() || "未分类"
       <div class="flex items-center justify-between py-4 border-y border-border">
         <div class="flex items-center gap-4 text-sm text-muted-foreground">
           <span class="flex items-center gap-1.5">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2" />
-            </svg>
             {words ? `${words} 字` : "——"}
           </span>
           <span class="flex items-center gap-1.5">
@@ -74,18 +71,6 @@ const categoryLabel = data.category?.toString().trim() || "未分类"
             </svg>
             {minutes ? `${minutes} 分钟` : "——"}
           </span>
-        </div>
-        <div class="flex items-center gap-2">
-          <button class="h-8 w-8 text-muted-foreground hover:text-primary rounded-lg hover:bg-muted/60 transition-colors" aria-label="分享">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4m0 0L8 6m4-4v14" />
-            </svg>
-          </button>
-          <button class="h-8 w-8 text-muted-foreground hover:text-primary rounded-lg hover:bg-muted/60 transition-colors" aria-label="收藏">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a7 7 0 0 1 10 0l1 1 1-1a7 7 0 1 1 0 10l-7 7-7-7a7 7 0 0 1 0-10z" />
-            </svg>
-          </button>
         </div>
       </div>
     </header>

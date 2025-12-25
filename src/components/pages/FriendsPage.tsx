@@ -1,51 +1,53 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { ExternalLink, Heart } from "lucide-react"
+import { ExternalLink, Heart, CheckCircle2, Copy, Check, Mail } from "lucide-react"
+import { useState } from "react"
+import friendsData from "@/data/friends.json"
 
-const friends = [
-  {
-    name: "数字花园",
-    url: "https://example.com",
-    avatar: "/digital-garden-logo-minimal.jpg",
-    description: "一位专注于知识管理与个人成长的博主",
-    tags: ["知识管理", "效率工具"],
-  },
-  {
-    name: "代码与诗",
-    url: "https://example.com",
-    avatar: "/code-poetry-logo-minimal.jpg",
-    description: "技术与人文的交汇处，探索编程的艺术",
-    tags: ["编程", "人文"],
-  },
-  {
-    name: "量化随笔",
-    url: "https://example.com",
-    avatar: "/quantitative-finance-logo-minimal.jpg",
-    description: "从数据中寻找市场规律的量化交易者",
-    tags: ["量化投资", "数据分析"],
-  },
-  {
-    name: "AI 观察站",
-    url: "https://example.com",
-    avatar: "/ai-observatory-logo-minimal.jpg",
-    description: "追踪 AI 前沿动态，解读技术变革",
-    tags: ["人工智能", "深度学习"],
-  },
-  {
-    name: "社会学笔记",
-    url: "https://example.com",
-    avatar: "/sociology-notes-logo-minimal.jpg",
-    description: "用社会学视角观察日常生活的研究者",
-    tags: ["社会学", "文化研究"],
-  },
-  {
-    name: "无限游戏",
-    url: "https://example.com",
-    avatar: "/infinite-game-logo-minimal.jpg",
-    description: "关于人生策略与长期主义的思考",
-    tags: ["人生哲学", "长期主义"],
-  },
-]
+type FriendLink = {
+  title: string
+  imgurl?: string
+  desc?: string
+  siteurl: string
+}
+
+type FriendCategory = {
+  categoryTitle: string
+  categoryDesc?: string
+  links: FriendLink[]
+}
+
+const friends = friendsData as FriendCategory[]
+
+// 站点信息配置
+const siteInfo = {
+  name: "时歌的博客",
+  url: "https://www.lapis.cafe",
+  avatar: "https://www.lapis.cafe/images/avatar.webp",
+  desc: "理解以真实为本，但真实本身并不会自动呈现",
+  rss: "https://lapis.cafe/rss.xml",
+  email: "lapiscafe@foxmail.com"
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+      title="复制"
+    >
+      {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  )
+}
 
 export default function FriendsPage() {
   return (
@@ -63,79 +65,134 @@ export default function FriendsPage() {
           </section>
 
           {/* Friends Grid */}
-          <section className="mb-16">
-            <div className="grid gap-4 sm:grid-cols-2">
-              {friends.map((friend) => (
-                <a
-                  key={friend.name}
-                  href={friend.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group p-5 rounded-xl border border-border bg-card hover:border-primary/30 hover:shadow-lg transition-all duration-300"
-                >
-                  <div className="flex items-start gap-4">
-                    {/* Avatar */}
-                    <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-border">
-                      <img
-                        src={friend.avatar || "/placeholder.svg"}
-                        alt={friend.name}
-                        width={56}
-                        height={56}
-                        loading="lazy"
-                        className="object-cover w-full h-full"
-                      />
-                    </div>
+          <section className="mb-16 space-y-10">
+            {friends.map((category) => (
+              <div key={category.categoryTitle}>
+                <div className="mb-5">
+                  <h2 className="text-xl font-semibold text-foreground mb-1">{category.categoryTitle}</h2>
+                  {category.categoryDesc ? (
+                    <p className="text-sm text-muted-foreground">{category.categoryDesc}</p>
+                  ) : null}
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {category.links.map((friend) => (
+                    <a
+                      key={friend.siteurl}
+                      href={friend.siteurl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group p-5 rounded-xl border border-border bg-card hover:border-primary/30 hover:shadow-lg transition-all duration-300"
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Avatar */}
+                        <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-border">
+                          <img
+                            src={friend.imgurl || "/placeholder.svg"}
+                            alt={friend.title}
+                            width={56}
+                            height={56}
+                            loading="lazy"
+                            className="object-cover w-full h-full"
+                          />
+                        </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                          {friend.name}
-                        </h3>
-                        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                              {friend.title}
+                            </h3>
+                            <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {friend.desc?.trim() ? friend.desc : "暂无描述"}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{friend.description}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {friend.tags.map((tag) => (
-                          <span key={tag} className="px-2 py-0.5 text-xs rounded-md bg-secondary text-muted-foreground">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </a>
-              ))}
-            </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
           </section>
 
           {/* Apply Section */}
-          <section className="p-8 rounded-2xl border border-dashed border-border bg-secondary/30">
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 text-primary mb-4">
-                <Heart className="w-6 h-6" />
+          <section className="space-y-6">
+            {/* Section Header */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary">
+                <Heart className="w-5 h-5" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">申请友链</h2>
-              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                如果你也有一个持续更新的博客，欢迎互换友链。请确保你的博客内容原创、用心，并已添加本站链接。
-              </p>
-              <div className="inline-flex flex-col gap-3 text-left text-sm p-4 rounded-lg bg-background border border-border">
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground w-16">站点名称</span>
-                  <span className="text-foreground font-medium">思维边界</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground w-16">站点地址</span>
-                  <span className="text-foreground font-mono text-xs">https://example.com</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground w-16">站点描述</span>
-                  <span className="text-foreground">金融、社会与 AI 的跨学科思考</span>
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">申请友链</h2>
+                <p className="text-sm text-muted-foreground">如果你也有一个持续更新的博客，欢迎互换友链</p>
+              </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Requirements Card */}
+              <div className="p-6 rounded-xl border border-border bg-card">
+                <h3 className="text-sm font-medium text-foreground mb-4">申请标准</h3>
+                <ul className="space-y-3">
+                  {[
+                    "贵站有一定深度的原创内容输出（读书笔记、专业研究、技术钻研或深度思考类内容）",
+                    "建站时间至少半年以上，且已有十篇以上的原创博文",
+                    "非以商业化为主，广告、推广内容不过多干扰阅读",
+                    "申请者具备一定的基本教育背景（最好完成高中或同等教育）"
+                  ].map((item, index) => (
+                    <li key={index} className="flex items-start gap-3 text-sm text-muted-foreground">
+                      <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Site Info Card */}
+              <div className="p-6 rounded-xl border border-border bg-card">
+                <h3 className="text-sm font-medium text-foreground mb-4">本站信息</h3>
+                <div className="space-y-3">
+                  {[
+                    { label: "站点名称", value: siteInfo.name },
+                    { label: "站点地址", value: siteInfo.url, mono: true },
+                    { label: "站点头像", value: siteInfo.avatar, mono: true },
+                    { label: "站点描述", value: siteInfo.desc },
+                    { label: "RSS", value: siteInfo.rss, mono: true }
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center justify-between gap-4 group">
+                      <span className="text-sm text-muted-foreground shrink-0">{item.label}</span>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className={`text-sm text-foreground truncate ${item.mono ? "font-mono text-xs" : ""}`}>
+                          {item.value}
+                        </span>
+                        <CopyButton text={item.value} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground mt-6">
-                申请方式：发送邮件至 <span className="text-primary">hello@example.com</span>
-              </p>
+            </div>
+
+            {/* Contact Card */}
+            <div className="p-5 rounded-xl border border-primary/20 bg-primary/5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Mail className="w-5 h-5 text-primary mt-0.5" />
+                  <div>
+                    <p className="text-sm text-foreground font-medium">通过邮件申请</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      由于评论系统使用 giscus，建议通过邮件提交，避免打扰其他读者
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={`mailto:${siteInfo.email}`}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors shrink-0"
+                >
+                  <Mail className="w-4 h-4" />
+                  {siteInfo.email}
+                </a>
+              </div>
             </div>
           </section>
         </div>
