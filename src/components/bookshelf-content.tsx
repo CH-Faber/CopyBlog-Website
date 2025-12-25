@@ -3,123 +3,96 @@
 import { useState } from "react"
 import { Header } from "./header"
 import { Footer } from "./footer"
-import { BookOpen, Star, Calendar, Filter, Search, ExternalLink } from "lucide-react"
+import { BookOpen, Filter, Search, ExternalLink, ThumbsUp, Minus, ThumbsDown, Calendar } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import booksData from "../../public/data/books.json"
 
-// 临时静态数据，之后可替换为飞书云文档数据源
-const books = [
-  {
-    id: 1,
-    title: "思考，快与慢",
-    author: "丹尼尔·卡尼曼",
-    cover: "/thinking-fast-and-slow-book-cover-minimal.jpg",
-    rating: 5,
-    status: "已读",
-    category: "心理学",
-    finishedDate: "2025-03",
-    review: "系统1与系统2的双系统理论，深刻影响了我对决策的理解。",
-  },
-  {
-    id: 2,
-    title: "枪炮、病菌与钢铁",
-    author: "贾雷德·戴蒙德",
-    cover: "/guns-germs-and-steel-book-cover-minimal.jpg",
-    rating: 5,
-    status: "已读",
-    category: "社会学",
-    finishedDate: "2025-02",
-    review: "从地理决定论视角解读人类文明发展的不平等，视野宏大。",
-  },
-  {
-    id: 3,
-    title: "债务：第一个5000年",
-    author: "大卫·格雷伯",
-    cover: "/debt-the-first-5000-years-book-cover-minimal.jpg",
-    rating: 4,
-    status: "已读",
-    category: "金融",
-    finishedDate: "2025-01",
-    review: "颠覆了「物物交换-货币-信用」的传统叙事，人类学视角下的货币史。",
-  },
-  {
-    id: 4,
-    title: "规模",
-    author: "杰弗里·韦斯特",
-    cover: "/scale-geoffrey-west-book-cover-minimal.jpg",
-    rating: 5,
-    status: "已读",
-    category: "复杂系统",
-    finishedDate: "2024-12",
-    review: "用幂律揭示生物、城市、公司的统一规律，跨学科思维的典范。",
-  },
-  {
-    id: 5,
-    title: "注意力商人",
-    author: "吴修铭",
-    cover: "/attention-merchants-book-cover-minimal.jpg",
-    rating: 4,
-    status: "已读",
-    category: "社会学",
-    finishedDate: "2024-11",
-    review: "注意力如何成为商品，从报纸到社交媒体的注意力争夺史。",
-  },
-  {
-    id: 6,
-    title: "生成式人工智能",
-    author: "埃隆·费雷拉",
-    cover: "/generative-ai-book-cover-minimal.jpg",
-    rating: 4,
-    status: "在读",
-    category: "AI",
-    finishedDate: "",
-    review: "系统梳理生成式AI的技术原理与应用场景。",
-  },
-  {
-    id: 7,
-    title: "随机漫步的傻瓜",
-    author: "纳西姆·塔勒布",
-    cover: "/fooled-by-randomness-book-cover-minimal.jpg",
-    rating: 5,
-    status: "已读",
-    category: "金融",
-    finishedDate: "2024-10",
-    review: "运气与技能的区分，不确定性哲学的入门之作。",
-  },
-  {
-    id: 8,
-    title: "社会学的想象力",
-    author: "C·赖特·米尔斯",
-    cover: "/sociological-imagination-book-cover-minimal.jpg",
-    rating: 4,
-    status: "已读",
-    category: "社会学",
-    finishedDate: "2024-09",
-    review: "将个人困扰与公共议题联结，社会学思维的经典表述。",
-  },
-]
+// 飞书数据类型定义
+interface BookFields {
+  书名: string
+  作者?: string[]
+  书籍简介?: string
+  书评?: string
+  封面?: { local_path: string }[]
+  推荐状态?: "推荐" | "中庸" | "不行"
+  阅读进度?: string
+  完成阅读时期?: string
+  领域?: string
+}
 
-const categories = ["全部", "金融", "社会学", "心理学", "AI", "复杂系统"]
-const statuses = ["全部", "已读", "在读", "想读"]
+interface BookRecord {
+  fields: BookFields
+  id: string
+  record_id: string
+}
+
+// 过滤已读的书籍 (阅读进度 === "1")
+const allBooks = (booksData.data.items as BookRecord[]).filter(
+  (book) => book.fields.阅读进度 === "1"
+)
+
+// 按领域分组
+const booksByCategory = allBooks.reduce<Record<string, BookRecord[]>>((acc, book) => {
+  const category = book.fields.领域 || "未分类"
+  if (!acc[category]) acc[category] = []
+  acc[category].push(book)
+  return acc
+}, {})
+
+// 获取所有领域
+const categories = ["全部", ...Object.keys(booksByCategory)]
+const recommendStatuses = ["全部", "推荐", "中庸", "不行"]
 
 export function BookshelfContent() {
   const [selectedCategory, setSelectedCategory] = useState("全部")
   const [selectedStatus, setSelectedStatus] = useState("全部")
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedBook, setSelectedBook] = useState<BookRecord | null>(null)
 
-  const filteredBooks = books.filter((book) => {
-    const matchCategory = selectedCategory === "全部" || book.category === selectedCategory
-    const matchStatus = selectedStatus === "全部" || book.status === selectedStatus
+  // 过滤书籍
+  const filteredBooks = allBooks.filter((book) => {
+    const matchCategory = selectedCategory === "全部" || book.fields.领域 === selectedCategory
+    const matchStatus = selectedStatus === "全部" || book.fields.推荐状态 === selectedStatus
     const matchSearch =
-      book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      book.author.toLowerCase().includes(searchQuery.toLowerCase())
+      book.fields.书名.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (book.fields.作者?.join(", ") || "").toLowerCase().includes(searchQuery.toLowerCase())
     return matchCategory && matchStatus && matchSearch
   })
 
+  // 按领域分组过滤后的书籍
+  const filteredByCategory = filteredBooks.reduce<Record<string, BookRecord[]>>((acc, book) => {
+    const category = book.fields.领域 || "未分类"
+    if (!acc[category]) acc[category] = []
+    acc[category].push(book)
+    return acc
+  }, {})
+
+  // 统计数据
   const stats = {
-    total: books.length,
-    finished: books.filter((b) => b.status === "已读").length,
-    reading: books.filter((b) => b.status === "在读").length,
-    avgRating: (books.reduce((sum, b) => sum + b.rating, 0) / books.length).toFixed(1),
+    total: allBooks.length,
+    recommended: allBooks.filter((b) => b.fields.推荐状态 === "推荐").length,
+    categories: Object.keys(booksByCategory).length,
+  }
+
+  // 获取封面URL
+  const getCoverUrl = (book: BookRecord): string | null => {
+    const cover = book.fields.封面?.[0]
+    return cover?.local_path || null
+  }
+
+  // 获取推荐状态图标和样式
+  const getRecommendBadge = (status?: string) => {
+    switch (status) {
+      case "推荐":
+        return { icon: ThumbsUp, className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" }
+      case "中庸":
+        return { icon: Minus, className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" }
+      case "不行":
+        return { icon: ThumbsDown, className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" }
+      default:
+        return null
+    }
   }
 
   return (
@@ -139,145 +112,144 @@ export function BookshelfContent() {
             </p>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-            <div className="bg-muted/30 rounded-2xl p-6 border border-border/50">
-              <div className="flex items-center gap-3 mb-2">
-                <BookOpen className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">总计</span>
-              </div>
-              <p className="text-3xl font-bold text-foreground">{stats.total}</p>
-            </div>
-            <div className="bg-muted/30 rounded-2xl p-6 border border-border/50">
-              <div className="flex items-center gap-3 mb-2">
-                <Calendar className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">已读</span>
-              </div>
-              <p className="text-3xl font-bold text-foreground">{stats.finished}</p>
-            </div>
-            <div className="bg-muted/30 rounded-2xl p-6 border border-border/50">
-              <div className="flex items-center gap-3 mb-2">
-                <BookOpen className="w-5 h-5 text-amber-500" />
-                <span className="text-sm text-muted-foreground">在读</span>
-              </div>
-              <p className="text-3xl font-bold text-foreground">{stats.reading}</p>
-            </div>
-            <div className="bg-muted/30 rounded-2xl p-6 border border-border/50">
-              <div className="flex items-center gap-3 mb-2">
-                <Star className="w-5 h-5 text-primary" />
-                <span className="text-sm text-muted-foreground">平均评分</span>
-              </div>
-              <p className="text-3xl font-bold text-foreground">{stats.avgRating}</p>
-            </div>
+          {/* Stats Bar */}
+          <div className="flex items-center gap-6 text-sm text-muted-foreground mb-8">
+            <span className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4" />
+              <span className="font-medium text-foreground">{stats.total}</span> 本已读
+            </span>
+            <span className="flex items-center gap-2">
+              <ThumbsUp className="w-4 h-4 text-green-500" />
+              <span className="font-medium text-foreground">{stats.recommended}</span> 本推荐
+            </span>
+            <span className="flex items-center gap-2">
+              <Filter className="w-4 h-4" />
+              <span className="font-medium text-foreground">{stats.categories}</span> 个领域
+            </span>
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-4 mb-8">
+          {/* Search & Filters */}
+          <div className="space-y-4 mb-10">
             {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="搜索书名或作者..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border/50 rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+                className="w-full pl-10 pr-4 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
               />
             </div>
 
-            {/* Category Filter */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              {categories.map((category) => (
-                <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-sm transition-all duration-200",
-                    selectedCategory === category
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  {category}
-                </button>
-              ))}
+            {/* Filters Row */}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              {/* Category Filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground uppercase tracking-wide">领域</span>
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-md text-xs transition-all duration-200",
+                      selectedCategory === category
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                    )}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+
+              <div className="h-4 w-px bg-border hidden sm:block" />
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground uppercase tracking-wide">评价</span>
+                {recommendStatuses.map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setSelectedStatus(status)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-md text-xs transition-all duration-200",
+                      selectedStatus === status
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                    )}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Status Filter */}
-          <div className="flex gap-2 mb-12">
-            {statuses.map((status) => (
-              <button
-                key={status}
-                onClick={() => setSelectedStatus(status)}
-                className={cn(
-                  "px-4 py-2 rounded-lg text-sm border transition-all duration-200",
-                  selectedStatus === status
-                    ? "border-primary text-primary bg-primary/5"
-                    : "border-border/50 text-muted-foreground hover:border-border hover:text-foreground",
-                )}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-
-          {/* Book Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredBooks.map((book) => (
-              <div
-                key={book.id}
-                className="group bg-background border border-border/50 rounded-2xl overflow-hidden hover:border-border hover:shadow-lg transition-all duration-300"
-              >
-                {/* Cover */}
-                <div className="relative aspect-[3/4] bg-muted/30 overflow-hidden">
-                  <img
-                    src={book.cover || "/placeholder.svg"}
-                    alt={book.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  {/* Status Badge */}
-                  <div
-                    className={cn(
-                      "absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-medium",
-                      book.status === "已读" && "bg-primary/90 text-primary-foreground",
-                      book.status === "在读" && "bg-amber-500/90 text-white",
-                      book.status === "想读" && "bg-muted/90 text-foreground",
-                    )}
-                  >
-                    {book.status}
-                  </div>
+          {/* Book Grid by Category */}
+          <div className="space-y-12">
+            {Object.entries(filteredByCategory).map(([category, books]) => (
+              <div key={category}>
+                {/* Category Header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <h2 className="text-lg font-semibold text-foreground">{category}</h2>
+                  <span className="text-sm text-muted-foreground">({books.length})</span>
+                  <div className="flex-1 h-px bg-border/50" />
                 </div>
 
-                {/* Info */}
-                <div className="p-5">
-                  <h3 className="font-semibold text-foreground mb-1 line-clamp-1 group-hover:text-primary transition-colors">
-                    {book.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-3">{book.author}</p>
+                {/* Books Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+                  {books.map((book) => {
+                    const badge = getRecommendBadge(book.fields.推荐状态)
+                    const coverUrl = getCoverUrl(book)
+                    return (
+                      <div
+                        key={book.id}
+                        className="group cursor-pointer"
+                        onClick={() => setSelectedBook(book)}
+                      >
+                        {/* Cover */}
+                        <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3 bg-muted/30 shadow-sm group-hover:shadow-xl transition-shadow duration-300">
+                          {coverUrl ? (
+                            <img
+                              src={coverUrl}
+                              alt={book.fields.书名}
+                              loading="lazy"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center p-3 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5">
+                              <p className="font-semibold text-xs text-foreground text-center line-clamp-4">{book.fields.书名}</p>
+                            </div>
+                          )}
 
-                  {/* Rating */}
-                  <div className="flex items-center gap-1 mb-3">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={cn(
-                          "w-4 h-4",
-                          i < book.rating ? "fill-primary text-primary" : "text-muted-foreground/30",
+                          {/* Recommend Icon */}
+                          {badge && (
+                            <div className={cn("absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center", badge.className)}>
+                              <badge.icon className="w-3 h-3" />
+                            </div>
+                          )}
+
+                          {/* Hover Info Overlay */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
+                            {book.fields.书评 ? (
+                              <p className="text-white/90 text-xs line-clamp-4 leading-relaxed">{book.fields.书评}</p>
+                            ) : book.fields.书籍简介 ? (
+                              <p className="text-white/80 text-xs line-clamp-4 leading-relaxed">{book.fields.书籍简介}</p>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* Info */}
+                        <h3 className="font-medium text-sm text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">
+                          {book.fields.书名}
+                        </h3>
+                        {book.fields.作者 && (
+                          <p className="text-xs text-muted-foreground line-clamp-1">{book.fields.作者.join(", ")}</p>
                         )}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Review */}
-                  <p className="text-sm text-muted-foreground line-clamp-2">{book.review}</p>
-
-                  {/* Meta */}
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
-                    <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">{book.category}</span>
-                    {book.finishedDate && <span className="text-xs text-muted-foreground">{book.finishedDate}</span>}
-                  </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             ))}
@@ -312,6 +284,81 @@ export function BookshelfContent() {
       </main>
 
       <Footer />
+
+      {/* Book Detail Dialog */}
+      <Dialog open={!!selectedBook} onOpenChange={(open) => !open && setSelectedBook(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+          {selectedBook && (
+            <>
+              <div className="flex gap-5">
+                {/* Cover */}
+                <div className="shrink-0 w-32 aspect-[3/4] rounded-lg overflow-hidden bg-muted/30">
+                  {getCoverUrl(selectedBook) ? (
+                    <img
+                      src={getCoverUrl(selectedBook)!}
+                      alt={selectedBook.fields.书名}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center p-3 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5">
+                      <p className="font-semibold text-xs text-foreground text-center">{selectedBook.fields.书名}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Basic Info */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold text-foreground mb-2">{selectedBook.fields.书名}</h2>
+                  {selectedBook.fields.作者 && (
+                    <p className="text-sm text-muted-foreground mb-3">{selectedBook.fields.作者.join(", ")}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {selectedBook.fields.领域 && (
+                      <span className="px-2 py-1 text-xs rounded-md bg-muted text-muted-foreground">
+                        {selectedBook.fields.领域}
+                      </span>
+                    )}
+                    {selectedBook.fields.推荐状态 && (
+                      <span className={cn(
+                        "px-2 py-1 text-xs rounded-md",
+                        getRecommendBadge(selectedBook.fields.推荐状态)?.className
+                      )}>
+                        {selectedBook.fields.推荐状态}
+                      </span>
+                    )}
+                    {selectedBook.fields.完成阅读时期 && (
+                      <span className="px-2 py-1 text-xs rounded-md bg-muted text-muted-foreground flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {selectedBook.fields.完成阅读时期}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto space-y-4 mt-4 pr-2">
+                {selectedBook.fields.书评 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-foreground mb-2">我的书评</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {selectedBook.fields.书评}
+                    </p>
+                  </div>
+                )}
+                {selectedBook.fields.书籍简介 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-foreground mb-2">书籍简介</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {selectedBook.fields.书籍简介}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
