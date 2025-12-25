@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { name: "首页", href: "/" },
-  { name: "文章", href: "/posts" },
+  { name: "时间线", href: "/timeline" },
   { name: "搜索", href: "/search" },
   { name: "书架", href: "/bookshelf" },
   { name: "友链", href: "/friends" },

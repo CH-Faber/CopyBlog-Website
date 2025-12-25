@@ -1,21 +1,28 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro"
-import { ArticleList } from "@/components/article-list"
+import Timeline from "@/components/Timeline.astro"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { getSortedPosts, toPostMeta } from "@/lib/posts"
+import { getSortedPosts } from "@/lib/posts"
 
 const title = "文章归档 | 思维边界"
-const description = "全部文章列表"
+const description = "全部文章时间线"
 const posts = await getSortedPosts(true)
-const articles = posts.map((post) => toPostMeta(post))
+
+// 转换为时间线所需的简化数据
+const timelineItems = posts.map((post) => ({
+  slug: post.slug,
+  title: post.data.title,
+  date: post.data.published.toISOString().slice(0, 10),
+  pinned: post.data.pinned ?? false,
+}))
 ---
 
 <BaseLayout {title} {description}>
   <div class="min-h-screen bg-background">
     <Header client:load />
     <main class="pt-24">
-      <ArticleList client:load articles={articles} title="全部文章" subtitle="All Posts" showViewAll={false} />
+      <Timeline items={timelineItems} />
     </main>
     <Footer />
   </div>
