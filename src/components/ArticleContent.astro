@@ -1,0 +1,132 @@
+---
+import type { CollectionEntry } from 'astro:content'
+
+type ArticleEntry = CollectionEntry<'articles'>
+
+interface Props {
+  article: ArticleEntry
+  Content: any
+}
+
+const { article, Content } = Astro.props as Props
+const data = article.data
+const formattedDate = data.date.toISOString().slice(0, 10)
+---
+
+<main class="pt-24 pb-20">
+  <div class="max-w-3xl mx-auto px-6">
+    <a href="/" class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-8 group">
+      <svg class="w-4 h-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      返回首页
+    </a>
+
+    <header class="mb-12">
+      <h1 class="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-foreground leading-tight mb-6 flex items-start gap-3">
+        <span class="w-1.5 h-8 sm:h-10 shrink-0 bg-primary rounded-full mt-1"></span>
+        <span class="text-balance">{data.title}</span>
+      </h1>
+
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground mb-6">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h8M8 11h8m-6 4h6m2-9a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2z" />
+          </svg>
+          {formattedDate}
+        </span>
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10" />
+          </svg>
+          {data.categoryLabel}
+        </span>
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H7z" />
+          </svg>
+          {data.tag}
+        </span>
+      </div>
+
+      <div class="flex items-center justify-between py-4 border-y border-border">
+        <div class="flex items-center gap-4 text-sm text-muted-foreground">
+          <span class="flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2" />
+            </svg>
+            {data.wordCount ? `${data.wordCount} 字` : "——"}
+          </span>
+          <span class="flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+            </svg>
+            {data.readTime ?? "——"}
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="h-8 w-8 text-muted-foreground hover:text-primary rounded-lg hover:bg-muted/60 transition-colors" aria-label="分享">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4m0 0L8 6m4-4v14" />
+            </svg>
+          </button>
+          <button class="h-8 w-8 text-muted-foreground hover:text-primary rounded-lg hover:bg-muted/60 transition-colors" aria-label="收藏">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a7 7 0 0 1 10 0l1 1 1-1a7 7 0 1 1 0 10l-7 7-7-7a7 7 0 0 1 0-10z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <article
+      class="prose prose-neutral dark:prose-invert max-w-none
+      prose-headings:font-serif prose-headings:font-bold
+      prose-h2:text-2xl prose-h2:mt-12 prose-h2:mb-4 prose-h2:flex prose-h2:items-center prose-h2:gap-3
+      prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-3
+      prose-p:text-base prose-p:leading-relaxed prose-p:text-foreground/90
+      prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+      prose-blockquote:border-l-primary prose-blockquote:border-l-2 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground
+      prose-strong:text-foreground prose-strong:font-semibold
+      prose-code:text-primary prose-code:bg-secondary prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
+      prose-pre:bg-secondary prose-pre:border prose-pre:border-border
+      prose-ol:text-foreground/90 prose-ul:text-foreground/90
+      prose-li:marker:text-primary
+      prose-table:text-sm
+      prose-th:bg-secondary prose-th:px-4 prose-th:py-2 prose-th:text-left prose-th:font-medium
+      prose-td:px-4 prose-td:py-2 prose-td:border-t prose-td:border-border
+      prose-hr:border-border prose-hr:my-8"
+    >
+      <Content />
+    </article>
+
+    <footer class="mt-16 pt-8 border-t border-border">
+      <div class="flex items-center gap-3 mb-8">
+        <span class="text-sm text-muted-foreground">标签：</span>
+        <div class="flex flex-wrap gap-2">
+          <span class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-full">
+            {data.tag}
+          </span>
+          <span class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-full">
+            {data.categoryLabel}
+          </span>
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <a href="/" class="group p-4 border border-border rounded-xl hover:border-primary/30 transition-colors">
+          <span class="text-xs text-muted-foreground mb-1 block">上一篇</span>
+          <span class="text-sm font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">
+            探索更多文章...
+          </span>
+        </a>
+        <a href="/" class="group p-4 border border-border rounded-xl hover:border-primary/30 transition-colors text-right">
+          <span class="text-xs text-muted-foreground mb-1 block">下一篇</span>
+          <span class="text-sm font-medium text-foreground group-hover:text-primary transition-colors line-clamp-1">
+            探索更多文章...
+          </span>
+        </a>
+      </div>
+    </footer>
+  </div>
+</main>

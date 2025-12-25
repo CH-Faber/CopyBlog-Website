@@ -1,0 +1,11 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro"
+import { BookshelfContent } from "@/components/bookshelf-content"
+
+const title = "书架 | 思维边界"
+const description = "我的阅读记录与书籍推荐"
+---
+
+<BaseLayout {title} {description}>
+  <BookshelfContent client:load />
+</BaseLayout>

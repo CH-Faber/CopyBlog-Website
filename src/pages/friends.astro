@@ -1,0 +1,11 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro"
+import FriendsPage from "@/components/pages/FriendsPage"
+
+const title = "友链 | 思维边界"
+const description = "与更多创作者建立连接，发现有趣的内容"
+---
+
+<BaseLayout {title} {description}>
+  <FriendsPage client:load />
+</BaseLayout>

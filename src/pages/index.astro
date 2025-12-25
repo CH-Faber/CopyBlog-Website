@@ -1,0 +1,42 @@
+---
+import { getCollection } from "astro:content"
+import BaseLayout from "@/layouts/BaseLayout.astro"
+import { ArticleList } from "@/components/article-list"
+import { Footer } from "@/components/footer"
+import { Header } from "@/components/header"
+import { Hero } from "@/components/hero"
+
+const title = "思维边界 | Boundary of Thought"
+const description = "探索金融、社会与人工智能的交汇点"
+const posts = await getCollection("articles")
+const articles = posts
+  .map((post) => ({
+    slug: post.slug,
+    title: post.data.title,
+    excerpt: post.data.excerpt,
+    category: post.data.category,
+    categoryLabel: post.data.categoryLabel,
+    tag: post.data.tag,
+    date: post.data.date.toISOString().slice(0, 10),
+    wordCount: post.data.wordCount,
+    readTime: post.data.readTime,
+    image: post.data.image,
+    pinned: post.data.pinned,
+  }))
+  .sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1
+    if (!a.pinned && b.pinned) return 1
+    return b.date.localeCompare(a.date)
+  })
+---
+
+<BaseLayout {title} {description}>
+  <div class="min-h-screen bg-background">
+    <Header client:load />
+    <main>
+      <Hero client:load />
+      <ArticleList client:load articles={articles} />
+    </main>
+    <Footer />
+  </div>
+</BaseLayout>
