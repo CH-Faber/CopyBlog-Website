@@ -28,7 +28,24 @@ export function HeaderSearch() {
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
   const isProd = import.meta.env.PROD
   const containerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const desktopInputRef = useRef<HTMLInputElement>(null)
+  const mobileInputRef = useRef<HTMLInputElement>(null)
+
+  const focusSearchInput = (delay = 0) => {
+    const focus = () => {
+      const isDesktop = window.matchMedia("(min-width: 768px)").matches
+      const target = isDesktop ? desktopInputRef.current : mobileInputRef.current
+      if (target) {
+        target.focus()
+        target.select()
+      }
+    }
+    if (delay > 0) {
+      window.setTimeout(focus, delay)
+    } else {
+      focus()
+    }
+  }
 
   // Load Pagefind as ES module
   useEffect(() => {
@@ -88,7 +105,7 @@ export function HeaderSearch() {
 
     const debounce = setTimeout(runSearch, 200)
     return () => clearTimeout(debounce)
-  }, [query, isProd])
+  }, [query, isProd, status])
 
   // Close panel when clicking outside
   useEffect(() => {
@@ -106,10 +123,16 @@ export function HeaderSearch() {
   // Keyboard shortcut (Cmd+K / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "k") {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault()
-        setIsOpen(true)
-        setTimeout(() => inputRef.current?.focus(), 100)
+        const isDesktop = window.matchMedia("(min-width: 768px)").matches
+        if (isDesktop) {
+          setIsFocused(true)
+          focusSearchInput()
+        } else {
+          setIsOpen(true)
+          focusSearchInput(100)
+        }
       }
       if (event.key === "Escape") {
         setIsOpen(false)
@@ -121,7 +144,7 @@ export function HeaderSearch() {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [])
 
-  const showPanel = (isOpen || isFocused) && (query.trim() || !isProd)
+  const showPanel = isOpen || (isFocused && (query.trim() || !isProd))
 
   return (
     <div ref={containerRef} className="relative">
@@ -134,7 +157,7 @@ export function HeaderSearch() {
         )}>
           <SearchIcon className="w-4 h-4 ml-3 text-muted-foreground pointer-events-none" />
           <input
-            ref={inputRef}
+            ref={desktopInputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -156,7 +179,7 @@ export function HeaderSearch() {
       <button
         onClick={() => {
           setIsOpen(!isOpen)
-          if (!isOpen) setTimeout(() => inputRef.current?.focus(), 100)
+          if (!isOpen) focusSearchInput(100)
         }}
         className="md:hidden p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors"
         aria-label="搜索"
@@ -176,13 +199,14 @@ export function HeaderSearch() {
           <div className="flex items-center h-10 rounded-lg bg-muted/50">
             <SearchIcon className="w-4 h-4 ml-3 text-muted-foreground" />
             <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索..."
-              className="flex-1 bg-transparent text-sm outline-none px-2 text-foreground placeholder:text-muted-foreground"
-            />
+            ref={mobileInputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setIsFocused(true)}
+            placeholder="搜索..."
+            className="flex-1 bg-transparent text-sm outline-none px-2 text-foreground placeholder:text-muted-foreground"
+          />
           </div>
         </div>
 
