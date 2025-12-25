@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { Calendar, Github, MessageCircle, Music } from "lucide-react"
 import { profile } from "@/data/profile"
@@ -11,9 +12,22 @@ interface SidebarProps {
   onCategoryChange: (category: string) => void
   activeTag: string | null
   onTagChange: (tag: string | null) => void
+  categoryPreviewCount?: number
 }
 
-export function Sidebar({ categories, tags, activeCategory, onCategoryChange, activeTag, onTagChange }: SidebarProps) {
+export function Sidebar({
+  categories,
+  tags,
+  activeCategory,
+  onCategoryChange,
+  activeTag,
+  onTagChange,
+  categoryPreviewCount = 3,
+}: SidebarProps) {
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false)
+  const canCollapse = categories.length > categoryPreviewCount
+  const visibleCategories = categoriesExpanded ? categories : categories.slice(0, categoryPreviewCount)
+
   return (
     <aside className="w-full lg:w-72 shrink-0 space-y-8">
       {/* Author Card */}
@@ -60,7 +74,7 @@ export function Sidebar({ categories, tags, activeCategory, onCategoryChange, ac
           <h4 className="font-medium text-foreground">分类</h4>
         </div>
         <div className="space-y-1">
-          {categories.map((category) => (
+          {visibleCategories.map((category) => (
             <button
               key={category.id}
               onClick={() => onCategoryChange(category.id)}
@@ -83,6 +97,16 @@ export function Sidebar({ categories, tags, activeCategory, onCategoryChange, ac
             </button>
           ))}
         </div>
+        {canCollapse && !categoriesExpanded && (
+          <button
+            type="button"
+            onClick={() => setCategoriesExpanded(true)}
+            className="w-full mt-3 text-sm text-primary hover:text-primary/80 transition-colors flex items-center justify-center gap-2"
+          >
+            <span className="tracking-widest text-primary/70">•••</span>
+            更多
+          </button>
+        )}
       </div>
 
       {/* Tags */}
