@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState, useEffect, useRef } from "react"
 import type { MouseEvent } from "react"
 import { ArticleCard } from "./article-card"
 import { Sidebar } from "./sidebar"
@@ -103,9 +103,11 @@ export function ArticleList({
   sidebarCategories?: SidebarCategory[]
   sidebarTags?: string[]
 }) {
+  const sectionRef = useRef<HTMLElement | null>(null)
   const [activeCategory, setActiveCategory] = useState("all")
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(pagination?.currentPage ?? 1)
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false)
 
   const computedCategories = useMemo(() => {
     const counts = new Map<string, { id: string; name: string; count: number }>()
@@ -170,13 +172,24 @@ export function ArticleList({
   const previousUrl = pagination && currentPage > 1 ? getPageHref(currentPage - 1, basePath) : undefined
   const nextUrl = pagination && currentPage < totalPages ? getPageHref(currentPage + 1, basePath) : undefined
   const homeTargetForHref = (href?: string) => (href === "/" ? "home-main" : undefined)
+  const scrollToListTop = () => {
+    const target = document.getElementById("home-main") ?? sectionRef.current
+    if (!target) return
+    target.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
   const handleCategoryChange = (category: string) => {
     setActiveCategory(category)
+    setActiveTag(null)
     setCurrentPage(1)
+    requestAnimationFrame(scrollToListTop)
   }
   const handleTagChange = (tag: string | null) => {
     setActiveTag(tag)
+    setActiveCategory("all")
+    setCategoriesExpanded(false)
     setCurrentPage(1)
+    requestAnimationFrame(scrollToListTop)
   }
   const handlePageClick =
     (page: number) => (event: MouseEvent<HTMLAnchorElement>) => {
@@ -186,7 +199,7 @@ export function ArticleList({
     }
 
   return (
-    <section className="px-6 py-16 bg-muted/30">
+    <section ref={sectionRef} className="px-6 py-16 bg-muted/30">
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
         <div className="mb-10 onload-animation" style={{ animationDelay: "50ms" }}>
@@ -205,6 +218,8 @@ export function ArticleList({
               onCategoryChange={handleCategoryChange}
               activeTag={activeTag}
               onTagChange={handleTagChange}
+              categoriesExpanded={categoriesExpanded}
+              onCategoriesExpandedChange={setCategoriesExpanded}
             />
           </div>
 

@@ -13,6 +13,8 @@ interface SidebarProps {
   activeTag: string | null
   onTagChange: (tag: string | null) => void
   categoryPreviewCount?: number
+  categoriesExpanded?: boolean
+  onCategoriesExpandedChange?: (expanded: boolean) => void
 }
 
 export function Sidebar({
@@ -23,10 +25,14 @@ export function Sidebar({
   activeTag,
   onTagChange,
   categoryPreviewCount = 3,
+  categoriesExpanded,
+  onCategoriesExpandedChange,
 }: SidebarProps) {
-  const [categoriesExpanded, setCategoriesExpanded] = useState(false)
+  const [internalExpanded, setInternalExpanded] = useState(false)
+  const isExpanded = categoriesExpanded ?? internalExpanded
+  const setExpanded = onCategoriesExpandedChange ?? setInternalExpanded
   const canCollapse = categories.length > categoryPreviewCount
-  const visibleCategories = categoriesExpanded ? categories : categories.slice(0, categoryPreviewCount)
+  const visibleCategories = isExpanded ? categories : categories.slice(0, categoryPreviewCount)
 
   return (
     <aside className="w-full lg:w-72 shrink-0 space-y-8">
@@ -97,10 +103,10 @@ export function Sidebar({
             </button>
           ))}
         </div>
-        {canCollapse && !categoriesExpanded && (
+        {canCollapse && !isExpanded && (
           <button
             type="button"
-            onClick={() => setCategoriesExpanded(true)}
+            onClick={() => setExpanded(true)}
             className="w-full mt-3 text-sm text-primary hover:text-primary/80 transition-colors flex items-center justify-center gap-2"
           >
             <span className="tracking-widest text-primary/70">•••</span>
