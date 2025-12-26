@@ -7,7 +7,7 @@ export const profile: {
   links: { type: ProfileLinkType; name: string; url: string }[]
 } = {
   name: "时歌",
-  bio: "理解以真实为本，但真实本身并不会自动呈现.",
+  bio: "理解以真实为本，但真实本身并不会自动呈现",
   avatar: "/avatar.webp",
   links: [
     {

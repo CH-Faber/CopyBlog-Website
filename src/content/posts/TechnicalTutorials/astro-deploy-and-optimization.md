@@ -148,7 +148,7 @@ export const siteConfig: SiteConfig = {
 export const profileConfig: ProfileConfig = {
   avatar: 'assets/images/avatar.jpg',  // 个人头像，Relative to the /src directory. Relative to the /public directory if it starts with '/'
   name: '时歌',
-  bio: '理解以真实为本，但真实本身并不会自动呈现.',
+  bio: '理解以真实为本，但真实本身并不会自动呈现',
   links: [
     {
       name: 'QQ',
