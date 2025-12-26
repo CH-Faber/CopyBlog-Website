@@ -158,6 +158,7 @@ export function ArticleList({
       setActiveCategory(queryCategory)
       setActiveTag(null)
       setCurrentPage(1)
+      setCategoriesExpanded(true)
     }
 
     if (document.documentElement.hasAttribute("data-prefilter")) {
@@ -229,6 +230,7 @@ export function ArticleList({
     setActiveCategory(category)
     setActiveTag(null)
     setCurrentPage(1)
+    setCategoriesExpanded(true)
     updateSearchParams(category, null)
     requestAnimationFrame(scrollToListTop)
   }
