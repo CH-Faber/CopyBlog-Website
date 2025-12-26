@@ -33,7 +33,7 @@ export function ArticleCard({
         <div className="flex gap-5">
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <h3 className="font-serif text-lg sm:text-xl font-medium text-foreground mb-3 leading-tight group-hover:text-primary transition-colors duration-200 flex items-start gap-2">
+            <h3 className="font-serif text-lg sm:text-xl font-medium text-foreground mb-3 leading-tight group-hover:text-primary dark:group-hover:text-foreground transition-colors duration-200 flex items-start gap-2">
               <span className="w-1 h-6 shrink-0 bg-primary rounded-full mt-0.5" />
               <span>{article.title}</span>
             </h3>
