@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect, useRef } from "react"
+import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import type { MouseEvent } from "react"
 import { ArticleCard } from "./article-card"
 import { Sidebar } from "./sidebar"
@@ -141,25 +141,27 @@ export function ArticleList({
 
   const tags = sidebarTags && sidebarTags.length > 0 ? sidebarTags : computedTags
 
-  useEffect(() => {
+  const syncFromLocation = useCallback(() => {
     if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
     const queryCategory = params.get("category")?.trim()
     const queryTag = params.get("tag")?.trim()
 
+    let nextCategory = "all"
+    let nextTag: string | null = null
+    let nextExpanded = false
+
     if (queryTag && tags.includes(queryTag)) {
-      setActiveTag(queryTag)
-      setActiveCategory("all")
-      setCurrentPage(1)
-      return
+      nextTag = queryTag
+    } else if (queryCategory && categories.some((category) => category.id === queryCategory)) {
+      nextCategory = queryCategory
+      nextExpanded = true
     }
 
-    if (queryCategory && categories.some((category) => category.id === queryCategory)) {
-      setActiveCategory(queryCategory)
-      setActiveTag(null)
-      setCurrentPage(1)
-      setCategoriesExpanded(true)
-    }
+    setActiveCategory(nextCategory)
+    setActiveTag(nextTag)
+    setCategoriesExpanded(nextExpanded)
+    setCurrentPage(1)
 
     if (document.documentElement.hasAttribute("data-prefilter")) {
       requestAnimationFrame(() => {
@@ -167,6 +169,26 @@ export function ArticleList({
       })
     }
   }, [categories, tags])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    syncFromLocation()
+
+    const handleLocationChange = () => {
+      syncFromLocation()
+    }
+
+    window.addEventListener("popstate", handleLocationChange)
+    window.addEventListener("hashchange", handleLocationChange)
+    document.addEventListener("astro:page-load", handleLocationChange)
+    document.addEventListener("astro:after-swap", handleLocationChange)
+    return () => {
+      window.removeEventListener("popstate", handleLocationChange)
+      window.removeEventListener("hashchange", handleLocationChange)
+      document.removeEventListener("astro:page-load", handleLocationChange)
+      document.removeEventListener("astro:after-swap", handleLocationChange)
+    }
+  }, [syncFromLocation])
 
   const filteredArticles = useMemo(() => {
     return articles.filter((article) => {
