@@ -56,7 +56,7 @@ export function ArticleCard({
         </div>
       )}
 
-      <div className="flex gap-5">
+      <div className="flex gap-4 sm:gap-5">
         {/* Content */}
         <div className="flex-1 min-w-0">
           <h3 className="font-serif text-lg sm:text-xl font-medium text-foreground mb-3 leading-tight group-hover:text-primary dark:group-hover:text-foreground transition-colors duration-200 flex items-start gap-2">
@@ -113,7 +113,7 @@ export function ArticleCard({
         ) : null}
 
         {/* Arrow */}
-        <div className="flex items-center shrink-0 text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div className="hidden sm:flex items-center shrink-0 text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <ChevronRight className="w-5 h-5" />
         </div>
       </div>
