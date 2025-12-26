@@ -1,5 +1,6 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { Giscus } from "@/components/Giscus"
 import { MapPin, Github, MessageCircle, Music, Heart } from "lucide-react"
 import { profile } from "@/data/profile"
 
@@ -7,7 +8,7 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background dark:bg-muted/30">
       <Header />
-      <main className="pt-32 pb-20">
+      <main className="pt-32 pb-8">
         <div className="max-w-4xl mx-auto px-6">
           {/* Hero Section */}
           <section className="mb-10">
@@ -125,6 +126,12 @@ export default function AboutPage() {
                   <p className="text-sm font-medium text-blue-600">支付宝赞赏</p>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section className="mt-8 pt-0 pb-8">
+            <div className="max-w-3xl mx-auto">
+              <Giscus />
             </div>
           </section>
         </div>

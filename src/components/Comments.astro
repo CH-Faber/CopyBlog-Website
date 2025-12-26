@@ -1,29 +1,60 @@
 ---
-const repo = import.meta.env.PUBLIC_GISCUS_REPO
-const repoId = import.meta.env.PUBLIC_GISCUS_REPO_ID
-const category = import.meta.env.PUBLIC_GISCUS_CATEGORY
-const categoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID
+const repo = import.meta.env.PUBLIC_GISCUS_REPO ?? "Lapis0x0/blog-discussion"
+const repoId = import.meta.env.PUBLIC_GISCUS_REPO_ID ?? "R_kgDONda6_g"
+const category = import.meta.env.PUBLIC_GISCUS_CATEGORY ?? "General"
+const categoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID ?? "DIC_kwDONda6_s4ClN0E"
 const isEnabled = Boolean(repo && repoId && category && categoryId)
 ---
 
 {isEnabled && (
-  <div class="mt-12">
-    <script
-      is:inline
-      src="https://giscus.app/client.js"
-      data-repo={repo}
-      data-repo-id={repoId}
-      data-category={category}
-      data-category-id={categoryId}
-      data-mapping="pathname"
-      data-strict="0"
-      data-reactions-enabled="1"
-      data-emit-metadata="0"
-      data-input-position="bottom"
-      data-theme="preferred_color_scheme"
-      data-lang="zh-CN"
-      crossorigin="anonymous"
-      async
-    ></script>
-  </div>
+  <section class="mt-8 pt-0 pb-12">
+    <div class="px-6">
+      <div class="max-w-3xl mx-auto">
+        <script
+          is:inline
+          src="https://giscus.app/client.js"
+          data-repo={repo}
+          data-repo-id={repoId}
+          data-category={category}
+          data-category-id={categoryId}
+          data-mapping="pathname"
+          data-strict="0"
+          data-reactions-enabled="0"
+          data-emit-metadata="0"
+          data-input-position="bottom"
+          data-theme="light"
+          data-lang="zh-CN"
+          crossorigin="anonymous"
+          async
+        ></script>
+        <script is:inline>
+          {`
+            (() => {
+              const getTheme = () =>
+                document.documentElement.classList.contains("dark") ? "dark" : "light";
+              const updateTheme = () => {
+                const iframe = document.querySelector("iframe.giscus-frame");
+                if (!iframe) return;
+                iframe.contentWindow?.postMessage(
+                  { giscus: { setConfig: { theme: getTheme() } } },
+                  "https://giscus.app"
+                );
+              };
+              const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                  if (mutation.attributeName === "class") {
+                    updateTheme();
+                  }
+                }
+              });
+              observer.observe(document.documentElement, { attributes: true });
+              window.addEventListener("load", updateTheme);
+              document.addEventListener("astro:page-load", updateTheme);
+              document.addEventListener("astro:after-swap", updateTheme);
+            })();
+          `}
+        </script>
+      </div>
+    </div>
+  </section>
 )}

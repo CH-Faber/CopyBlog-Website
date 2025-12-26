@@ -1,5 +1,6 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { Giscus } from "@/components/Giscus"
 import { ExternalLink, Heart, CheckCircle2, Copy, Check, Mail } from "lucide-react"
 import { useState } from "react"
 import friendsData from "@/data/friends.json"
@@ -53,7 +54,7 @@ export default function FriendsPage() {
   return (
     <div className="min-h-screen bg-background dark:bg-muted/30">
       <Header />
-      <main className="pt-32 pb-20">
+      <main className="pt-32 pb-8">
         <div className="max-w-4xl mx-auto px-6">
           {/* Header */}
           <section className="mb-12">
@@ -195,6 +196,12 @@ export default function FriendsPage() {
                   {siteInfo.email}
                 </a>
               </div>
+            </div>
+          </section>
+
+          <section className="mt-8 pt-0 pb-8">
+            <div className="max-w-3xl mx-auto">
+              <Giscus />
             </div>
           </section>
         </div>
