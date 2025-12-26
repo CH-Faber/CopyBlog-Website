@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
+import type { MouseEvent } from "react"
 import { ArticleCard } from "./article-card"
 import { Sidebar } from "./sidebar"
 import {
@@ -31,8 +32,8 @@ type SidebarCategory = { id: string; name: string; count: number }
 
 type PaginationMeta = {
   currentPage: number
-  totalPages: number
   basePath?: string
+  pageSize?: number
 }
 
 const HIDDEN = -1
@@ -104,6 +105,7 @@ export function ArticleList({
 }) {
   const [activeCategory, setActiveCategory] = useState("all")
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(pagination?.currentPage ?? 1)
 
   const computedCategories = useMemo(() => {
     const counts = new Map<string, { id: string; name: string; count: number }>()
@@ -136,23 +138,52 @@ export function ArticleList({
 
   const tags = sidebarTags && sidebarTags.length > 0 ? sidebarTags : computedTags
 
-  const filteredArticles = articles.filter((article) => {
-    const categoryMatch = activeCategory === "all" || article.category === activeCategory
-    const tagMatch = !activeTag || article.tags.includes(activeTag)
-    return categoryMatch && tagMatch
-  })
+  const filteredArticles = useMemo(() => {
+    return articles.filter((article) => {
+      const categoryMatch = activeCategory === "all" || article.category === activeCategory
+      const tagMatch = !activeTag || article.tags.includes(activeTag)
+      return categoryMatch && tagMatch
+    })
+  }, [articles, activeCategory, activeTag])
+
+  const isFiltering = activeCategory !== "all" || Boolean(activeTag)
+  const pageSize = pagination?.pageSize ?? Math.max(1, articles.length)
+  const totalPages = pagination ? Math.max(1, Math.ceil(filteredArticles.length / pageSize)) : 1
+
+  useEffect(() => {
+    if (!pagination) return
+    if (currentPage > totalPages) {
+      setCurrentPage(1)
+    }
+  }, [pagination, currentPage, totalPages])
+
+  const pagedArticles = pagination
+    ? filteredArticles.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    : filteredArticles
 
   const pageRange = useMemo(() => {
     if (!pagination) return []
-    return buildPageRange(pagination.currentPage, pagination.totalPages)
-  }, [pagination])
+    return buildPageRange(currentPage, totalPages)
+  }, [pagination, currentPage, totalPages])
 
   const basePath = pagination?.basePath ?? "/"
-  const previousUrl =
-    pagination && pagination.currentPage > 1 ? getPageHref(pagination.currentPage - 1, basePath) : undefined
-  const nextUrl =
-    pagination && pagination.currentPage < pagination.totalPages ? getPageHref(pagination.currentPage + 1, basePath) : undefined
+  const previousUrl = pagination && currentPage > 1 ? getPageHref(currentPage - 1, basePath) : undefined
+  const nextUrl = pagination && currentPage < totalPages ? getPageHref(currentPage + 1, basePath) : undefined
   const homeTargetForHref = (href?: string) => (href === "/" ? "home-main" : undefined)
+  const handleCategoryChange = (category: string) => {
+    setActiveCategory(category)
+    setCurrentPage(1)
+  }
+  const handleTagChange = (tag: string | null) => {
+    setActiveTag(tag)
+    setCurrentPage(1)
+  }
+  const handlePageClick =
+    (page: number) => (event: MouseEvent<HTMLAnchorElement>) => {
+      if (!pagination || !isFiltering) return
+      event.preventDefault()
+      setCurrentPage(page)
+    }
 
   return (
     <section className="px-6 py-16 bg-muted/30">
@@ -171,16 +202,16 @@ export function ArticleList({
               categories={categories}
               tags={tags}
               activeCategory={activeCategory}
-              onCategoryChange={setActiveCategory}
+              onCategoryChange={handleCategoryChange}
               activeTag={activeTag}
-              onTagChange={setActiveTag}
+              onTagChange={handleTagChange}
             />
           </div>
 
           {/* Article list - Single column */}
           <div className="flex-1 space-y-4">
-            {filteredArticles.length > 0 ? (
-              filteredArticles.map((article, index) => (
+            {pagedArticles.length > 0 ? (
+              pagedArticles.map((article, index) => (
                 <ArticleCard
                   key={article.slug}
                   article={article}
@@ -212,7 +243,7 @@ export function ArticleList({
               </div>
             )}
 
-            {pagination && pagination.totalPages > 1 && (
+            {pagination && totalPages > 1 && (
               <div className="pt-8">
                 <Pagination>
                   <PaginationContent>
@@ -225,6 +256,7 @@ export function ArticleList({
                         className={cn("gap-1 px-2.5", !previousUrl && "pointer-events-none opacity-50")}
                         rel={previousUrl ? "prev" : undefined}
                         data-home-target={homeTargetForHref(previousUrl)}
+                        onClick={previousUrl ? handlePageClick(currentPage - 1) : undefined}
                       >
                         <ChevronLeft className="size-4" />
                         <span className="hidden sm:block">上一页</span>
@@ -238,8 +270,9 @@ export function ArticleList({
                         ) : (
                           <PaginationLink
                             href={getPageHref(page, basePath)}
-                            isActive={pagination.currentPage === page}
+                            isActive={currentPage === page}
                             data-home-target={homeTargetForHref(getPageHref(page, basePath))}
+                            onClick={handlePageClick(page)}
                           >
                             {page}
                           </PaginationLink>
@@ -256,6 +289,7 @@ export function ArticleList({
                         className={cn("gap-1 px-2.5", !nextUrl && "pointer-events-none opacity-50")}
                         rel={nextUrl ? "next" : undefined}
                         data-home-target={homeTargetForHref(nextUrl)}
+                        onClick={nextUrl ? handlePageClick(currentPage + 1) : undefined}
                       >
                         <span className="hidden sm:block">下一页</span>
                         <ChevronRight className="size-4" />

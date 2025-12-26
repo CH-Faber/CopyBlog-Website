@@ -18,8 +18,6 @@ export const getStaticPaths = (async ({ paginate }) => {
 
 const { page } = Astro.props
 const currentPage = page.currentPage
-const totalPages = page.lastPage
-const articles = page.data
 const allPosts = await getSortedPosts()
 const allArticles = allPosts.map((post) => toPostMeta(post))
 const sidebarMeta = buildSidebarMeta(allArticles)
@@ -35,11 +33,11 @@ const title =
     <main class="pt-24">
       <ArticleList
         client:load
-        articles={articles}
+        articles={allArticles}
         title="全部文章"
         subtitle="All Posts"
         showViewAll={false}
-        pagination={{ currentPage, totalPages, basePath: "/" }}
+        pagination={{ currentPage, pageSize: PAGE_SIZE, basePath: "/" }}
         sidebarCategories={sidebarMeta.categories}
         sidebarTags={sidebarMeta.tags}
       />
