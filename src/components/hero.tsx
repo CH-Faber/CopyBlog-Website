@@ -120,19 +120,14 @@ export function Hero() {
             />
           </h1>
 
-          <p className="text-muted-foreground text-base sm:text-lg leading-relaxed max-w-xl mx-auto mb-10 text-pretty">
-            在金融市场、社会结构与人工智能的交汇处，
-            <br className="hidden sm:block" />
-            用文字捕捉思考的瞬间。
-          </p>
-
-          <div className="flex flex-col items-center gap-4 mb-10">
-            <p className="font-medium text-foreground">个人博客</p>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-              <span>持续更新中</span>
-            </div>
-          </div>
+          <blockquote className="max-w-xl mx-auto mb-10">
+            <p className="text-muted-foreground text-base sm:text-lg leading-relaxed italic">
+              「我不知道我在想什么，直到我读到我写的东西。」
+            </p>
+            <footer className="mt-2 text-sm text-muted-foreground/70">
+              —— Flannery O'Connor
+            </footer>
+          </blockquote>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button className="group flex items-center gap-2 px-8 py-3 bg-foreground text-background rounded-full font-medium text-sm hover:bg-foreground/90 transition-all duration-300">
