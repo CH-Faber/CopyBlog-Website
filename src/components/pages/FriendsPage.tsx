@@ -85,16 +85,18 @@ export default function FriendsPage() {
                     >
                       <div className="flex items-start gap-4">
                         {/* Avatar */}
-                        <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-border">
-                          <img
-                            src={friend.imgurl || "/placeholder.svg"}
-                            alt={friend.title}
-                            width={56}
-                            height={56}
-                            loading="lazy"
-                            className="object-cover w-full h-full"
-                          />
-                        </div>
+                        {friend.imgurl ? (
+                          <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-border">
+                            <img
+                              src={friend.imgurl}
+                              alt={friend.title}
+                              width={56}
+                              height={56}
+                              loading="lazy"
+                              className="object-cover w-full h-full"
+                            />
+                          </div>
+                        ) : null}
 
                         {/* Info */}
                         <div className="flex-1 min-w-0">

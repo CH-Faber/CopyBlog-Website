@@ -66,15 +66,16 @@ export function ArticleCard({
           </div>
 
           {/* Thumbnail (optional) */}
-          {article.image && (
+          {article.image ? (
             <div className="hidden sm:block w-28 h-20 shrink-0 rounded-lg overflow-hidden">
               <img
-                src={article.image || "/placeholder.svg"}
+                src={article.image}
                 alt=""
                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
               />
             </div>
-          )}
+          ) : null}
 
           {/* Arrow */}
           <div className="flex items-center shrink-0 text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-200">

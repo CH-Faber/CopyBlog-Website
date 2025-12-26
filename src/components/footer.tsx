@@ -15,8 +15,8 @@ export function Footer() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-serif text-sm font-semibold">思</span>
+              <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary">
+                <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
               </div>
               <span className="text-foreground font-medium">时歌的博客</span>
             </div>

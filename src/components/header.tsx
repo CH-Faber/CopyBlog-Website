@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { HeaderSearch } from "./header-search"
+import { profile } from "@/data/profile"
 
 const navItems: { name: string; href: string; external?: boolean }[] = [
   { name: "首页", href: "/" },
@@ -35,8 +36,8 @@ export function Header() {
       <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
         <a href="/" data-home-target="home-main" className="group flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center transition-transform duration-300 group-hover:scale-105">
-            <span className="text-primary-foreground font-serif text-sm font-semibold">思</span>
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
+            <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
           </div>
           <span className="text-foreground font-medium tracking-tight hidden sm:block">时歌的博客</span>
         </a>
