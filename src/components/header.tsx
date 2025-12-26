@@ -4,12 +4,13 @@ import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { HeaderSearch } from "./header-search"
 
-const navItems = [
+const navItems: { name: string; href: string; external?: boolean }[] = [
   { name: "首页", href: "/" },
-  { name: "时间线", href: "/timeline" },
-  { name: "书架", href: "/bookshelf" },
-  { name: "友链", href: "/friends" },
-  { name: "关于", href: "/about" },
+  { name: "时间线", href: "/timeline/" },
+  { name: "书架", href: "/bookshelf/" },
+  { name: "友链", href: "/friends/" },
+  { name: "关于", href: "/about/" },
+  { name: "开往", href: "https://www.travellings.cn/go.html", external: true },
 ]
 
 export function Header() {
@@ -47,6 +48,8 @@ export function Header() {
               key={item.name}
               href={item.href}
               data-home-target={item.href === "/" ? "home-main" : undefined}
+              target={item.external ? "_blank" : undefined}
+              rel={item.external ? "noreferrer" : undefined}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
             >
               {item.name}
@@ -98,6 +101,8 @@ export function Header() {
               key={item.name}
               href={item.href}
               data-home-target={item.href === "/" ? "home-main" : undefined}
+              target={item.external ? "_blank" : undefined}
+              rel={item.external ? "noreferrer" : undefined}
               onClick={() => setMobileMenuOpen(false)}
               className="text-muted-foreground hover:text-foreground transition-colors duration-200"
             >

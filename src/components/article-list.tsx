@@ -195,7 +195,7 @@ export function ArticleList({
             {showViewAll && (
               <div className="pt-8 text-center">
                 <a
-                  href="/posts"
+                  href="/posts/"
                   className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors duration-200 group"
                 >
                   <span>查看全部文章</span>
