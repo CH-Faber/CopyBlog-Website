@@ -4,6 +4,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent } from "react"
 import { Calendar, Folder, Hash, ChevronRight } from "lucide-react"
 import type { ArticleMeta } from "./article-list"
 import { cn } from "@/lib/utils"
+import { navigate } from "astro:transitions/client"
 
 export function ArticleCard({
   article,
@@ -24,13 +25,13 @@ export function ArticleCard({
   const handleCardClick = (event: MouseEvent<HTMLElement>) => {
     const target = event.target as HTMLElement
     if (target.closest("a, button")) return
-    window.location.href = postHref
+    void navigate(postHref)
   }
 
   const handleCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "Enter" && event.key !== " ") return
     event.preventDefault()
-    window.location.href = postHref
+    void navigate(postHref)
   }
 
   return (
