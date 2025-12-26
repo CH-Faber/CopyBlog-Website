@@ -159,6 +159,12 @@ export function ArticleList({
       setActiveTag(null)
       setCurrentPage(1)
     }
+
+    if (document.documentElement.hasAttribute("data-prefilter")) {
+      requestAnimationFrame(() => {
+        document.documentElement.removeAttribute("data-prefilter")
+      })
+    }
   }, [categories, tags])
 
   const filteredArticles = useMemo(() => {
@@ -242,7 +248,7 @@ export function ArticleList({
     }
 
   return (
-    <section ref={sectionRef} className="px-6 py-16 bg-muted/30">
+    <section ref={sectionRef} className="article-list-root px-6 py-16 bg-muted/30">
       <div className="max-w-6xl mx-auto">
         {/* Section header */}
         <div className="mb-10 onload-animation" style={{ animationDelay: "50ms" }}>

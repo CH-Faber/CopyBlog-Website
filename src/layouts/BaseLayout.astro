@@ -73,6 +73,17 @@ const { title = defaultTitle, description = defaultDescription } = Astro.props a
         window.__applyTheme = applyTheme;
       })();
     </script>
+    <script is:inline>
+      // 预过滤标记：避免带 tag/category 查询的首页渲染闪动
+      (function() {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          if (params.has("category") || params.has("tag")) {
+            document.documentElement.setAttribute("data-prefilter", "1");
+          }
+        } catch {}
+      })();
+    </script>
     <ViewTransitions />
   </head>
   <body class="bg-background text-foreground">

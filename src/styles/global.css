@@ -156,6 +156,12 @@ html:focus-within {
   scroll-behavior: smooth;
 }
 
+/* 避免带过滤参数的首页初次渲染闪动 */
+html[data-prefilter="1"] .article-list-root {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* Selection color */
 ::selection {
   background-color: oklch(0.55 0.22 25 / 0.2);
