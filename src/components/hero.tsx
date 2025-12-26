@@ -100,6 +100,16 @@ export function Hero() {
     }
   }
 
+  const handleBrowseClick = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    const target = document.getElementById("home-main")
+    if (!target) return
+    target.scrollIntoView({ behavior: "smooth", block: "start" })
+    if (history.replaceState) {
+      history.replaceState({}, "", "#home-main")
+    }
+  }, [])
+
   return (
     <section className="relative min-h-[90vh] flex items-center justify-center px-6 bg-muted/30">
       <div className="max-w-4xl mx-auto text-center">
@@ -132,6 +142,7 @@ export function Hero() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a
               href="#home-main"
+              onClick={handleBrowseClick}
               className="group flex items-center gap-2 px-8 py-3 bg-foreground text-background rounded-full font-medium text-sm hover:bg-foreground/90 transition-all duration-300"
             >
               浏览文章
