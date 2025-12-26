@@ -2,6 +2,7 @@ node_modules
 dist
 .astro
 *.log
+.env
 
 AGENTS.md
 CLAUDE.md
