@@ -63,19 +63,29 @@ const { title = defaultTitle, description = defaultDescription } = Astro.props a
     <script is:inline>
       // 主题初始化 - 防止页面加载闪烁
       (function() {
-        const stored = localStorage.getItem('theme');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const theme = stored || (prefersDark ? 'dark' : 'light');
-        if (theme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        const applyTheme = () => {
+          const stored = localStorage.getItem('theme');
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const theme = stored || (prefersDark ? 'dark' : 'light');
+          document.documentElement.classList.toggle('dark', theme === 'dark');
+        };
+        applyTheme();
+        window.__applyTheme = applyTheme;
       })();
     </script>
     <ViewTransitions />
   </head>
   <body class="bg-background text-foreground">
     <slot />
+    <script is:inline>
+      // View Transitions 页面切换后重应用主题
+      (function() {
+        const applyTheme = window.__applyTheme
+        if (typeof applyTheme !== "function") return
+        document.addEventListener("astro:page-load", applyTheme)
+        document.addEventListener("astro:after-swap", applyTheme)
+        window.addEventListener("pageshow", applyTheme)
+      })()
+    </script>
   </body>
 </html>
