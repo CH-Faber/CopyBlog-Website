@@ -51,7 +51,7 @@ function CopyButton({ text }: { text: string }) {
 
 export default function FriendsPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark:bg-muted/30">
       <Header />
       <main className="pt-32 pb-20">
         <div className="max-w-4xl mx-auto px-6">

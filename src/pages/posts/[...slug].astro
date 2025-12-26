@@ -44,7 +44,7 @@ if (post.data.encrypted && post.data.password) {
 ---
 
 <BaseLayout {title} {description}>
-  <div class="min-h-screen bg-background">
+  <div class="min-h-screen bg-background dark:bg-muted/30">
     <Header client:load />
     <ArticleContent post={post} {Content} {words} {minutes}>
       <div class="mb-8">

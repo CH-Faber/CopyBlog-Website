@@ -96,7 +96,7 @@ export function BookshelfContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark:bg-muted/30">
       <Header />
 
       <main className="pt-32 pb-24">
