@@ -31,16 +31,18 @@ const title =
   <div class="min-h-screen bg-background">
     <Header client:load />
     <main class="pt-24">
-      <ArticleList
-        client:load
-        articles={allArticles}
-        title="全部文章"
-        subtitle="All Posts"
-        showViewAll={false}
-        pagination={{ currentPage, pageSize: PAGE_SIZE, basePath: "/" }}
-        sidebarCategories={sidebarMeta.categories}
-        sidebarTags={sidebarMeta.tags}
-      />
+      <section id="home-main" class="scroll-mt-24">
+        <ArticleList
+          client:load
+          articles={allArticles}
+          title="全部文章"
+          subtitle="All Posts"
+          showViewAll={false}
+          pagination={{ currentPage, pageSize: PAGE_SIZE, basePath: "/" }}
+          sidebarCategories={sidebarMeta.categories}
+          sidebarTags={sidebarMeta.tags}
+        />
+      </section>
     </main>
     <Footer />
   </div>

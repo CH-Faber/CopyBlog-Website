@@ -147,8 +147,12 @@
   }
 }
 
-/* Custom smooth scrolling */
+/* Custom smooth scrolling (avoid hash navigation animation) */
 html {
+  scroll-behavior: auto;
+}
+
+html:focus-within {
   scroll-behavior: smooth;
 }
 

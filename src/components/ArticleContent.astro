@@ -14,14 +14,16 @@ const data = post.data
 const formattedDate = data.published?.toISOString().slice(0, 10)
 const tags = data.tags ?? []
 const categoryLabel = data.category?.toString().trim() || "未分类"
+const categoryHref = `/?category=${encodeURIComponent(categoryLabel)}#home-main`
+const primaryTag = tags[0]
+const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#home-main` : null
 ---
 
 <main class="pt-24 pb-20">
   <div class="px-6">
     <div class="max-w-3xl mx-auto">
     <a
-      href="/"
-      data-home-target="home-main"
+      href="/#home-main"
       class="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors mb-8 group"
     >
       <svg class="w-4 h-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,18 +48,27 @@ const categoryLabel = data.category?.toString().trim() || "未分类"
           </svg>
           {formattedDate}
         </span>
-        <span class="flex items-center gap-2">
+        <a href={categoryHref} class="inline-flex items-center gap-2 hover:text-primary transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10" />
           </svg>
           {categoryLabel}
-        </span>
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H7z" />
-          </svg>
-          {tags[0] ?? "未标签"}
-        </span>
+        </a>
+        {primaryTagHref ? (
+          <a href={primaryTagHref} class="inline-flex items-center gap-2 hover:text-primary transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H7z" />
+            </svg>
+            {primaryTag}
+          </a>
+        ) : (
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H7z" />
+            </svg>
+            未标签
+          </span>
+        )}
       </div>
 
       <div class="flex items-center justify-between py-4 border-y border-border">
@@ -110,12 +121,23 @@ const categoryLabel = data.category?.toString().trim() || "未分类"
         <div class="flex flex-wrap gap-2">
           {tags.length > 0 ? (
             tags.map((tag: string) => (
-              <span class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-full">{tag}</span>
+              <a
+                key={tag}
+                href={`/?tag=${encodeURIComponent(tag)}#home-main`}
+                class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-full hover:bg-primary hover:text-primary-foreground transition-colors"
+              >
+                {tag}
+              </a>
             ))
           ) : (
             <span class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-full">未标签</span>
           )}
-          <span class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-full">{categoryLabel}</span>
+          <a
+            href={categoryHref}
+            class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-full hover:bg-primary hover:text-primary-foreground transition-colors"
+          >
+            {categoryLabel}
+          </a>
         </div>
       </div>
 

@@ -7,7 +7,7 @@ import { ThemeToggle } from "./theme-toggle"
 import { profile } from "@/data/profile"
 
 const navItems: { name: string; href: string; external?: boolean }[] = [
-  { name: "首页", href: "/" },
+  { name: "首页", href: "/#home-main" },
   { name: "时间线", href: "/timeline/" },
   { name: "书架", href: "/bookshelf/" },
   { name: "友链", href: "/friends/" },
@@ -36,7 +36,7 @@ export function Header() {
     >
       <div className="max-w-6xl mx-auto px-6 grid grid-cols-[1fr_auto_1fr] items-center">
         {/* Left: Logo */}
-        <a href="/" data-home-target="home-main" className="group flex items-center gap-3 justify-self-start">
+        <a href="/#home-main" className="group flex items-center gap-3 justify-self-start">
           <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
             <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
           </div>
@@ -49,7 +49,6 @@ export function Header() {
             <a
               key={item.name}
               href={item.href}
-              data-home-target={item.href === "/" ? "home-main" : undefined}
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noreferrer" : undefined}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
@@ -108,7 +107,6 @@ export function Header() {
             <a
               key={item.name}
               href={item.href}
-              data-home-target={item.href === "/" ? "home-main" : undefined}
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noreferrer" : undefined}
               onClick={() => setMobileMenuOpen(false)}

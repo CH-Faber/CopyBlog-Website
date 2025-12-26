@@ -108,6 +108,7 @@ export function ArticleList({
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(pagination?.currentPage ?? 1)
   const [categoriesExpanded, setCategoriesExpanded] = useState(false)
+  const basePath = pagination?.basePath ?? "/"
 
   const computedCategories = useMemo(() => {
     const counts = new Map<string, { id: string; name: string; count: number }>()
@@ -140,6 +141,26 @@ export function ArticleList({
 
   const tags = sidebarTags && sidebarTags.length > 0 ? sidebarTags : computedTags
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    const queryCategory = params.get("category")?.trim()
+    const queryTag = params.get("tag")?.trim()
+
+    if (queryTag && tags.includes(queryTag)) {
+      setActiveTag(queryTag)
+      setActiveCategory("all")
+      setCurrentPage(1)
+      return
+    }
+
+    if (queryCategory && categories.some((category) => category.id === queryCategory)) {
+      setActiveCategory(queryCategory)
+      setActiveTag(null)
+      setCurrentPage(1)
+    }
+  }, [categories, tags])
+
   const filteredArticles = useMemo(() => {
     return articles.filter((article) => {
       const categoryMatch = activeCategory === "all" || article.category === activeCategory
@@ -168,20 +189,41 @@ export function ArticleList({
     return buildPageRange(currentPage, totalPages)
   }, [pagination, currentPage, totalPages])
 
-  const basePath = pagination?.basePath ?? "/"
+  const withHomeHash = (href?: string) => (href ? `${href}#home-main` : undefined)
   const previousUrl = pagination && currentPage > 1 ? getPageHref(currentPage - 1, basePath) : undefined
   const nextUrl = pagination && currentPage < totalPages ? getPageHref(currentPage + 1, basePath) : undefined
-  const homeTargetForHref = (href?: string) => (href === "/" ? "home-main" : undefined)
   const scrollToListTop = () => {
     const target = document.getElementById("home-main") ?? sectionRef.current
     if (!target) return
     target.scrollIntoView({ behavior: "smooth", block: "start" })
   }
 
+  const updateSearchParams = (nextCategory: string, nextTag: string | null) => {
+    if (typeof window === "undefined") return
+    const url = new URL(window.location.href)
+    const targetPath = pagination ? getPageHref(1, basePath) : url.pathname
+
+    if (nextCategory !== "all") {
+      url.searchParams.set("category", nextCategory)
+    } else {
+      url.searchParams.delete("category")
+    }
+
+    if (nextTag) {
+      url.searchParams.set("tag", nextTag)
+    } else {
+      url.searchParams.delete("tag")
+    }
+
+    const search = url.searchParams.toString()
+    window.history.replaceState({}, "", `${targetPath}${search ? `?${search}` : ""}#home-main`)
+  }
+
   const handleCategoryChange = (category: string) => {
     setActiveCategory(category)
     setActiveTag(null)
     setCurrentPage(1)
+    updateSearchParams(category, null)
     requestAnimationFrame(scrollToListTop)
   }
   const handleTagChange = (tag: string | null) => {
@@ -189,6 +231,7 @@ export function ArticleList({
     setActiveCategory("all")
     setCategoriesExpanded(false)
     setCurrentPage(1)
+    updateSearchParams("all", tag)
     requestAnimationFrame(scrollToListTop)
   }
   const handlePageClick =
@@ -264,13 +307,12 @@ export function ArticleList({
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationLink
-                        href={previousUrl}
+                        href={withHomeHash(previousUrl)}
                         size="default"
                         aria-disabled={!previousUrl}
                         tabIndex={previousUrl ? undefined : -1}
                         className={cn("gap-1 px-2.5", !previousUrl && "pointer-events-none opacity-50")}
                         rel={previousUrl ? "prev" : undefined}
-                        data-home-target={homeTargetForHref(previousUrl)}
                         onClick={previousUrl ? handlePageClick(currentPage - 1) : undefined}
                       >
                         <ChevronLeft className="size-4" />
@@ -284,9 +326,8 @@ export function ArticleList({
                           <PaginationEllipsis />
                         ) : (
                           <PaginationLink
-                            href={getPageHref(page, basePath)}
+                            href={withHomeHash(getPageHref(page, basePath))}
                             isActive={currentPage === page}
-                            data-home-target={homeTargetForHref(getPageHref(page, basePath))}
                             onClick={handlePageClick(page)}
                           >
                             {page}
@@ -297,13 +338,12 @@ export function ArticleList({
 
                     <PaginationItem>
                       <PaginationLink
-                        href={nextUrl}
+                        href={withHomeHash(nextUrl)}
                         size="default"
                         aria-disabled={!nextUrl}
                         tabIndex={nextUrl ? undefined : -1}
                         className={cn("gap-1 px-2.5", !nextUrl && "pointer-events-none opacity-50")}
                         rel={nextUrl ? "next" : undefined}
-                        data-home-target={homeTargetForHref(nextUrl)}
                         onClick={nextUrl ? handlePageClick(currentPage + 1) : undefined}
                       >
                         <span className="hidden sm:block">下一页</span>
