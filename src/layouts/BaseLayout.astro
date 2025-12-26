@@ -26,6 +26,39 @@ const { title = defaultTitle, description = defaultDescription } = Astro.props a
     <link rel="icon" href="/icon-dark-32x32.png" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-icon.png" />
+    <!-- Google tag (gtag.js) -->
+    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-1DF2LNJPSY"></script>
+    <script is:inline>
+      // @ts-nocheck
+      window.dataLayer = window.dataLayer || []
+      const gtag = (...args) => {
+        window.dataLayer.push(args)
+      }
+      gtag('js', new Date())
+      gtag('config', 'G-1DF2LNJPSY')
+    </script>
+
+    <!-- Microsoft Clarity -->
+    <script is:inline>
+      // @ts-nocheck
+      ;(() => {
+        if (window.clarity) return
+        const clarity = function () {
+          clarity.q = clarity.q || []
+          clarity.q.push(Array.from(arguments))
+        }
+        window.clarity = clarity
+        const script = document.createElement('script')
+        script.async = true
+        script.src = 'https://www.clarity.ms/tag/rkga1fxqqs'
+        const firstScript = document.getElementsByTagName('script')[0]
+        if (firstScript?.parentNode) {
+          firstScript.parentNode.insertBefore(script, firstScript)
+        } else {
+          document.head.appendChild(script)
+        }
+      })()
+    </script>
     <script is:inline>
       // 主题初始化 - 防止页面加载闪烁
       (function() {
