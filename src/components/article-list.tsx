@@ -161,14 +161,16 @@ export function ArticleList({
     setActiveCategory(nextCategory)
     setActiveTag(nextTag)
     setCategoriesExpanded(nextExpanded)
-    setCurrentPage(1)
+
+    const shouldResetPage = Boolean(nextTag) || nextCategory !== "all"
+    setCurrentPage(shouldResetPage ? 1 : pagination?.currentPage ?? 1)
 
     if (document.documentElement.hasAttribute("data-prefilter")) {
       requestAnimationFrame(() => {
         document.documentElement.removeAttribute("data-prefilter")
       })
     }
-  }, [categories, tags])
+  }, [categories, tags, pagination?.currentPage])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -218,7 +220,11 @@ export function ArticleList({
     return buildPageRange(currentPage, totalPages)
   }, [pagination, currentPage, totalPages])
 
-  const withHomeHash = (href?: string) => (href ? `${href}#home-main` : undefined)
+  const withHomeHash = (href?: string, pageNumber?: number) => {
+    if (!href) return undefined
+    if (pageNumber === 1) return `${href}#home-main`
+    return href
+  }
   const previousUrl = pagination && currentPage > 1 ? getPageHref(currentPage - 1, basePath) : undefined
   const nextUrl = pagination && currentPage < totalPages ? getPageHref(currentPage + 1, basePath) : undefined
   const scrollToListTop = () => {
@@ -337,7 +343,7 @@ export function ArticleList({
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationLink
-                        href={withHomeHash(previousUrl)}
+                        href={withHomeHash(previousUrl, currentPage - 1)}
                         size="default"
                         aria-disabled={!previousUrl}
                         tabIndex={previousUrl ? undefined : -1}
@@ -356,7 +362,7 @@ export function ArticleList({
                           <PaginationEllipsis />
                         ) : (
                           <PaginationLink
-                            href={withHomeHash(getPageHref(page, basePath))}
+                            href={withHomeHash(getPageHref(page, basePath), page)}
                             isActive={currentPage === page}
                             onClick={handlePageClick(page)}
                           >
@@ -368,7 +374,7 @@ export function ArticleList({
 
                     <PaginationItem>
                       <PaginationLink
-                        href={withHomeHash(nextUrl)}
+                        href={withHomeHash(nextUrl, currentPage + 1)}
                         size="default"
                         aria-disabled={!nextUrl}
                         tabIndex={nextUrl ? undefined : -1}
