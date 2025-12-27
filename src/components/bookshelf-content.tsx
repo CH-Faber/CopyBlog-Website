@@ -104,10 +104,10 @@ export function BookshelfContent() {
           {/* Page Header */}
           <div className="mb-16">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-1 h-8 bg-primary rounded-full" />
-              <h1 className="text-4xl md:text-5xl font-bold text-foreground">书架</h1>
+              <div className="w-1 h-[3em] bg-primary rounded-full translate-y-1.5" />
+              <h1 className="text-4xl md:text-5xl font-bold text-foreground font-serif">书架</h1>
             </div>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-muted-foreground text-lg font-serif">
               博学而笃志，切问而近思
             </p>
           </div>
