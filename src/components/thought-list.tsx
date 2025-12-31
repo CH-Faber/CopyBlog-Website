@@ -114,7 +114,7 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
           prose-a:text-primary prose-a:no-underline prose-a:hover:underline
           prose-strong:text-foreground prose-strong:font-semibold
           prose-code:text-primary prose-code:bg-secondary prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
-          prose-blockquote:border-l-primary prose-blockquote:border-l-2 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground
+          prose-blockquote:border-l-primary prose-blockquote:border-l-2 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-foreground/70 prose-blockquote:font-normal
           prose-ol:text-foreground/90 prose-ul:text-foreground/90 prose-ol:my-4 prose-ul:my-4
           prose-li:marker:text-primary prose-li:my-1.5"
           dangerouslySetInnerHTML={{ __html: thought.content }}
