@@ -1,6 +1,5 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Giscus } from "@/components/Giscus"
 import { MapPin, Github, MessageCircle, Music, Heart } from "lucide-react"
 import { profile } from "@/data/profile"
 
@@ -129,11 +128,6 @@ export default function AboutPage() {
             </div>
           </section>
 
-          <section className="mt-8 pt-0 pb-8">
-            <div className="max-w-3xl mx-auto">
-              <Giscus />
-            </div>
-          </section>
         </div>
       </main>
       <Footer />
