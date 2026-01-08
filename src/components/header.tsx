@@ -104,7 +104,7 @@ export function Header() {
           mobileMenuOpen ? "max-h-64 opacity-100" : "max-h-0 opacity-0",
         )}
       >
-        <nav className="flex flex-col px-6 py-4 gap-4">
+        <nav className="flex flex-col px-6 py-4 gap-4 items-end text-right">
           {navItems.map((item) => (
             <a
               key={item.name}
@@ -113,7 +113,7 @@ export function Header() {
               rel={item.external ? "noreferrer" : undefined}
               data-astro-prefetch={item.external ? undefined : ""}
               onClick={() => setMobileMenuOpen(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors duration-200"
+              className="text-muted-foreground hover:text-foreground transition-colors duration-200 w-full flex justify-end"
             >
               {item.name}
             </a>
