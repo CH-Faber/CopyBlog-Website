@@ -2,6 +2,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro"
 import AboutPage from "@/components/pages/AboutPage"
 import Comments from "@/components/Comments.astro"
+import { Footer } from "@/components/footer"
 
 const title = "关于 | 时歌的博客"
 const description = "跨学科研究者的背景与博客介绍"
@@ -10,4 +11,5 @@ const description = "跨学科研究者的背景与博客介绍"
 <BaseLayout {title} {description}>
   <AboutPage />
   <Comments />
+  <Footer />
 </BaseLayout>
