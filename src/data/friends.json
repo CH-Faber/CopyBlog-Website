@@ -110,6 +110,13 @@
         "imgurl": "https://www.inkem.space/images/avatar.webp",
         "desc": "不许平凡，不容悲欢。",
         "siteurl": "https://www.inkem.space"
+      },
+      {
+        "title": "Viki 写东西的地方",
+        "imgurl": "https://blog.viki.moe/avatar.png",
+        "desc": "生活需要记录。",
+        "siteurl": "https://blog.viki.moe",
+        "rss": "https://blog.viki.moe/rss"
       }
     ]
   },

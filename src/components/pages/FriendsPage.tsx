@@ -10,6 +10,7 @@ type FriendLink = {
   imgurl?: string
   desc?: string
   siteurl: string
+  rss?: string
 }
 
 type FriendCategory = {
@@ -29,6 +30,14 @@ const siteInfo = {
   rss: "https://lapis.cafe/rss.xml",
   email: "lapiscafe@foxmail.com"
 }
+
+const siteInfoText = [
+  `昵称：${siteInfo.name}`,
+  `地址：${siteInfo.url}`,
+  `头像：${siteInfo.avatar}`,
+  `描述：${siteInfo.desc}`,
+  `RSS：${siteInfo.rss}`
+].join("\n")
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -51,6 +60,14 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function FriendsPage() {
+  const [copiedAll, setCopiedAll] = useState(false)
+
+  const handleCopyAll = async () => {
+    await navigator.clipboard.writeText(siteInfoText)
+    setCopiedAll(true)
+    setTimeout(() => setCopiedAll(false), 2000)
+  }
+
   return (
     <div className="min-h-screen bg-background dark:bg-muted/30">
       <Header />
@@ -153,7 +170,17 @@ export default function FriendsPage() {
 
               {/* Site Info Card */}
               <div className="p-6 rounded-xl border border-border bg-card">
-                <h3 className="text-sm font-medium text-foreground mb-4">本站信息</h3>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h3 className="text-sm font-medium text-foreground">本站信息</h3>
+                  <button
+                    onClick={handleCopyAll}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:border-primary/60 hover:text-primary transition-colors"
+                    title="一键复制全部友链信息"
+                  >
+                    {copiedAll ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedAll ? "已复制" : "复制全部"}</span>
+                  </button>
+                </div>
                 <div className="space-y-3">
                   {[
                     { label: "站点名称", value: siteInfo.name },
