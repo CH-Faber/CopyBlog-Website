@@ -227,18 +227,20 @@ const booksForClient = allBooks.map((book) => {
                       </div>
                     </div>
 
-                    <h3 class="font-medium text-sm text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors min-h-[2.5rem] leading-snug">
-                      {book.fields.书名}
-                    </h3>
-                    {book.fields.作者 ? (
-                      <p class="text-xs text-muted-foreground line-clamp-1 min-h-[1rem]">
-                        {book.fields.作者.join(", ")}
-                      </p>
-                    ) : (
-                      <p class="text-xs text-muted-foreground min-h-[1rem]" aria-hidden="true">
-                        &nbsp;
-                      </p>
-                    )}
+                    <div class="min-h-[3.5rem] space-y-1">
+                      <h3 class="font-medium text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+                        {book.fields.书名}
+                      </h3>
+                      {book.fields.作者 ? (
+                        <p class="text-xs text-muted-foreground line-clamp-1">
+                          {book.fields.作者.join(", ")}
+                        </p>
+                      ) : (
+                        <p class="text-xs text-muted-foreground" aria-hidden="true">
+                          &nbsp;
+                        </p>
+                      )}
+                    </div>
                   </button>
                 )
               })}
