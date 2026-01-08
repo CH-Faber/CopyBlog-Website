@@ -1,0 +1,547 @@
+---
+import { Header } from "@/components/header"
+import { Footer } from "@/components/footer"
+import { cn } from "@/lib/utils"
+import booksData from "../../public/data/books.json"
+
+interface BookFields {
+  书名: string
+  作者?: string[]
+  书籍简介?: string
+  书评?: string
+  封面?: { local_path: string }[]
+  推荐状态?: "推荐" | "中庸" | "不行"
+  阅读进度?: string
+  完成阅读时期?: string
+  领域?: string
+}
+
+interface BookRecord {
+  fields: BookFields
+  id: string
+  record_id: string
+}
+
+const allBooks = (booksData.data.items as BookRecord[]).filter(
+  (book) => book.fields.阅读进度 === "1",
+)
+
+const booksByCategory = allBooks.reduce<Record<string, BookRecord[]>>((acc, book) => {
+  const category = book.fields.领域 || "未分类"
+  if (!acc[category]) acc[category] = []
+  acc[category].push(book)
+  return acc
+}, {})
+
+const categories = ["全部", ...Object.keys(booksByCategory)]
+const recommendStatuses = ["全部", "推荐", "中庸", "不行"]
+
+const stats = {
+  total: allBooks.length,
+  recommended: allBooks.filter((b) => b.fields.推荐状态 === "推荐").length,
+  categories: Object.keys(booksByCategory).length,
+}
+
+const getCoverUrl = (book: BookRecord): string | null => {
+  const cover = book.fields.封面?.[0]
+  return cover?.local_path || null
+}
+
+const getRecommendBadge = (status?: string) => {
+  switch (status) {
+    case "推荐":
+      return { icon: "ThumbsUp", className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" }
+    case "中庸":
+      return { icon: "Minus", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" }
+    case "不行":
+      return { icon: "ThumbsDown", className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" }
+    default:
+      return null
+  }
+}
+
+const booksForClient = allBooks.map((book) => {
+  return {
+    id: book.id,
+    title: book.fields.书名,
+    authors: book.fields.作者?.join(", ") ?? "",
+    category: book.fields.领域 || "未分类",
+    status: book.fields.推荐状态 ?? "",
+    cover: getCoverUrl(book) ?? "",
+    review: book.fields.书评 ?? "",
+    description: book.fields.书籍简介 ?? "",
+    finished: book.fields.完成阅读时期 ?? "",
+  }
+})
+---
+
+<div class="min-h-screen bg-background dark:bg-muted/30">
+  <Header client:load />
+
+  <main class="pt-32 pb-24">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="mb-16">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-1 h-[3em] bg-primary rounded-full translate-y-1.5" />
+          <h1 class="text-4xl md:text-5xl font-bold text-foreground font-serif">书架</h1>
+        </div>
+        <p class="text-muted-foreground text-lg font-serif">博学而笃志，切问而近思</p>
+      </div>
+
+      <div class="flex items-center gap-6 text-sm text-muted-foreground mb-8">
+        <span class="flex items-center gap-2">
+          <span class="inline-flex h-4 w-4 items-center justify-center text-primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4">
+              <path fill="currentColor" d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16.5a1.5 1.5 0 0 1-1.5 1.5H6.5A2.5 2.5 0 0 1 4 18.5zM6.5 4A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H18a.5.5 0 0 0 .5-.5V4z" />
+            </svg>
+          </span>
+          <span class="font-medium text-foreground">{stats.total}</span> 本已读
+        </span>
+        <span class="flex items-center gap-2">
+          <span class="inline-flex h-4 w-4 items-center justify-center text-green-500">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4">
+              <path fill="currentColor" d="M2 10h6.5L10 3l4 7h6l-5 6 2.5 6-5-4-5 4L9 16z" />
+            </svg>
+          </span>
+          <span class="font-medium text-foreground">{stats.recommended}</span> 本推荐
+        </span>
+        <span class="flex items-center gap-2">
+          <span class="inline-flex h-4 w-4 items-center justify-center text-muted-foreground">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4">
+              <path fill="currentColor" d="M3 5h18v2H3zm4 6h10v2H7zm-2 6h14v2H5z" />
+            </svg>
+          </span>
+          <span class="font-medium text-foreground">{stats.categories}</span> 个领域
+        </span>
+      </div>
+
+      <div class="space-y-4 mb-10">
+        <div class="relative max-w-sm">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="h-4 w-4">
+              <path fill="currentColor" d="M10 4a6 6 0 1 0 3.5 10.8l4.9 4.9 1.4-1.4-4.9-4.9A6 6 0 0 0 10 4m0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8" />
+            </svg>
+          </span>
+          <input
+            data-bookshelf-search
+            type="text"
+            placeholder="搜索书名或作者..."
+            class="w-full pl-10 pr-4 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all"
+          />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-muted-foreground uppercase tracking-wide">领域</span>
+            {categories.map((category) => (
+              <button
+                type="button"
+                data-filter-category={category}
+                data-active-class="bg-primary text-primary-foreground"
+                data-inactive-class="text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                class={cn(
+                  "px-3 py-1.5 rounded-md text-xs transition-all duration-200",
+                  category === "全部" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                )}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          <div class="h-4 w-px bg-border hidden sm:block" />
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-muted-foreground uppercase tracking-wide">评价</span>
+            {recommendStatuses.map((status) => (
+              <button
+                type="button"
+                data-filter-status={status}
+                data-active-class="bg-primary text-primary-foreground"
+                data-inactive-class="text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                class={cn(
+                  "px-3 py-1.5 rounded-md text-xs transition-all duration-200",
+                  status === "全部" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                )}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-12" data-bookshelf-sections>
+        {Object.entries(booksByCategory).map(([category, books]) => (
+          <section data-category-section={category}>
+            <div class="flex items-center gap-3 mb-6">
+              <h2 class="text-lg font-semibold text-foreground">{category}</h2>
+              <span class="text-sm text-muted-foreground" data-category-count>
+                ({books.length})
+              </span>
+              <div class="flex-1 h-px bg-border/50" />
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+              {books.map((book) => {
+                const badge = getRecommendBadge(book.fields.推荐状态)
+                const coverUrl = getCoverUrl(book)
+                const authors = book.fields.作者?.join(", ") ?? ""
+                return (
+                  <button
+                    type="button"
+                    data-book-card
+                    data-book-id={book.id}
+                    data-category={book.fields.领域 || "未分类"}
+                    data-status={book.fields.推荐状态 || ""}
+                    data-title={book.fields.书名.toLowerCase()}
+                    data-authors={authors.toLowerCase()}
+                    class="group cursor-pointer text-left"
+                  >
+                    <div class="relative aspect-[3/4] rounded-lg overflow-hidden mb-3 bg-muted/30 shadow-sm group-hover:shadow-xl transition-shadow duration-300">
+                      {coverUrl ? (
+                        <img
+                          src={coverUrl}
+                          alt={book.fields.书名}
+                          loading="lazy"
+                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div class="flex h-full w-full items-center justify-center p-3 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5">
+                          <p class="font-semibold text-xs text-foreground text-center line-clamp-4">{book.fields.书名}</p>
+                        </div>
+                      )}
+
+                      {badge && (
+                        <div class={cn("absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center", badge.className)}>
+                          <span class="text-xs font-semibold" aria-hidden="true">★</span>
+                        </div>
+                      )}
+
+                      <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
+                        {book.fields.书评 ? (
+                          <p class="text-white/90 text-xs line-clamp-4 leading-relaxed">{book.fields.书评}</p>
+                        ) : book.fields.书籍简介 ? (
+                          <p class="text-white/80 text-xs line-clamp-4 leading-relaxed">{book.fields.书籍简介}</p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <h3 class="font-medium text-sm text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">
+                      {book.fields.书名}
+                    </h3>
+                    {book.fields.作者 && (
+                      <p class="text-xs text-muted-foreground line-clamp-1">{book.fields.作者.join(", ")}</p>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div class="text-center py-16 hidden" data-empty-state>
+        <span class="inline-flex h-12 w-12 items-center justify-center text-muted-foreground/30 mx-auto mb-4">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="h-12 w-12">
+            <path fill="currentColor" d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16.5a1.5 1.5 0 0 1-1.5 1.5H6.5A2.5 2.5 0 0 1 4 18.5zM6.5 4A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H18a.5.5 0 0 0 .5-.5V4z" />
+          </svg>
+        </span>
+        <p class="text-muted-foreground">没有找到匹配的书籍</p>
+      </div>
+    </div>
+  </main>
+
+  <Footer />
+
+  <div
+    class="fixed inset-0 z-[60] hidden items-center justify-center px-4"
+    data-bookshelf-modal
+    aria-hidden="true"
+  >
+    <div class="absolute inset-0 bg-black/50" data-bookshelf-backdrop></div>
+    <div class="relative w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col bg-background border border-border rounded-2xl shadow-2xl">
+      <button
+        type="button"
+        class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+        data-bookshelf-close
+        aria-label="关闭"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="h-5 w-5">
+          <path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z" />
+        </svg>
+      </button>
+
+      <div class="flex gap-5 p-6">
+        <div class="shrink-0 w-32 aspect-[3/4] rounded-lg overflow-hidden bg-muted/30" data-modal-cover-wrap>
+          <img data-modal-cover alt="" class="w-full h-full object-cover hidden" />
+          <div class="flex h-full w-full items-center justify-center p-3 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5" data-modal-cover-fallback>
+            <p class="font-semibold text-xs text-foreground text-center" data-modal-cover-title></p>
+          </div>
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <h2 class="text-xl font-bold text-foreground mb-2" data-modal-title></h2>
+          <p class="text-sm text-muted-foreground mb-3" data-modal-authors></p>
+          <div class="flex flex-wrap gap-2">
+            <span class="px-2 py-1 text-xs rounded-md bg-muted text-muted-foreground" data-modal-category></span>
+            <span class="px-2 py-1 text-xs rounded-md" data-modal-status></span>
+            <span class="px-2 py-1 text-xs rounded-md bg-muted text-muted-foreground flex items-center gap-1" data-modal-finished>
+              <span class="inline-flex h-3 w-3 items-center justify-center">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="h-3 w-3">
+                  <path fill="currentColor" d="M7 2h2v2h6V2h2v2h3v18H4V4h3zm11 6H6v12h12z" />
+                </svg>
+              </span>
+              <span data-modal-finished-text></span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-4 px-6 pb-6" data-modal-content>
+        <div data-modal-review-section>
+          <h3 class="text-sm font-medium text-foreground mb-2">我的书评</h3>
+          <p class="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap" data-modal-review></p>
+        </div>
+        <div data-modal-desc-section>
+          <h3 class="text-sm font-medium text-foreground mb-2">书籍简介</h3>
+          <p class="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap" data-modal-desc></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script
+    type="application/json"
+    id="books-data"
+    set:html={JSON.stringify(booksForClient).replace(/</g, "\\u003c")}
+  />
+  <script is:inline data-astro-rerun>
+    (function () {
+      if (window.__bookshelfCleanup) {
+        window.__bookshelfCleanup()
+        window.__bookshelfCleanup = null
+      }
+      const dataTag = document.getElementById("books-data")
+      if (!dataTag) return
+      const books = JSON.parse(dataTag.textContent || "[]")
+      const bookMap = new Map(books.map((book) => [book.id, book]))
+
+      const searchInput = document.querySelector("[data-bookshelf-search]")
+      const categoryButtons = Array.from(document.querySelectorAll("[data-filter-category]"))
+      const statusButtons = Array.from(document.querySelectorAll("[data-filter-status]"))
+      const cards = Array.from(document.querySelectorAll("[data-book-card]"))
+      const sections = Array.from(document.querySelectorAll("[data-category-section]"))
+      const emptyState = document.querySelector("[data-empty-state]")
+
+      const modal = document.querySelector("[data-bookshelf-modal]")
+      const modalBackdrop = document.querySelector("[data-bookshelf-backdrop]")
+      const modalClose = document.querySelector("[data-bookshelf-close]")
+      const modalCover = document.querySelector("[data-modal-cover]")
+      const modalCoverFallback = document.querySelector("[data-modal-cover-fallback]")
+      const modalCoverTitle = document.querySelector("[data-modal-cover-title]")
+      const modalTitle = document.querySelector("[data-modal-title]")
+      const modalAuthors = document.querySelector("[data-modal-authors]")
+      const modalCategory = document.querySelector("[data-modal-category]")
+      const modalStatus = document.querySelector("[data-modal-status]")
+      const modalFinished = document.querySelector("[data-modal-finished]")
+      const modalFinishedText = document.querySelector("[data-modal-finished-text]")
+      const modalReviewSection = document.querySelector("[data-modal-review-section]")
+      const modalReview = document.querySelector("[data-modal-review]")
+      const modalDescSection = document.querySelector("[data-modal-desc-section]")
+      const modalDesc = document.querySelector("[data-modal-desc]")
+
+      const state = {
+        category: "全部",
+        status: "全部",
+        query: "",
+      }
+
+      const setButtonState = (button, isActive) => {
+        const activeClass = (button.getAttribute("data-active-class") || "").split(" ").filter(Boolean)
+        const inactiveClass = (button.getAttribute("data-inactive-class") || "").split(" ").filter(Boolean)
+        activeClass.forEach((cls) => button.classList.toggle(cls, isActive))
+        inactiveClass.forEach((cls) => button.classList.toggle(cls, !isActive))
+      }
+
+      const updateSectionCounts = () => {
+        let totalVisible = 0
+        sections.forEach((section) => {
+          const sectionCards = Array.from(section.querySelectorAll("[data-book-card]"))
+          const visibleCount = sectionCards.filter((card) => !card.classList.contains("hidden")).length
+          const countEl = section.querySelector("[data-category-count]")
+          if (countEl) countEl.textContent = `(${visibleCount})`
+          section.classList.toggle("hidden", visibleCount === 0)
+          totalVisible += visibleCount
+        })
+        if (emptyState) {
+          emptyState.classList.toggle("hidden", totalVisible !== 0)
+        }
+      }
+
+      const applyFilters = () => {
+        const query = state.query.trim().toLowerCase()
+        cards.forEach((card) => {
+          const category = card.getAttribute("data-category") || ""
+          const status = card.getAttribute("data-status") || ""
+          const title = card.getAttribute("data-title") || ""
+          const authors = card.getAttribute("data-authors") || ""
+          const matchCategory = state.category === "全部" || category === state.category
+          const matchStatus = state.status === "全部" || status === state.status
+          const matchQuery = !query || title.includes(query) || authors.includes(query)
+          card.classList.toggle("hidden", !(matchCategory && matchStatus && matchQuery))
+        })
+        updateSectionCounts()
+      }
+
+      const cleanups = []
+
+      categoryButtons.forEach((button) => {
+        const handler = () => {
+          state.category = button.getAttribute("data-filter-category") || "全部"
+          categoryButtons.forEach((btn) => setButtonState(btn, btn === button))
+          applyFilters()
+        }
+        button.addEventListener("click", handler)
+        cleanups.push(() => button.removeEventListener("click", handler))
+      })
+
+      statusButtons.forEach((button) => {
+        const handler = () => {
+          state.status = button.getAttribute("data-filter-status") || "全部"
+          statusButtons.forEach((btn) => setButtonState(btn, btn === button))
+          applyFilters()
+        }
+        button.addEventListener("click", handler)
+        cleanups.push(() => button.removeEventListener("click", handler))
+      })
+
+      if (searchInput) {
+        const handler = (event) => {
+          const target = event.target
+          if (!(target instanceof HTMLInputElement)) return
+          state.query = target.value
+          applyFilters()
+        }
+        searchInput.addEventListener("input", handler)
+        cleanups.push(() => searchInput.removeEventListener("input", handler))
+      }
+
+      const openModal = (book) => {
+        if (!modal) return
+        modal.classList.remove("hidden")
+        modal.setAttribute("aria-hidden", "false")
+        document.body.classList.add("overflow-hidden")
+
+        if (modalTitle) modalTitle.textContent = book.title || ""
+        if (modalAuthors) {
+          modalAuthors.textContent = book.authors || ""
+          modalAuthors.classList.toggle("hidden", !book.authors)
+        }
+
+        if (modalCategory) {
+          modalCategory.textContent = book.category || "未分类"
+          modalCategory.classList.toggle("hidden", !book.category)
+        }
+
+        if (modalStatus) {
+          modalStatus.textContent = book.status || ""
+          modalStatus.classList.toggle("hidden", !book.status)
+          modalStatus.classList.remove(
+            "bg-green-100",
+            "text-green-700",
+            "dark:bg-green-900/30",
+            "dark:text-green-400",
+            "bg-yellow-100",
+            "text-yellow-700",
+            "dark:bg-yellow-900/30",
+            "dark:text-yellow-400",
+            "bg-red-100",
+            "text-red-700",
+            "dark:bg-red-900/30",
+            "dark:text-red-400",
+          )
+          if (book.status === "推荐") {
+            modalStatus.classList.add("bg-green-100", "text-green-700", "dark:bg-green-900/30", "dark:text-green-400")
+          } else if (book.status === "中庸") {
+            modalStatus.classList.add("bg-yellow-100", "text-yellow-700", "dark:bg-yellow-900/30", "dark:text-yellow-400")
+          } else if (book.status === "不行") {
+            modalStatus.classList.add("bg-red-100", "text-red-700", "dark:bg-red-900/30", "dark:text-red-400")
+          }
+        }
+
+        if (modalFinished && modalFinishedText) {
+          modalFinishedText.textContent = book.finished || ""
+          modalFinished.classList.toggle("hidden", !book.finished)
+        }
+
+        if (modalCover && modalCoverFallback && modalCoverTitle) {
+          if (book.cover) {
+            modalCover.src = book.cover
+            modalCover.classList.remove("hidden")
+            modalCoverFallback.classList.add("hidden")
+          } else {
+            modalCover.removeAttribute("src")
+            modalCover.classList.add("hidden")
+            modalCoverTitle.textContent = book.title || ""
+            modalCoverFallback.classList.remove("hidden")
+          }
+        }
+
+        if (modalReviewSection && modalReview) {
+          modalReview.textContent = book.review || ""
+          modalReviewSection.classList.toggle("hidden", !book.review)
+        }
+
+        if (modalDescSection && modalDesc) {
+          modalDesc.textContent = book.description || ""
+          modalDescSection.classList.toggle("hidden", !book.description)
+        }
+      }
+
+      const closeModal = () => {
+        if (!modal) return
+        modal.classList.add("hidden")
+        modal.setAttribute("aria-hidden", "true")
+        document.body.classList.remove("overflow-hidden")
+      }
+
+      cards.forEach((card) => {
+        const handler = () => {
+          const id = card.getAttribute("data-book-id")
+          if (!id) return
+          const book = bookMap.get(id)
+          if (book) openModal(book)
+        }
+        card.addEventListener("click", handler)
+        cleanups.push(() => card.removeEventListener("click", handler))
+      })
+
+      if (modalClose) {
+        modalClose.addEventListener("click", closeModal)
+        cleanups.push(() => modalClose.removeEventListener("click", closeModal))
+      }
+      if (modalBackdrop) {
+        modalBackdrop.addEventListener("click", closeModal)
+        cleanups.push(() => modalBackdrop.removeEventListener("click", closeModal))
+      }
+
+      const keydownHandler = (event) => {
+        if (event.key === "Escape") closeModal()
+      }
+      document.addEventListener("keydown", keydownHandler)
+      cleanups.push(() => document.removeEventListener("keydown", keydownHandler))
+
+      updateSectionCounts()
+
+      window.__bookshelfCleanup = () => {
+        cleanups.forEach((cleanup) => cleanup())
+        if (modal && !modal.classList.contains("hidden")) {
+          modal.classList.add("hidden")
+          modal.setAttribute("aria-hidden", "true")
+          document.body.classList.remove("overflow-hidden")
+        }
+      }
+    })()
+  </script>
+</div>

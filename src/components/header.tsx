@@ -37,7 +37,7 @@ export function Header() {
     >
       <div className="max-w-6xl mx-auto px-6 grid grid-cols-[1fr_auto_1fr] items-center">
         {/* Left: Logo */}
-        <a href="/#home-main" className="group flex items-center gap-3 justify-self-start">
+        <a href="/#home-main" data-astro-prefetch className="group flex items-center gap-3 justify-self-start">
           <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
             <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
           </div>
@@ -52,6 +52,7 @@ export function Header() {
               href={item.href}
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noreferrer" : undefined}
+              data-astro-prefetch={item.external ? undefined : ""}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
             >
               {item.name}
@@ -110,6 +111,7 @@ export function Header() {
               href={item.href}
               target={item.external ? "_blank" : undefined}
               rel={item.external ? "noreferrer" : undefined}
+              data-astro-prefetch={item.external ? undefined : ""}
               onClick={() => setMobileMenuOpen(false)}
               className="text-muted-foreground hover:text-foreground transition-colors duration-200"
             >
