@@ -442,8 +442,10 @@ const booksForClient = allBooks.map((book) => {
       const openModal = (book) => {
         if (!modal) return
         modal.classList.remove("hidden")
-        modalBackdrop && modalBackdrop.classList.add("opacity-100")
-        modalPanel && modalPanel.classList.add("opacity-100", "scale-100")
+        requestAnimationFrame(() => {
+          modalBackdrop && modalBackdrop.classList.add("opacity-100")
+          modalPanel && modalPanel.classList.add("opacity-100", "scale-100")
+        })
         modal.setAttribute("aria-hidden", "false")
         document.body.classList.add("overflow-hidden")
 
@@ -515,11 +517,13 @@ const booksForClient = allBooks.map((book) => {
 
       const closeModal = () => {
         if (!modal) return
-        modal.classList.add("hidden")
         modalBackdrop && modalBackdrop.classList.remove("opacity-100")
         modalPanel && modalPanel.classList.remove("opacity-100", "scale-100")
         modal.setAttribute("aria-hidden", "true")
         document.body.classList.remove("overflow-hidden")
+        setTimeout(() => {
+          modal.classList.add("hidden")
+        }, 200)
       }
 
       cards.forEach((card) => {
