@@ -196,7 +196,7 @@ const booksForClient = allBooks.map((book) => {
                     data-status={book.fields.推荐状态 || ""}
                     data-title={book.fields.书名.toLowerCase()}
                     data-authors={authors.toLowerCase()}
-                    class="group cursor-pointer text-left"
+                    class="group w-full cursor-pointer text-left focus:outline-none"
                   >
                     <div class="relative aspect-[3/4] rounded-lg overflow-hidden mb-3 bg-muted/30 shadow-sm group-hover:shadow-xl transition-shadow duration-300">
                       {coverUrl ? (
@@ -227,11 +227,17 @@ const booksForClient = allBooks.map((book) => {
                       </div>
                     </div>
 
-                    <h3 class="font-medium text-sm text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">
+                    <h3 class="font-medium text-sm text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors min-h-[2.5rem] leading-snug">
                       {book.fields.书名}
                     </h3>
-                    {book.fields.作者 && (
-                      <p class="text-xs text-muted-foreground line-clamp-1">{book.fields.作者.join(", ")}</p>
+                    {book.fields.作者 ? (
+                      <p class="text-xs text-muted-foreground line-clamp-1 min-h-[1rem]">
+                        {book.fields.作者.join(", ")}
+                      </p>
+                    ) : (
+                      <p class="text-xs text-muted-foreground min-h-[1rem]" aria-hidden="true">
+                        &nbsp;
+                      </p>
                     )}
                   </button>
                 )
@@ -255,12 +261,15 @@ const booksForClient = allBooks.map((book) => {
   <Footer />
 
   <div
-    class="fixed inset-0 z-[60] hidden items-center justify-center px-4"
+    class="fixed inset-0 z-[60] hidden flex items-center justify-center px-4"
     data-bookshelf-modal
     aria-hidden="true"
   >
-    <div class="absolute inset-0 bg-black/50" data-bookshelf-backdrop></div>
-    <div class="relative w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col bg-background border border-border rounded-2xl shadow-2xl">
+    <div class="absolute inset-0 bg-black/50 opacity-0 transition-opacity duration-200" data-bookshelf-backdrop></div>
+    <div
+      class="relative w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col bg-background border border-border rounded-2xl shadow-2xl opacity-0 scale-95 transition-all duration-200"
+      data-bookshelf-panel
+    >
       <button
         type="button"
         class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
@@ -336,6 +345,7 @@ const booksForClient = allBooks.map((book) => {
 
       const modal = document.querySelector("[data-bookshelf-modal]")
       const modalBackdrop = document.querySelector("[data-bookshelf-backdrop]")
+      const modalPanel = document.querySelector("[data-bookshelf-panel]")
       const modalClose = document.querySelector("[data-bookshelf-close]")
       const modalCover = document.querySelector("[data-modal-cover]")
       const modalCoverFallback = document.querySelector("[data-modal-cover-fallback]")
@@ -430,6 +440,8 @@ const booksForClient = allBooks.map((book) => {
       const openModal = (book) => {
         if (!modal) return
         modal.classList.remove("hidden")
+        modalBackdrop && modalBackdrop.classList.add("opacity-100")
+        modalPanel && modalPanel.classList.add("opacity-100", "scale-100")
         modal.setAttribute("aria-hidden", "false")
         document.body.classList.add("overflow-hidden")
 
@@ -502,6 +514,8 @@ const booksForClient = allBooks.map((book) => {
       const closeModal = () => {
         if (!modal) return
         modal.classList.add("hidden")
+        modalBackdrop && modalBackdrop.classList.remove("opacity-100")
+        modalPanel && modalPanel.classList.remove("opacity-100", "scale-100")
         modal.setAttribute("aria-hidden", "true")
         document.body.classList.remove("overflow-hidden")
       }

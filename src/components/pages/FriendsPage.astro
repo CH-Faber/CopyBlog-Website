@@ -86,7 +86,7 @@ const siteInfoText = [
                         <h3 class="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                           {friend.title}
                         </h3>
-                        <ExternalLink class="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       <p class="text-sm text-muted-foreground line-clamp-2">
                         {friend.desc?.trim() ? friend.desc : "暂无描述"}
@@ -103,7 +103,7 @@ const siteInfoText = [
       <section class="space-y-6">
         <div class="flex items-center gap-3">
           <div class="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary">
-            <Heart class="w-5 h-5" />
+            <Heart className="w-5 h-5" />
           </div>
           <div>
             <h2 class="text-xl font-semibold text-foreground">申请友链</h2>
@@ -122,7 +122,7 @@ const siteInfoText = [
                 "申请者具备一定的基本教育背景（最好完成高中或同等教育）",
               ].map((item) => (
                 <li class="flex items-start gap-3 text-sm text-muted-foreground">
-                  <CheckCircle2 class="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -139,8 +139,8 @@ const siteInfoText = [
                 class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:border-primary/60 hover:text-primary transition-colors"
                 title="一键复制全部友链信息"
               >
-                <Copy class="w-3.5 h-3.5" data-copy-icon />
-                <Check class="w-3.5 h-3.5 text-green-500 hidden" data-check-icon />
+                <Copy className="w-3.5 h-3.5" data-copy-icon />
+                <Check className="w-3.5 h-3.5 text-green-500 hidden" data-check-icon />
                 <span data-copy-label>复制全部</span>
               </button>
             </div>
@@ -165,8 +165,8 @@ const siteInfoText = [
                       class="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                       title="复制"
                     >
-                      <Copy class="w-3.5 h-3.5" data-copy-icon />
-                      <Check class="w-3.5 h-3.5 text-green-500 hidden" data-check-icon />
+                      <Copy className="w-3.5 h-3.5" data-copy-icon />
+                      <Check className="w-3.5 h-3.5 text-green-500 hidden" data-check-icon />
                     </button>
                   </div>
                 </div>
@@ -178,7 +178,7 @@ const siteInfoText = [
         <div class="p-5 rounded-xl border border-primary/20 bg-primary/5">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div class="flex items-start gap-3">
-              <Mail class="w-5 h-5 text-primary mt-0.5" />
+              <Mail className="w-5 h-5 text-primary mt-0.5" />
               <div>
                 <p class="text-sm text-foreground font-medium">通过邮件申请</p>
                 <p class="text-xs text-muted-foreground mt-0.5">
@@ -190,7 +190,7 @@ const siteInfoText = [
               href={`mailto:${siteInfo.email}`}
               class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors shrink-0"
             >
-              <Mail class="w-4 h-4" />
+              <Mail className="w-4 h-4" />
               {siteInfo.email}
             </a>
           </div>
