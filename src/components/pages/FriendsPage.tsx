@@ -27,7 +27,7 @@ const siteInfo = {
   url: "https://www.lapis.cafe",
   avatar: "https://www.lapis.cafe/avatar.webp",
   desc: "理解以真实为本，但真实本身并不会自动呈现",
-  rss: "https://lapis.cafe/rss.xml",
+  rss: "https://www.lapis.cafe/rss.xml",
   email: "lapiscafe@foxmail.com"
 }
 
