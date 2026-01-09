@@ -130,21 +130,19 @@ const siteInfoText = [
             </ul>
           </div>
 
-          <div class="p-6 rounded-xl border border-border bg-card">
-          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h3 class="text-sm font-medium text-foreground">本站信息</h3>
-              <button
-                type="button"
-                data-copy-all
-                data-copy-text={siteInfoText}
-                class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:border-primary/60 hover:text-primary transition-colors"
-                title="一键复制全部友链信息"
-              >
-                <Copy className="w-3.5 h-3.5" data-copy-icon />
-                <Check className="w-3.5 h-3.5 text-green-500 hidden" data-check-icon />
-                <span data-copy-label>复制全部</span>
-              </button>
-            </div>
+          <div class="p-6 rounded-xl border border-border bg-card relative">
+            <h3 class="text-sm font-medium text-foreground mb-4">本站信息</h3>
+            <button
+              type="button"
+              data-copy-all
+              data-copy-text={siteInfoText}
+              class="absolute right-6 top-6 inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:border-primary/60 hover:text-primary transition-colors"
+              title="一键复制全部友链信息"
+            >
+              <Copy className="w-3.5 h-3.5" data-copy-icon />
+              <Check className="w-3.5 h-3.5 text-green-500 hidden" data-check-icon />
+              <span data-copy-label>复制全部</span>
+            </button>
             <div class="space-y-3">
               {[
                 { label: "站点名称", value: siteInfo.name },
@@ -153,25 +151,11 @@ const siteInfoText = [
                 { label: "站点描述", value: siteInfo.desc },
                 { label: "RSS", value: siteInfo.rss, mono: true },
               ].map((item) => (
-                <div class="grid grid-cols-[auto,1fr] items-start gap-x-4 gap-y-1 group">
+                <div class="flex flex-col gap-1 group sm:grid sm:grid-cols-[96px_1fr] sm:items-start sm:gap-x-4 sm:gap-y-1">
                   <span class="text-sm text-muted-foreground shrink-0">{item.label}</span>
-                  <div class="flex items-start justify-end gap-1 min-w-0">
-                    <span
-                      class={`text-sm text-foreground break-words ${item.mono ? "font-mono text-xs" : ""}`}
-                    >
-                      {item.value}
-                    </span>
-                    <button
-                      type="button"
-                      data-copy
-                      data-copy-text={item.value}
-                      class="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                      title="复制"
-                    >
-                      <Copy className="w-3.5 h-3.5" data-copy-icon />
-                      <Check className="w-3.5 h-3.5 text-green-500 hidden" data-check-icon />
-                    </button>
-                  </div>
+                  <span class={`text-sm text-foreground break-words ${item.mono ? "font-mono text-xs" : ""}`}>
+                    {item.value}
+                  </span>
                 </div>
               ))}
             </div>
@@ -235,16 +219,9 @@ const siteInfoText = [
         }
       }
 
-      const buttons = Array.from(document.querySelectorAll("[data-copy]"))
       const copyAll = document.querySelector("[data-copy-all]")
 
       const cleanups = []
-      buttons.forEach((button) => {
-        const handler = () => handleCopy(button)
-        button.addEventListener("click", handler)
-        cleanups.push(() => button.removeEventListener("click", handler))
-      })
-
       if (copyAll) {
         const handler = () => handleCopy(copyAll)
         copyAll.addEventListener("click", handler)
