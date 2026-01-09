@@ -37,19 +37,21 @@ const siteInfoText = [
 ].join("\n")
 ---
 
-<div class="min-h-screen bg-background dark:bg-muted/30">
+<div class="min-h-screen bg-background dark:bg-muted/30 overflow-x-hidden">
   <Header client:load />
-  <main class="pt-32 pb-8">
+  <main class="pt-24 sm:pt-32 pb-8">
     <div class="max-w-4xl mx-auto px-6">
       <section class="mb-12">
-        <h1 class="text-4xl font-bold text-foreground mb-3 flex items-center gap-3">
+        <h1 class="text-3xl sm:text-4xl font-bold text-foreground mb-3 flex items-center gap-3">
           <span class="w-1 h-8 bg-primary rounded-full" />
           友情链接
         </h1>
-        <p class="text-lg text-muted-foreground">这些是我欣赏的创作者们，他们在各自的领域持续输出优质内容。</p>
+        <p class="text-base sm:text-lg text-muted-foreground">
+          这些是我欣赏的创作者们，他们在各自的领域持续输出优质内容。
+        </p>
       </section>
 
-      <section class="mb-16 space-y-10">
+      <section class="mb-16 space-y-8 sm:space-y-10">
         {friends.map((category) => (
           <div>
             <div class="mb-5">
@@ -58,17 +60,17 @@ const siteInfoText = [
                 <p class="text-sm text-muted-foreground">{category.categoryDesc}</p>
               ) : null}
             </div>
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid gap-3 sm:gap-4 sm:grid-cols-2">
               {category.links.map((friend) => (
                 <a
                   href={friend.siteurl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="group p-5 rounded-xl border border-border bg-card hover:border-primary/30 hover:shadow-lg transition-all duration-300"
+                  class="group block w-full min-w-0 p-4 sm:p-5 rounded-xl border border-border bg-card hover:border-primary/30 hover:shadow-lg transition-all duration-300"
                 >
-                  <div class="flex items-start gap-4">
+                  <div class="flex items-start gap-4 min-w-0">
                     {friend.imgurl ? (
-                      <div class="shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-border">
+                      <div class="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border border-border">
                         <img
                           src={friend.imgurl}
                           alt={friend.title}
@@ -82,7 +84,7 @@ const siteInfoText = [
 
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
-                        <h3 class="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                        <h3 class="text-base sm:text-lg font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                           {friend.title}
                         </h3>
                         <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -129,7 +131,7 @@ const siteInfoText = [
           </div>
 
           <div class="p-6 rounded-xl border border-border bg-card">
-            <div class="flex items-center justify-between gap-3 mb-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h3 class="text-sm font-medium text-foreground">本站信息</h3>
               <button
                 type="button"
@@ -151,10 +153,12 @@ const siteInfoText = [
                 { label: "站点描述", value: siteInfo.desc },
                 { label: "RSS", value: siteInfo.rss, mono: true },
               ].map((item) => (
-                <div class="flex items-center justify-between gap-4 group">
+                <div class="grid grid-cols-[auto,1fr] items-start gap-x-4 gap-y-1 group">
                   <span class="text-sm text-muted-foreground shrink-0">{item.label}</span>
-                  <div class="flex items-center gap-1 min-w-0">
-                    <span class={`text-sm text-foreground truncate ${item.mono ? "font-mono text-xs" : ""}`}>
+                  <div class="flex items-start justify-end gap-1 min-w-0">
+                    <span
+                      class={`text-sm text-foreground break-words ${item.mono ? "font-mono text-xs" : ""}`}
+                    >
                       {item.value}
                     </span>
                     <button
