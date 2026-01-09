@@ -40,76 +40,78 @@ export function Header() {
   }, [mobileMenuOpen])
 
   return (
-    <header
-      className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-out",
-        scrolled ? "bg-background/80 backdrop-blur-xl border-b border-border/50 py-4" : "bg-transparent py-6",
-      )}
-    >
-      <div className="max-w-6xl mx-auto px-6 grid grid-cols-[1fr_auto_1fr] items-center">
-        {/* Left: Logo */}
-        <a href="/#home-main" data-astro-prefetch className="group flex items-center gap-3 justify-self-start">
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
-            <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
-          </div>
-          <span className="text-foreground font-medium tracking-tight hidden sm:block">时歌的博客</span>
-        </a>
-
-        {/* Center: Navigation */}
-        <nav className="hidden md:flex items-center gap-8 justify-self-center">
-          {navItems.map((item) => (
-            <a
-              key={item.name}
-              href={item.href}
-              target={item.external ? "_blank" : undefined}
-              rel={item.external ? "noreferrer" : undefined}
-              data-astro-prefetch={item.external ? undefined : ""}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
-            >
-              {item.name}
-              <span className="absolute -bottom-1 left-0 w-0 h-px bg-primary transition-all duration-300 group-hover:w-full" />
-            </a>
-          ))}
-        </nav>
-
-        {/* Right: Search + Theme Toggle */}
-        <div className="hidden md:flex items-center gap-4 justify-self-end">
-          <HeaderSearch />
-          <ThemeToggle />
-        </div>
-
-        {/* Mobile: Search + Theme + Menu Button */}
-        <div className="flex items-center gap-2 md:hidden col-start-3 justify-self-end">
-          <HeaderSearch />
-          <ThemeToggle />
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2"
-            aria-label="Toggle menu"
-          >
-            <div className="relative w-5 h-4">
-              <span
-                className={cn(
-                  "absolute left-0 top-0 w-full h-px bg-foreground transition-all duration-300",
-                  mobileMenuOpen && "top-1/2 -translate-y-1/2 rotate-45 bottom-auto",
-                )}
-              />
-              <span
-                className={cn(
-                  "absolute left-0 top-1/2 w-full h-px -translate-y-1/2 bg-foreground transition-all duration-300",
-                  mobileMenuOpen && "opacity-0",
-                )}
-              />
-              <span
-                className={cn(
-                  "absolute left-0 bottom-0 w-full h-px bg-foreground transition-all duration-300",
-                  mobileMenuOpen && "top-1/2 -translate-y-1/2 -rotate-45 bottom-auto",
-                )}
-              />
+    <>
+      <header
+        className={cn(
+          "fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-out",
+          scrolled ? "bg-background/80 backdrop-blur-xl border-b border-border/50 py-4" : "bg-transparent py-6",
+        )}
+      >
+        <div className="max-w-6xl mx-auto px-6 grid grid-cols-[1fr_auto_1fr] items-center">
+          {/* Left: Logo */}
+          <a href="/#home-main" data-astro-prefetch className="group flex items-center gap-3 justify-self-start">
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
+              <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
             </div>
-        </button>
+            <span className="text-foreground font-medium tracking-tight hidden sm:block">时歌的博客</span>
+          </a>
+
+          {/* Center: Navigation */}
+          <nav className="hidden md:flex items-center gap-8 justify-self-center">
+            {navItems.map((item) => (
+              <a
+                key={item.name}
+                href={item.href}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noreferrer" : undefined}
+                data-astro-prefetch={item.external ? undefined : ""}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
+              >
+                {item.name}
+                <span className="absolute -bottom-1 left-0 w-0 h-px bg-primary transition-all duration-300 group-hover:w-full" />
+              </a>
+            ))}
+          </nav>
+
+          {/* Right: Search + Theme Toggle */}
+          <div className="hidden md:flex items-center gap-4 justify-self-end">
+            <HeaderSearch />
+            <ThemeToggle />
+          </div>
+
+          {/* Mobile: Search + Theme + Menu Button */}
+          <div className="flex items-center gap-2 md:hidden col-start-3 justify-self-end">
+            <HeaderSearch />
+            <ThemeToggle />
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2"
+              aria-label="Toggle menu"
+            >
+              <div className="relative w-5 h-4">
+                <span
+                  className={cn(
+                    "absolute left-0 top-0 w-full h-px bg-foreground transition-all duration-300",
+                    mobileMenuOpen && "top-1/2 -translate-y-1/2 rotate-45 bottom-auto",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "absolute left-0 top-1/2 w-full h-px -translate-y-1/2 bg-foreground transition-all duration-300",
+                    mobileMenuOpen && "opacity-0",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "absolute left-0 bottom-0 w-full h-px bg-foreground transition-all duration-300",
+                    mobileMenuOpen && "top-1/2 -translate-y-1/2 -rotate-45 bottom-auto",
+                  )}
+                />
+              </div>
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Mobile Menu */}
       <div
@@ -159,6 +161,6 @@ export function Header() {
           </nav>
         </div>
       </div>
-    </header>
+    </>
   )
 }
