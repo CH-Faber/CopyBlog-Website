@@ -28,6 +28,17 @@ export function Header() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      document.body.style.overflow = ""
+      return
+    }
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [mobileMenuOpen])
+
   return (
     <header
       className={cn(
@@ -76,23 +87,26 @@ export function Header() {
             className="p-2"
             aria-label="Toggle menu"
           >
-          <div className="w-5 h-4 flex flex-col justify-between">
-            <span
-              className={cn(
-                "w-full h-px bg-foreground transition-all duration-300",
-                mobileMenuOpen && "rotate-45 translate-y-1.5",
-              )}
-            />
-            <span
-              className={cn("w-full h-px bg-foreground transition-all duration-300", mobileMenuOpen && "opacity-0")}
-            />
-            <span
-              className={cn(
-                "w-full h-px bg-foreground transition-all duration-300",
-                mobileMenuOpen && "-rotate-45 -translate-y-1.5",
-              )}
-            />
-          </div>
+            <div className="relative w-5 h-4">
+              <span
+                className={cn(
+                  "absolute left-0 top-0 w-full h-px bg-foreground transition-all duration-300",
+                  mobileMenuOpen && "top-1/2 -translate-y-1/2 rotate-45 bottom-auto",
+                )}
+              />
+              <span
+                className={cn(
+                  "absolute left-0 top-1/2 w-full h-px -translate-y-1/2 bg-foreground transition-all duration-300",
+                  mobileMenuOpen && "opacity-0",
+                )}
+              />
+              <span
+                className={cn(
+                  "absolute left-0 bottom-0 w-full h-px bg-foreground transition-all duration-300",
+                  mobileMenuOpen && "top-1/2 -translate-y-1/2 -rotate-45 bottom-auto",
+                )}
+              />
+            </div>
         </button>
         </div>
       </div>
@@ -100,25 +114,50 @@ export function Header() {
       {/* Mobile Menu */}
       <div
         className={cn(
-          "md:hidden absolute top-full left-0 right-0 bg-background/95 backdrop-blur-xl border-b border-border overflow-hidden transition-all duration-300",
-          mobileMenuOpen ? "max-h-64 opacity-100" : "max-h-0 opacity-0",
+          "md:hidden fixed inset-0 z-[60] bg-background/95 backdrop-blur-xl transition-opacity duration-300",
+          mobileMenuOpen ? "opacity-100" : "pointer-events-none opacity-0",
         )}
+        onClick={() => setMobileMenuOpen(false)}
+        role="dialog"
+        aria-modal={mobileMenuOpen ? "true" : "false"}
+        aria-hidden={!mobileMenuOpen}
       >
-        <nav className="flex flex-col px-6 py-4 gap-4 items-end text-right">
-          {navItems.map((item) => (
-            <a
-              key={item.name}
-              href={item.href}
-              target={item.external ? "_blank" : undefined}
-              rel={item.external ? "noreferrer" : undefined}
-              data-astro-prefetch={item.external ? undefined : ""}
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors duration-200 w-full flex justify-end"
-            >
-              {item.name}
-            </a>
-          ))}
-        </nav>
+        <div
+          className="absolute inset-0 flex items-center justify-center px-8"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="absolute inset-x-0 top-0">
+            <div className="max-w-6xl mx-auto px-6 pt-6 flex justify-end">
+              <button
+                type="button"
+                className="p-2"
+                aria-label="Close menu"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <div className="relative w-5 h-4">
+                  <span className="absolute left-0 top-1/2 w-full h-px -translate-y-1/2 bg-foreground rotate-45 transition-all duration-300" />
+                  <span className="absolute left-0 top-1/2 w-full h-px -translate-y-1/2 bg-foreground opacity-0 transition-all duration-300" />
+                  <span className="absolute left-0 top-1/2 w-full h-px -translate-y-1/2 bg-foreground -rotate-45 transition-all duration-300" />
+                </div>
+              </button>
+            </div>
+          </div>
+          <nav className="flex flex-col items-center gap-6 text-center">
+            {navItems.map((item) => (
+              <a
+                key={item.name}
+                href={item.href}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noreferrer" : undefined}
+                data-astro-prefetch={item.external ? undefined : ""}
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-2xl text-muted-foreground hover:text-foreground transition-colors duration-200"
+              >
+                {item.name}
+              </a>
+            ))}
+          </nav>
+        </div>
       </div>
     </header>
   )

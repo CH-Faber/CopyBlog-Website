@@ -1,11 +1,9 @@
-import { Header } from "@/components/header"
 import { MapPin, Github, MessageCircle, Music, Heart } from "lucide-react"
 import { profile } from "@/data/profile"
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background dark:bg-muted/30">
-      <Header />
       <main className="pt-32 pb-8">
         <div className="max-w-4xl mx-auto px-6">
           {/* Hero Section */}
