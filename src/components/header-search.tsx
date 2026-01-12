@@ -7,8 +7,11 @@ type PagefindResult = {
   id: string
   data: () => Promise<{
     url: string
-    title: string
     excerpt: string
+    title?: string
+    meta?: {
+      title?: string
+    }
   }>
 }
 
@@ -235,7 +238,12 @@ export function HeaderSearch() {
 }
 
 function SearchResultItem({ result, onSelect }: { result: PagefindResult; onSelect: () => void }) {
-  const [data, setData] = useState<{ url: string; title: string; excerpt: string } | null>(null)
+  const [data, setData] = useState<{
+    url: string
+    excerpt: string
+    title?: string
+    meta?: { title?: string }
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -260,7 +268,7 @@ function SearchResultItem({ result, onSelect }: { result: PagefindResult; onSele
       className="block px-4 py-3 hover:bg-muted/50 transition-colors border-b border-border last:border-b-0"
     >
       <div className="font-medium text-sm text-foreground line-clamp-1">
-        {data.title}
+        {data.meta?.title || data.title || "未命名"}
       </div>
       <div
         className="text-xs text-muted-foreground mt-1 line-clamp-2"
