@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 
 type PagefindResult = {
@@ -33,6 +34,8 @@ export function HeaderSearch() {
   const containerRef = useRef<HTMLDivElement>(null)
   const desktopInputRef = useRef<HTMLInputElement>(null)
   const mobileInputRef = useRef<HTMLInputElement>(null)
+
+  const showPanel = isOpen || (isFocused && (query.trim() || !isProd))
 
   const focusSearchInput = (delay = 0) => {
     const focus = () => {
@@ -110,19 +113,6 @@ export function HeaderSearch() {
     return () => clearTimeout(debounce)
   }, [query, isProd, status])
 
-  // Close panel when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-        setIsFocused(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
   // Keyboard shortcut (Cmd+K / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -147,8 +137,6 @@ export function HeaderSearch() {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [])
 
-  const showPanel = isOpen || (isFocused && (query.trim() || !isProd))
-
   // Lock page scroll when search panel is open
   useEffect(() => {
     if (!showPanel) return
@@ -160,17 +148,24 @@ export function HeaderSearch() {
     }
   }, [showPanel])
 
+  const overlay = showPanel && typeof document !== "undefined"
+    ? createPortal(
+      <div
+        className="fixed inset-0 z-40"
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          setIsOpen(false)
+          setIsFocused(false)
+        }}
+      />,
+      document.body
+    )
+    : null
+
   return (
     <div ref={containerRef} className="relative">
-      {showPanel && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => {
-            setIsOpen(false)
-            setIsFocused(false)
-          }}
-        />
-      )}
+      {overlay}
       {/* Desktop search input */}
       <div className="hidden md:flex items-center">
         <div className={cn(
