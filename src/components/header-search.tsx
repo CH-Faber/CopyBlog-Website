@@ -149,8 +149,28 @@ export function HeaderSearch() {
 
   const showPanel = isOpen || (isFocused && (query.trim() || !isProd))
 
+  // Lock page scroll when search panel is open
+  useEffect(() => {
+    if (!showPanel) return
+    const { body } = document
+    const prevOverflow = body.style.overflow
+    body.style.overflow = "hidden"
+    return () => {
+      body.style.overflow = prevOverflow
+    }
+  }, [showPanel])
+
   return (
     <div ref={containerRef} className="relative">
+      {showPanel && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => {
+            setIsOpen(false)
+            setIsFocused(false)
+          }}
+        />
+      )}
       {/* Desktop search input */}
       <div className="hidden md:flex items-center">
         <div className={cn(
@@ -192,7 +212,7 @@ export function HeaderSearch() {
 
       {/* Search panel */}
       <div className={cn(
-        "fixed left-4 right-4 top-16 md:absolute md:top-full md:left-auto md:right-0 md:w-96 md:mt-2",
+        "fixed left-4 right-4 top-16 md:absolute md:top-full md:left-auto md:right-0 md:w-96 md:mt-2 z-50",
         "bg-background/95 backdrop-blur-xl border border-border rounded-xl shadow-lg",
         "transition-all duration-200 overflow-hidden",
         showPanel ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
