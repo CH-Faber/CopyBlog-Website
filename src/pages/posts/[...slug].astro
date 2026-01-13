@@ -28,7 +28,27 @@ const { Content, remarkPluginFrontmatter } = await post.render()
 const words = remarkPluginFrontmatter?.words
 const minutes = remarkPluginFrontmatter?.minutes
 
-const description = post.data.description || post.data.title
+const normalizeText = (text: string) => text.replace(/\s+/g, " ").trim()
+const buildMetaDescription = (primary: string, fallback: string, title: string, encrypted: boolean) => {
+  const preferred = normalizeText(primary)
+  const backup = normalizeText(fallback)
+
+  let result = preferred
+  if (!result || result.length < 60) {
+    result = backup
+  }
+  if (!result || result.length < 60) {
+    result = encrypted ? `${title}｜此文章已加密，输入密码后阅读。` : title
+  }
+  return result.length > 160 ? result.slice(0, 160) : result
+}
+
+const description = buildMetaDescription(
+  post.data.description || "",
+  remarkPluginFrontmatter?.excerpt || "",
+  post.data.title,
+  post.data.encrypted ?? false,
+)
 const title = `${post.data.title} | 时歌的博客`
 
 let encryptedData = null
