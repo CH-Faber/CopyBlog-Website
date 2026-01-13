@@ -5,12 +5,40 @@ import { ViewTransitions } from "astro:transitions"
 interface Props {
   title?: string
   description?: string
+  canonical?: string
+  ogType?: string
+  ogTitle?: string
+  ogDescription?: string
+  ogUrl?: string
+  twitterCard?: string
+  twitterTitle?: string
+  twitterDescription?: string
+  robots?: string
 }
 
 const defaultTitle = "时歌的博客 | Boundary of Thought"
 const defaultDescription = "探索金融、社会与人工智能的交汇点"
 
-const { title = defaultTitle, description = defaultDescription } = Astro.props as Props
+const {
+  title = defaultTitle,
+  description = defaultDescription,
+  canonical,
+  ogType = "website",
+  ogTitle,
+  ogDescription,
+  ogUrl,
+  twitterCard = "summary",
+  twitterTitle,
+  twitterDescription,
+  robots,
+} = Astro.props as Props
+
+const canonicalUrl = canonical || Astro.url.toString()
+const resolvedOgTitle = ogTitle || title
+const resolvedOgDescription = ogDescription || description
+const resolvedOgUrl = ogUrl || canonicalUrl
+const resolvedTwitterTitle = twitterTitle || title
+const resolvedTwitterDescription = twitterDescription || description
 ---
 
 <!doctype html>
@@ -20,6 +48,18 @@ const { title = defaultTitle, description = defaultDescription } = Astro.props a
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {robots ? <meta name="robots" content={robots} /> : null}
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={resolvedOgTitle} />
+    <meta property="og:description" content={resolvedOgDescription} />
+    <meta property="og:url" content={resolvedOgUrl} />
+    <meta property="og:site_name" content="时歌的博客" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta name="twitter:card" content={twitterCard} />
+    <meta name="twitter:title" content={resolvedTwitterTitle} />
+    <meta name="twitter:description" content={resolvedTwitterDescription} />
+    <slot name="head" />
     <link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
