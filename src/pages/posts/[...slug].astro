@@ -101,7 +101,7 @@ if (post.data.encrypted && post.data.password) {
     {tags.map((tag) => (
       <meta property="article:tag" content={tag} />
     ))}
-    <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
   </Fragment>
   <div class="min-h-screen bg-background dark:bg-muted/30">
     <Header client:load />
