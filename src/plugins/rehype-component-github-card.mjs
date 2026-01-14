@@ -103,29 +103,44 @@ export function GithubCardComponent(properties, children) {
 
 	const nScript = h(
 		`script#${cardUuid}-script`,
-		{ type: "text/javascript", defer: true },
+		{ type: "text/javascript", defer: true, "data-astro-rerun": true },
 		`
-      const langColors = ${JSON.stringify(LANGUAGE_COLORS)};
-      fetch('https://api.github.com/repos/${repo}', { referrerPolicy: "no-referrer" }).then(response => response.json()).then(data => {
-        document.getElementById('${cardUuid}-description').innerText = data.description?.replace(/:[a-zA-Z0-9_]+:/g, '') || "No description provided";
-        const lang = data.language || "";
-        const langEl = document.getElementById('${cardUuid}-language');
-        langEl.innerText = lang || "—";
-        if (lang && langColors[lang]) {
-          langEl.style.setProperty('--gc-lang-color', langColors[lang]);
+      (function() {
+        const __gcLangColorsMap = ${JSON.stringify(LANGUAGE_COLORS)};
+        const debugEnabled = () => localStorage.getItem("debugGithubCard") === "1";
+        const debug = (...args) => { if (debugEnabled()) console.log("[GITHUB-CARD]", ...args); };
+        const cardEl = document.getElementById('${cardUuid}-card');
+        if (cardEl && cardEl.dataset.githubLoaded === "true") {
+          // already loaded by fallback loader
+          debug("skip (already loaded)", "${repo}");
+          return;
         }
-        document.getElementById('${cardUuid}-forks').innerText = Intl.NumberFormat('en-us', { notation: "compact", maximumFractionDigits: 1 }).format(data.forks).replaceAll("\u202f", '');
-        document.getElementById('${cardUuid}-stars').innerText = Intl.NumberFormat('en-us', { notation: "compact", maximumFractionDigits: 1 }).format(data.stargazers_count).replaceAll("\u202f", '');
-        const avatarEl = document.getElementById('${cardUuid}-avatar');
-        avatarEl.style.backgroundImage = 'url(' + data.owner.avatar_url + ')';
-        avatarEl.style.backgroundColor = 'transparent';
-        document.getElementById('${cardUuid}-license').innerText = data.license?.spdx_id || "—";
-        document.getElementById('${cardUuid}-card').classList.remove("fetch-waiting");
-      }).catch(err => {
-        const c = document.getElementById('${cardUuid}-card');
-        c?.classList.add("fetch-error");
-        console.warn("[GITHUB-CARD] Error loading card for ${repo}");
-      })
+        if (cardEl) cardEl.dataset.githubLoaded = "loading";
+        debug("inline fetch", "${repo}");
+        fetch('https://api.github.com/repos/${repo}', { referrerPolicy: "no-referrer" }).then(response => response.json()).then(data => {
+          document.getElementById('${cardUuid}-description').innerText = data.description?.replace(/:[a-zA-Z0-9_]+:/g, '') || "No description provided";
+          const lang = data.language || "";
+          const langEl = document.getElementById('${cardUuid}-language');
+          langEl.innerText = lang || "—";
+          if (lang && __gcLangColorsMap[lang]) {
+            langEl.style.setProperty('--gc-lang-color', __gcLangColorsMap[lang]);
+          }
+          document.getElementById('${cardUuid}-forks').innerText = Intl.NumberFormat('en-us', { notation: "compact", maximumFractionDigits: 1 }).format(data.forks).replaceAll("\u202f", '');
+          document.getElementById('${cardUuid}-stars').innerText = Intl.NumberFormat('en-us', { notation: "compact", maximumFractionDigits: 1 }).format(data.stargazers_count).replaceAll("\u202f", '');
+          const avatarEl = document.getElementById('${cardUuid}-avatar');
+          avatarEl.style.backgroundImage = 'url(' + data.owner.avatar_url + ')';
+          avatarEl.style.backgroundColor = 'transparent';
+          document.getElementById('${cardUuid}-license').innerText = data.license?.spdx_id || "—";
+          document.getElementById('${cardUuid}-card').classList.remove("fetch-waiting");
+          if (cardEl) cardEl.dataset.githubLoaded = "true";
+          debug("inline loaded", "${repo}");
+        }).catch(() => {
+          const c = document.getElementById('${cardUuid}-card');
+          c?.classList.add("fetch-error");
+          if (cardEl) cardEl.dataset.githubLoaded = "error";
+          console.warn("[GITHUB-CARD] Error loading card for ${repo}");
+        });
+      })();
     `,
 	);
 
@@ -136,6 +151,8 @@ export function GithubCardComponent(properties, children) {
 			href: `https://github.com/${repo}`,
 			target: "_blank",
 			rel: "noopener noreferrer",
+			"data-github-card": "",
+			"data-github-repo": repo,
 			repo,
 		},
 		[

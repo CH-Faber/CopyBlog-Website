@@ -9,6 +9,8 @@ draft: false
 ---
 注 ：YOLO 最初的 Tab 补全功能非常不完善，1.4.10里的 tab 补全更新很大程度上是参考了[obsidian-copilot-auto-completion](https://github.com/j0rd1smit/obsidian-copilot-auto-completion) 的思路与功能设计，向开发者致敬！
 
+::github{repo="j0rd1smit/obsidian-copilot-auto-completion"}
+
 首先，我们为什么需要 Tab 补全呢？
 
 我认为，从笔记软件设计的角度出发，Tab 补全的核心价值就在于「减少打断」。当我们在写作时，思维是流动的，**任何需要我们停下来思考「接下来该怎么表达」的瞬间都会增添认知负担**。传统的 AI 写作助手（和 yolo 的其他模块设计）都需要你主动发起对话、等待响应、然后复制粘贴结果，而这个过程显然会打断写作的心流状态。

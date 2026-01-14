@@ -30,6 +30,8 @@ draft: false
 
 所以，就有了你现在看到的 [YOLO](https://github.com/Lapis0x0/obsidian-yolo)。
 
+::github{repo="Lapis0x0/obsidian-yolo"}
+
 >这里要专门感谢 Windsurf 里的 Claude 4.1 opus、GPT5 medium 和 Claude 4 sonnet 老师，没有你们就没有 YOLO。
 
 # YOLO的愿景是什么？
