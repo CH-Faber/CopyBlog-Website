@@ -2,6 +2,52 @@
 // @ts-nocheck
 import { h } from "hastscript";
 
+// GitHub language colors (subset of most common languages)
+const LANGUAGE_COLORS = {
+	JavaScript: "#f1e05a",
+	TypeScript: "#3178c6",
+	Python: "#3572A5",
+	Java: "#b07219",
+	"C++": "#f34b7d",
+	C: "#555555",
+	"C#": "#178600",
+	Go: "#00ADD8",
+	Rust: "#dea584",
+	Ruby: "#701516",
+	PHP: "#4F5D95",
+	Swift: "#F05138",
+	Kotlin: "#A97BFF",
+	Dart: "#00B4AB",
+	Scala: "#c22d40",
+	Shell: "#89e051",
+	HTML: "#e34c26",
+	CSS: "#563d7c",
+	SCSS: "#c6538c",
+	Vue: "#41b883",
+	Svelte: "#ff3e00",
+	Astro: "#ff5a03",
+	MDX: "#fcb32c",
+	Markdown: "#083fa1",
+	JSON: "#292929",
+	YAML: "#cb171e",
+	Dockerfile: "#384d54",
+	Makefile: "#427819",
+	Lua: "#000080",
+	Perl: "#0298c3",
+	R: "#198CE7",
+	Julia: "#a270ba",
+	Haskell: "#5e5086",
+	Elixir: "#6e4a7e",
+	Clojure: "#db5855",
+	Objective_C: "#438eff",
+	"Objective-C": "#438eff",
+	Jupyter_Notebook: "#DA5B0B",
+	"Jupyter Notebook": "#DA5B0B",
+	Vim_Script: "#199f4b",
+	TeX: "#3D6117",
+	PowerShell: "#012456",
+};
+
 /**
  * Creates a GitHub Card component.
  *
@@ -30,7 +76,7 @@ export function GithubCardComponent(properties, children) {
 	const nLanguage = h(
 		`span#${cardUuid}-language`,
 		{ class: "gc-language" },
-		"Waiting...",
+		"—",
 	);
 
 	const nTitle = h("div", { class: "gc-titlebar" }, [
@@ -48,32 +94,37 @@ export function GithubCardComponent(properties, children) {
 	const nDescription = h(
 		`div#${cardUuid}-description`,
 		{ class: "gc-description" },
-		"Waiting for api.github.com...",
+		"Loading...",
 	);
 
-	const nStars = h(`div#${cardUuid}-stars`, { class: "gc-stars" }, "00K");
-	const nForks = h(`div#${cardUuid}-forks`, { class: "gc-forks" }, "0K");
-	const nLicense = h(`div#${cardUuid}-license`, { class: "gc-license" }, "0K");
+	const nStars = h(`div#${cardUuid}-stars`, { class: "gc-stars" }, "—");
+	const nForks = h(`div#${cardUuid}-forks`, { class: "gc-forks" }, "—");
+	const nLicense = h(`div#${cardUuid}-license`, { class: "gc-license" }, "—");
 
 	const nScript = h(
 		`script#${cardUuid}-script`,
 		{ type: "text/javascript", defer: true },
 		`
+      const langColors = ${JSON.stringify(LANGUAGE_COLORS)};
       fetch('https://api.github.com/repos/${repo}', { referrerPolicy: "no-referrer" }).then(response => response.json()).then(data => {
-        document.getElementById('${cardUuid}-description').innerText = data.description?.replace(/:[a-zA-Z0-9_]+:/g, '') || "Description not set";
-        document.getElementById('${cardUuid}-language').innerText = data.language;
+        document.getElementById('${cardUuid}-description').innerText = data.description?.replace(/:[a-zA-Z0-9_]+:/g, '') || "No description provided";
+        const lang = data.language || "";
+        const langEl = document.getElementById('${cardUuid}-language');
+        langEl.innerText = lang || "—";
+        if (lang && langColors[lang]) {
+          langEl.style.setProperty('--gc-lang-color', langColors[lang]);
+        }
         document.getElementById('${cardUuid}-forks').innerText = Intl.NumberFormat('en-us', { notation: "compact", maximumFractionDigits: 1 }).format(data.forks).replaceAll("\u202f", '');
         document.getElementById('${cardUuid}-stars').innerText = Intl.NumberFormat('en-us', { notation: "compact", maximumFractionDigits: 1 }).format(data.stargazers_count).replaceAll("\u202f", '');
         const avatarEl = document.getElementById('${cardUuid}-avatar');
         avatarEl.style.backgroundImage = 'url(' + data.owner.avatar_url + ')';
         avatarEl.style.backgroundColor = 'transparent';
-        document.getElementById('${cardUuid}-license').innerText = data.license?.spdx_id || "no-license";
+        document.getElementById('${cardUuid}-license').innerText = data.license?.spdx_id || "—";
         document.getElementById('${cardUuid}-card').classList.remove("fetch-waiting");
-        console.log("[GITHUB-CARD] Loaded card for ${repo} | ${cardUuid}.")
       }).catch(err => {
         const c = document.getElementById('${cardUuid}-card');
         c?.classList.add("fetch-error");
-        console.warn("[GITHUB-CARD] (Error) Loading card for ${repo} | ${cardUuid}.")
+        console.warn("[GITHUB-CARD] Error loading card for ${repo}");
       })
     `,
 	);
@@ -81,9 +132,10 @@ export function GithubCardComponent(properties, children) {
 	return h(
 		`a#${cardUuid}-card`,
 		{
-			class: "card-github fetch-waiting no-styling",
+			class: "card-github fetch-waiting not-prose",
 			href: `https://github.com/${repo}`,
 			target: "_blank",
+			rel: "noopener noreferrer",
 			repo,
 		},
 		[
