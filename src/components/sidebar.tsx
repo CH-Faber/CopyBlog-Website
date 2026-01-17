@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { Calendar, Github, MessageCircle, Music } from "lucide-react"
 import { profile } from "@/data/profile"
@@ -15,6 +15,7 @@ interface SidebarProps {
   categoryPreviewCount?: number
   categoriesExpanded?: boolean
   onCategoriesExpandedChange?: (expanded: boolean) => void
+  extra?: ReactNode
 }
 
 export function Sidebar({
@@ -27,6 +28,7 @@ export function Sidebar({
   categoryPreviewCount = 3,
   categoriesExpanded,
   onCategoriesExpandedChange,
+  extra,
 }: SidebarProps) {
   const [internalExpanded, setInternalExpanded] = useState(false)
   const isExpanded = categoriesExpanded ?? internalExpanded
@@ -138,6 +140,8 @@ export function Sidebar({
           ))}
         </div>
       </div>
+
+      {extra && <div>{extra}</div>}
     </aside>
   )
 }

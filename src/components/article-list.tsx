@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import type { MouseEvent } from "react"
 import { ArticleCard } from "./article-card"
 import { Sidebar } from "./sidebar"
+import { ThoughtPreview, type ThoughtPreviewItem } from "./thought-preview"
 import {
   Pagination,
   PaginationContent,
@@ -94,6 +95,7 @@ export function ArticleList({
   pagination,
   sidebarCategories,
   sidebarTags,
+  sidebarThoughts,
 }: {
   articles: ArticleMeta[]
   title?: string
@@ -102,6 +104,7 @@ export function ArticleList({
   pagination?: PaginationMeta
   sidebarCategories?: SidebarCategory[]
   sidebarTags?: string[]
+  sidebarThoughts?: ThoughtPreviewItem[]
 }) {
   const sectionRef = useRef<HTMLElement | null>(null)
   const [activeCategory, setActiveCategory] = useState("all")
@@ -299,6 +302,7 @@ export function ArticleList({
               onTagChange={handleTagChange}
               categoriesExpanded={categoriesExpanded}
               onCategoriesExpandedChange={setCategoriesExpanded}
+              extra={sidebarThoughts && sidebarThoughts.length > 0 ? <ThoughtPreview thoughts={sidebarThoughts} /> : undefined}
             />
           </div>
 
