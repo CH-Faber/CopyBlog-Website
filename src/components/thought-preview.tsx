@@ -47,14 +47,14 @@ export function ThoughtPreview({
                 </div>
               </div>
               <div>
-                <div className="flex items-center min-h-[16px] text-xs text-muted-foreground mb-1 font-medium tracking-wide leading-none">
-                  {formatDate(thought.date)}
+                <div className="flex items-center gap-3 min-h-[16px] text-xs text-muted-foreground mb-1 font-medium tracking-wide leading-none">
+                  <span>{formatDate(thought.date)}</span>
+                  {thought.title && (
+                    <span className="min-w-0 flex-1 text-xs font-normal text-muted-foreground line-clamp-1">
+                      {thought.title}
+                    </span>
+                  )}
                 </div>
-                {thought.title && (
-                  <div className="text-sm font-medium text-foreground mb-1 line-clamp-1">
-                    {thought.title}
-                  </div>
-                )}
                 <div className="text-xs text-muted-foreground leading-relaxed line-clamp-3 whitespace-pre-line">
                   {thought.excerpt}
                 </div>
