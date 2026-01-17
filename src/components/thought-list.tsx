@@ -306,17 +306,37 @@ export function ThoughtList({
           <h2 className="font-serif text-3xl sm:text-4xl font-medium text-foreground">偶得</h2>
         </div>
 
-        {/* Main layout: Timeline + Sidebar */}
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar */}
+        {/* Main layout: Tags + Timeline */}
+        <div className="flex flex-col gap-8">
           {tags.length > 0 && (
-            <div className="order-2 lg:order-1 onload-animation" style={{ animationDelay: "100ms" }}>
-              <ThoughtSidebar tags={tags} activeTag={activeTag} onTagChange={handleTagChange} />
+            <div className="onload-animation" style={{ animationDelay: "100ms" }}>
+              <div className="bg-card border border-border/50 rounded-xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1 h-4 bg-primary rounded-full" />
+                  <h4 className="font-medium text-foreground">标签</h4>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => handleTagChange(activeTag === tag ? null : tag)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs transition-colors",
+                        activeTag === tag
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
           {/* Timeline */}
-          <div className="order-1 lg:order-2 flex-1">
+          <div>
             {pagedThoughts.length > 0 ? (
               <div className="relative">
                 {pagedThoughts.map((thought, index) => (
