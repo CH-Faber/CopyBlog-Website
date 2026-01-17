@@ -38,7 +38,7 @@ export function ThoughtPreview({
             <a
               key={thought.slug}
               href={`/thoughts/#thought-${thought.slug}`}
-              className="group grid grid-cols-[20px_1fr] gap-1 rounded-xl py-3 pr-3 transition-colors hover:bg-muted/60 sm:py-4 sm:pr-4"
+              className="group grid grid-cols-[20px_1fr] gap-1 rounded-xl py-3 pr-2 transition-colors hover:bg-muted/60 sm:py-4 sm:pr-3"
             >
               <div className="relative">
                 <div className="absolute left-1/2 top-[8px] bottom-0 w-px bg-border/60 -translate-x-1/2" />
@@ -66,10 +66,10 @@ export function ThoughtPreview({
         <div className="text-sm text-muted-foreground">暂无偶得</div>
       )}
 
-      <div className="pt-4">
+      <div className="pt-4 flex justify-end">
         <a
-          href="/thoughts"
-          className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-primary transition-colors group"
+          href="/thoughts/"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors group mr-5"
         >
           <span>查看更多</span>
           <svg
