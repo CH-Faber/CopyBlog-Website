@@ -87,7 +87,8 @@ function formatDate(dateStr: string) {
 function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }) {
   return (
     <div
-      className="relative pl-8 pb-8 last:pb-0 onload-animation"
+      id={`thought-${thought.slug}`}
+      className="relative pl-8 pb-8 last:pb-0 onload-animation scroll-mt-24"
       style={{ animationDelay: `calc(var(--content-delay) + ${index * 50}ms)` }}
     >
       {/* Timeline line */}

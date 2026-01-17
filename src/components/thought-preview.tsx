@@ -1,4 +1,5 @@
 export type ThoughtPreviewItem = {
+  slug: string
   title?: string
   date: string
   excerpt: string
@@ -33,8 +34,12 @@ export function ThoughtPreview({
 
       {items.length > 0 ? (
         <div className="relative space-y-4">
-          {items.map((thought, index) => (
-            <div key={`${thought.date}-${index}`} className="group grid grid-cols-[20px_1fr] gap-4">
+          {items.map((thought) => (
+            <a
+              key={thought.slug}
+              href={`/thoughts/#thought-${thought.slug}`}
+              className="group grid grid-cols-[20px_1fr] gap-4 rounded-lg transition-colors hover:bg-muted/60"
+            >
               <div className="relative">
                 <div className="absolute left-1/2 top-[8px] bottom-0 w-px bg-border/60 -translate-x-1/2 group-last:hidden" />
                 <div className="relative z-10 flex items-center justify-center min-h-[16px]">
@@ -54,7 +59,7 @@ export function ThoughtPreview({
                   {thought.excerpt}
                 </div>
               </div>
-            </div>
+            </a>
           ))}
         </div>
       ) : (
