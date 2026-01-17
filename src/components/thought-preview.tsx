@@ -41,7 +41,7 @@ export function ThoughtPreview({
               className="group grid grid-cols-[20px_1fr] gap-1 rounded-xl py-3 pr-3 transition-colors hover:bg-muted/60 sm:py-4 sm:pr-4"
             >
               <div className="relative">
-                <div className="absolute left-1/2 top-[8px] bottom-0 w-px bg-border/60 -translate-x-1/2 group-last:hidden" />
+                <div className="absolute left-1/2 top-[8px] bottom-0 w-px bg-border/60 -translate-x-1/2" />
                 <div className="relative z-10 flex items-center justify-center min-h-[16px]">
                   <span className="w-3 h-3 rounded-full border-2 border-primary bg-background" />
                 </div>
@@ -55,7 +55,7 @@ export function ThoughtPreview({
                     {thought.title}
                   </div>
                 )}
-                <div className="text-sm text-muted-foreground leading-relaxed line-clamp-3 whitespace-pre-line">
+                <div className="text-xs text-muted-foreground leading-relaxed line-clamp-3 whitespace-pre-line">
                   {thought.excerpt}
                 </div>
               </div>
