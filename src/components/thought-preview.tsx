@@ -38,7 +38,7 @@ export function ThoughtPreview({
             <a
               key={thought.slug}
               href={`/thoughts/#thought-${thought.slug}`}
-              className="group grid grid-cols-[20px_1fr] gap-4 rounded-lg transition-colors hover:bg-muted/60"
+              className="group grid grid-cols-[20px_1fr] gap-1 rounded-xl py-3 pr-3 transition-colors hover:bg-muted/60 sm:py-4 sm:pr-4"
             >
               <div className="relative">
                 <div className="absolute left-1/2 top-[8px] bottom-0 w-px bg-border/60 -translate-x-1/2 group-last:hidden" />
