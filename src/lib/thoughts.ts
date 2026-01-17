@@ -11,12 +11,18 @@ const formatDate = (date?: Date) => {
 }
 
 const stripHtml = (html: string) => {
-  return html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+  const withBreaks = html
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+  const text = withBreaks.replace(/<[^>]*>/g, "")
+  return text.replace(/\n\s*\n+/g, "\n").trim()
 }
 
 const truncateText = (text: string, maxLength: number) => {
   if (text.length <= maxLength) return text
-  return `${text.slice(0, Math.max(0, maxLength)).trim()}...`
+  const slice = text.slice(0, Math.max(0, maxLength)).replace(/\s+$/g, "")
+  return `${slice}...`
 }
 
 export async function getSortedThoughts(): Promise<ThoughtEntry[]> {

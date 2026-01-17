@@ -50,7 +50,7 @@ export function ThoughtPreview({
                     {thought.title}
                   </div>
                 )}
-                <div className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+                <div className="text-sm text-muted-foreground leading-relaxed line-clamp-3 whitespace-pre-line">
                   {thought.excerpt}
                 </div>
               </div>
