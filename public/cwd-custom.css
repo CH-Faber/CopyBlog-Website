@@ -15,3 +15,20 @@
 .cwd-comments-count {
   margin: 10px 0 12px;
 }
+
+.cwd-btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.cwd-btn-primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary), black 10%);
+}
+
+.cwd-like-button {
+  color: var(--muted-foreground);
+}
+
+.cwd-like-button[data-liked='true'] {
+  color: var(--primary);
+}
