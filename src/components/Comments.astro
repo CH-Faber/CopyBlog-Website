@@ -53,11 +53,6 @@ const isEnabled = Boolean(apiBaseUrl)
               if (!apiBaseUrl) return;
               const customCssUrl = container.dataset.customCssUrl;
 
-              if (container._cwdInstance?.unmount) {
-                container._cwdInstance.unmount();
-              }
-              container._cwdInstance = null;
-
               await loadScript();
 
               const config = {
@@ -69,8 +64,17 @@ const isEnabled = Boolean(apiBaseUrl)
                 config.customCssUrl = customCssUrl;
               }
 
+              if (container._cwdInstance) {
+                if (typeof container._cwdInstance.updateConfig === "function") {
+                  container._cwdInstance.updateConfig(config);
+                }
+                return;
+              }
+
               const instance = new window.CWDComments(config);
-              instance.mount();
+              if (typeof instance.mount === "function") {
+                instance.mount();
+              }
               container._cwdInstance = instance;
             };
 
