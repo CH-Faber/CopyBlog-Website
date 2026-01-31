@@ -1,70 +1,86 @@
 ---
-const repo = import.meta.env.PUBLIC_GISCUS_REPO ?? "Lapis0x0/blog-discussion"
-const repoId = import.meta.env.PUBLIC_GISCUS_REPO_ID ?? "R_kgDONda6_g"
-const category = import.meta.env.PUBLIC_GISCUS_CATEGORY ?? "General"
-const categoryId = import.meta.env.PUBLIC_GISCUS_CATEGORY_ID ?? "DIC_kwDONda6_s4ClN0E"
-const isEnabled = Boolean(repo && repoId && category && categoryId)
+const apiBaseUrl = import.meta.env.PUBLIC_CWD_API_BASE_URL ?? ""
+const customCssUrl = import.meta.env.PUBLIC_CWD_CUSTOM_CSS_URL ?? ""
+const isEnabled = Boolean(apiBaseUrl)
 ---
 
 {isEnabled && (
   <section class="mt-8 pt-0 pb-12">
     <div class="px-6">
       <div class="max-w-3xl mx-auto">
-        <div class="giscus-container"
-          data-repo={repo}
-          data-repo-id={repoId}
-          data-category={category}
-          data-category-id={categoryId}
+        <div
+          id="cwd-comments"
+          data-api-base-url={apiBaseUrl}
+          data-custom-css-url={customCssUrl}
         ></div>
         <script is:inline>
           (() => {
             const getTheme = () =>
               document.documentElement.classList.contains("dark") ? "dark" : "light";
 
-            const loadGiscus = () => {
-              const container = document.querySelector(".giscus-container");
-              if (!container) return;
+            const loadScript = () => {
+              if (window.CWDComments) return Promise.resolve();
 
-              // 清除已有的 giscus
-              const existingGiscus = container.querySelector(".giscus");
-              if (existingGiscus) {
-                existingGiscus.remove();
+              const existing = document.querySelector("script[data-cwd-widget]");
+              if (existing) {
+                if (existing.dataset.loaded === "true") return Promise.resolve();
+                return new Promise((resolve, reject) => {
+                  existing.addEventListener("load", resolve, { once: true });
+                  existing.addEventListener("error", () => {
+                    reject(new Error("Failed to load CWD widget"));
+                  }, { once: true });
+                });
               }
 
-              const repo = container.dataset.repo;
-              const repoId = container.dataset.repoId;
-              const category = container.dataset.category;
-              const categoryId = container.dataset.categoryId;
+              return new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                script.src = "https://unpkg.com/cwd-widget@0.0.x/dist/cwd.js";
+                script.async = true;
+                script.dataset.cwdWidget = "true";
+                script.onload = () => {
+                  script.dataset.loaded = "true";
+                  resolve();
+                };
+                script.onerror = () => reject(new Error("Failed to load CWD widget"));
+                document.head.appendChild(script);
+              });
+            };
 
-              const script = document.createElement("script");
-              script.src = "https://giscus.app/client.js";
-              script.dataset.repo = repo;
-              script.dataset.repoId = repoId;
-              script.dataset.category = category;
-              script.dataset.categoryId = categoryId;
-              script.dataset.mapping = "pathname";
-              script.dataset.strict = "0";
-              script.dataset.reactionsEnabled = "0";
-              script.dataset.emitMetadata = "0";
-              script.dataset.inputPosition = "bottom";
-              script.dataset.theme = getTheme();
-              script.dataset.lang = "zh-CN";
-              script.crossOrigin = "anonymous";
-              script.async = true;
+            const mountComments = async () => {
+              const container = document.querySelector("#cwd-comments");
+              if (!container) return;
+              const apiBaseUrl = container.dataset.apiBaseUrl;
+              if (!apiBaseUrl) return;
+              const customCssUrl = container.dataset.customCssUrl;
 
-              container.appendChild(script);
+              if (container._cwdInstance?.unmount) {
+                container._cwdInstance.unmount();
+              }
+              container._cwdInstance = null;
+
+              await loadScript();
+
+              const config = {
+                el: container,
+                apiBaseUrl,
+                theme: getTheme(),
+              };
+              if (customCssUrl) {
+                config.customCssUrl = customCssUrl;
+              }
+
+              const instance = new window.CWDComments(config);
+              instance.mount();
+              container._cwdInstance = instance;
             };
 
             const updateTheme = () => {
-              const iframe = document.querySelector("iframe.giscus-frame");
-              if (!iframe) return;
-              iframe.contentWindow?.postMessage(
-                { giscus: { setConfig: { theme: getTheme() } } },
-                "https://giscus.app"
-              );
+              const container = document.querySelector("#cwd-comments");
+              const instance = container?._cwdInstance;
+              if (!instance?.updateConfig) return;
+              instance.updateConfig({ theme: getTheme() });
             };
 
-            // 监听主题变化
             const observer = new MutationObserver((mutations) => {
               for (const mutation of mutations) {
                 if (mutation.attributeName === "class") {
@@ -74,9 +90,8 @@ const isEnabled = Boolean(repo && repoId && category && categoryId)
             });
             observer.observe(document.documentElement, { attributes: true });
 
-            // 初始加载和页面切换时重新加载
-            loadGiscus();
-            document.addEventListener("astro:page-load", loadGiscus);
+            mountComments();
+            document.addEventListener("astro:page-load", mountComments);
           })();
         </script>
       </div>

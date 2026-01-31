@@ -3,6 +3,7 @@ dist
 .astro
 *.log
 .env
+.wrangler
 
 AGENTS.md
 CLAUDE.md
