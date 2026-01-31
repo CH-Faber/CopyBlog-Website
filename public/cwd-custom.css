@@ -1,0 +1,17 @@
+/* CWD 评论区样式覆盖：收紧多余间距 */
+.cwd-comments-header {
+  padding: 0;
+  margin-top: -20px;
+}
+
+.cwd-like {
+  padding: 0 0 6px;
+}
+
+.cwd-comment-form {
+  margin-bottom: 16px;
+}
+
+.cwd-comments-count {
+  margin: 10px 0 12px;
+}
