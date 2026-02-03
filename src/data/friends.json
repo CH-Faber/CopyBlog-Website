@@ -123,6 +123,12 @@
         "imgurl": "https://bluelanm.github.io/my-website/img/3.ico",
         "desc": "蓝莓",
         "siteurl": "https://bluelanm.github.io"
+      },
+      {
+        "title": "VnYzm的博客",
+        "imgurl": "https://vnyzm.top/img/profile.jpg",
+        "desc": "分享技术心得和摸鱼感想",
+        "siteurl": "https://vnyzm.top"
       }
     ]
   },
