@@ -117,6 +117,12 @@
         "desc": "生活需要记录。",
         "siteurl": "https://blog.viki.moe",
         "rss": "https://blog.viki.moe/rss"
+      },
+      {
+        "title": "LanM",
+        "imgurl": "https://bluelanm.github.io/my-website/img/3.ico",
+        "desc": "蓝莓",
+        "siteurl": "https://bluelanm.github.io"
       }
     ]
   },
