@@ -19,12 +19,12 @@ const thoughtPreviews = thoughts.map((thought) => toThoughtPreview(thought)).sli
 
 <BaseLayout {title} {description}>
   <div class="min-h-screen bg-background dark:bg-muted/30">
-    <Header client:load />
+    <Header client:idle />
     <main>
-      <Hero client:load />
+      <Hero client:idle />
       <section id="home-main" class="scroll-mt-24">
         <ArticleList
-          client:load
+          client:idle
           articles={allArticles}
           title="全部文章"
           subtitle="All Posts"

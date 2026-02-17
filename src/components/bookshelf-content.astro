@@ -76,7 +76,7 @@ const booksForClient = allBooks.map((book) => {
 ---
 
 <div class="min-h-screen bg-background dark:bg-muted/30">
-  <Header client:load />
+  <Header client:idle />
 
   <main class="pt-32 pb-24">
     <div class="max-w-6xl mx-auto px-6">
@@ -204,6 +204,7 @@ const booksForClient = allBooks.map((book) => {
                           src={coverUrl}
                           alt={book.fields.书名}
                           loading="lazy"
+                          decoding="async"
                           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                       ) : (
@@ -285,7 +286,7 @@ const booksForClient = allBooks.map((book) => {
 
       <div class="flex gap-5 p-6">
         <div class="shrink-0 w-32 aspect-[3/4] rounded-lg overflow-hidden bg-muted/30" data-modal-cover-wrap>
-          <img data-modal-cover alt="" class="w-full h-full object-cover hidden" />
+          <img data-modal-cover alt="" decoding="async" class="w-full h-full object-cover hidden" />
           <div class="flex h-full w-full items-center justify-center p-3 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5" data-modal-cover-fallback>
             <p class="font-semibold text-xs text-foreground text-center" data-modal-cover-title></p>
           </div>

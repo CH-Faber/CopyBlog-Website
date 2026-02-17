@@ -41,7 +41,13 @@ export function Sidebar({
       {/* Author Card */}
       <div className="bg-card border border-border/50 rounded-xl p-6 text-center">
         <div className="w-24 h-24 mx-auto mb-4 rounded-full overflow-hidden border-2 border-primary/20">
-          <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
+          <img
+            src={profile.avatar}
+            alt={profile.name}
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
+          />
         </div>
         <h3 className="font-serif text-xl font-medium text-foreground mb-1">{profile.name}</h3>
         <div className="w-8 h-0.5 bg-primary mx-auto mb-3" />

@@ -29,11 +29,11 @@ const title =
 
 <BaseLayout {title} {description}>
   <div class="min-h-screen bg-muted/30">
-    <Header client:load />
+    <Header client:idle />
     <main class="pt-24">
       <section id="home-main" class="scroll-mt-24">
         <ArticleList
-          client:load
+          client:idle
           articles={allArticles}
           title="全部文章"
           subtitle="All Posts"

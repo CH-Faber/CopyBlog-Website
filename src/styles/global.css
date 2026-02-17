@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
 @import "katex/dist/katex.min.css";
 @import "./transition.css";
 @import "tailwindcss";
@@ -532,4 +531,18 @@ a.card-github:hover .github-logo {
 .toc-scrollbar::-webkit-scrollbar-thumb {
   background-color: var(--border);
   border-radius: 3px;
+}
+
+@keyframes hero-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.hero-cursor {
+  animation: hero-cursor-blink 0.9s ease-in-out infinite;
 }

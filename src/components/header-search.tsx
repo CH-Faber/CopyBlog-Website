@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 
@@ -30,12 +30,19 @@ export function HeaderSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
+  const [loadRequested, setLoadRequested] = useState(false)
   const isProd = import.meta.env.PROD
   const containerRef = useRef<HTMLDivElement>(null)
   const desktopInputRef = useRef<HTMLInputElement>(null)
   const mobileInputRef = useRef<HTMLInputElement>(null)
 
   const showPanel = isOpen || (isFocused && (query.trim() || !isProd))
+
+  const requestPagefindLoad = useCallback(() => {
+    if (!isProd) return
+    if (window.pagefind || status === "loading" || status === "ready") return
+    setLoadRequested(true)
+  }, [isProd, status])
 
   const focusSearchInput = (delay = 0) => {
     const focus = () => {
@@ -55,7 +62,7 @@ export function HeaderSearch() {
 
   // Load Pagefind as ES module
   useEffect(() => {
-    if (!isProd) return
+    if (!isProd || !loadRequested) return
 
     let cancelled = false
 
@@ -75,6 +82,9 @@ export function HeaderSearch() {
         window.pagefind = pagefind;
         window.dispatchEvent(new CustomEvent("pagefind:loaded"));
       `
+      script.onerror = () => {
+        if (!cancelled) setStatus("error")
+      }
       document.head.appendChild(script)
     }
 
@@ -89,15 +99,20 @@ export function HeaderSearch() {
       cancelled = true
       window.removeEventListener("pagefind:loaded", handleLoaded)
     }
-  }, [isProd])
+  }, [isProd, loadRequested])
 
   // Run search
   useEffect(() => {
-    if (!isProd || !window.pagefind) return
+    if (!isProd) return
 
     const runSearch = async () => {
       if (!query.trim()) {
         setResults([])
+        return
+      }
+
+      if (!window.pagefind) {
+        requestPagefindLoad()
         return
       }
 
@@ -111,7 +126,7 @@ export function HeaderSearch() {
 
     const debounce = setTimeout(runSearch, 200)
     return () => clearTimeout(debounce)
-  }, [query, isProd, status])
+  }, [query, isProd, status, requestPagefindLoad])
 
   // Keyboard shortcut (Cmd+K / Ctrl+K)
   useEffect(() => {
@@ -121,9 +136,11 @@ export function HeaderSearch() {
         const isDesktop = window.matchMedia("(min-width: 768px)").matches
         if (isDesktop) {
           setIsFocused(true)
+          requestPagefindLoad()
           focusSearchInput()
         } else {
           setIsOpen(true)
+          requestPagefindLoad()
           focusSearchInput(100)
         }
       }
@@ -135,7 +152,7 @@ export function HeaderSearch() {
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [])
+  }, [requestPagefindLoad])
 
   // Lock page scroll when search panel is open
   useEffect(() => {
@@ -179,7 +196,10 @@ export function HeaderSearch() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => {
+              setIsFocused(true)
+              requestPagefindLoad()
+            }}
             placeholder="搜索..."
             className={cn(
               "bg-transparent text-sm outline-none h-full px-2",
@@ -197,6 +217,7 @@ export function HeaderSearch() {
       <button
         onClick={() => {
           setIsOpen(!isOpen)
+          requestPagefindLoad()
           if (!isOpen) focusSearchInput(100)
         }}
         className="md:hidden p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -221,7 +242,10 @@ export function HeaderSearch() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => {
+              setIsFocused(true)
+              requestPagefindLoad()
+            }}
             placeholder="搜索..."
             className="flex-1 bg-transparent text-sm outline-none px-2 text-foreground placeholder:text-muted-foreground"
           />

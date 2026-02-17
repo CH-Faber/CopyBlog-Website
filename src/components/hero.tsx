@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback } from "react"
 
 const phrases = [
   { prefix: "探求 AI 的", highlight: "边界" },
@@ -14,33 +14,9 @@ export function Hero() {
   const [phraseIndex, setPhraseIndex] = useState(0)
   const [displayText, setDisplayText] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
-  const [cursorOpacity, setCursorOpacity] = useState(1)
-  const cursorAnimationRef = useRef<number | null>(null)
 
   useEffect(() => {
     setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    let startTime: number | null = null
-    const duration = 800 // ms for one cycle
-
-    const animateCursor = (timestamp: number) => {
-      if (!startTime) startTime = timestamp
-      const elapsed = timestamp - startTime
-      const progress = (elapsed % duration) / duration
-      // Sine wave for smooth transition: 1 -> 0.3 -> 1
-      const opacity = 0.3 + 0.7 * Math.abs(Math.sin(progress * Math.PI))
-      setCursorOpacity(opacity)
-      cursorAnimationRef.current = requestAnimationFrame(animateCursor)
-    }
-
-    cursorAnimationRef.current = requestAnimationFrame(animateCursor)
-    return () => {
-      if (cursorAnimationRef.current) {
-        cancelAnimationFrame(cursorAnimationRef.current)
-      }
-    }
   }, [])
 
   const getTypeSpeed = useCallback(() => {
@@ -125,8 +101,7 @@ export function Hero() {
           <h1 className="font-sans text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-foreground leading-[1.1] mb-8 min-h-[1.2em]">
             {renderText()}
             <span
-              className="inline-block w-[4px] sm:w-[5px] md:w-[6px] lg:w-[7px] h-[48px] sm:h-[60px] md:h-[72px] lg:h-[96px] bg-foreground align-middle rounded-sm ml-2 -translate-y-1"
-              style={{ opacity: cursorOpacity }}
+              className="hero-cursor inline-block w-[4px] sm:w-[5px] md:w-[6px] lg:w-[7px] h-[48px] sm:h-[60px] md:h-[72px] lg:h-[96px] bg-foreground align-middle rounded-sm ml-2 -translate-y-1"
             />
           </h1>
 

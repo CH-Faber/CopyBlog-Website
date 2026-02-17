@@ -20,7 +20,7 @@ const timelineItems = posts.map((post) => ({
 
 <BaseLayout {title} {description}>
   <div class="min-h-screen bg-background dark:bg-muted/30">
-    <Header client:load />
+    <Header client:idle />
     <main class="pt-24">
       <Timeline items={timelineItems} />
     </main>

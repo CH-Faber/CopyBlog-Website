@@ -63,40 +63,73 @@ const resolvedTwitterDescription = twitterDescription || description
     <link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+    />
     <link rel="icon" href="/icon-light-32x32.png" media="(prefers-color-scheme: light)" />
     <link rel="icon" href="/icon-dark-32x32.png" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-icon.png" />
-    <!-- Google tag (gtag.js) -->
-    <script is:inline async src="https://www.googletagmanager.com/gtag/js?id=G-1DF2LNJPSY"></script>
     <script is:inline>
-      // @ts-nocheck
-      window.dataLayer = window.dataLayer || []
-      const gtag = (...args) => {
-        window.dataLayer.push(args)
-      }
-      gtag('js', new Date())
-      gtag('config', 'G-1DF2LNJPSY')
-    </script>
-
-    <!-- Microsoft Clarity -->
-    <script is:inline>
-      // @ts-nocheck
       ;(() => {
-        if (window.clarity) return
-        const clarity = function () {
-          clarity.q = clarity.q || []
-          clarity.q.push(Array.from(arguments))
+        let analyticsLoaded = false
+        let clarityLoaded = false
+
+        const runWhenIdle = (callback) => {
+          if ("requestIdleCallback" in window) {
+            window.requestIdleCallback(callback, { timeout: 3000 })
+            return
+          }
+          window.setTimeout(callback, 1500)
         }
-        window.clarity = clarity
-        const script = document.createElement('script')
-        script.async = true
-        script.src = 'https://www.clarity.ms/tag/rkga1fxqqs'
-        const firstScript = document.getElementsByTagName('script')[0]
-        if (firstScript?.parentNode) {
-          firstScript.parentNode.insertBefore(script, firstScript)
-        } else {
+
+        const loadScript = (src) => {
+          const script = document.createElement("script")
+          script.async = true
+          script.src = src
           document.head.appendChild(script)
+        }
+
+        const initAnalytics = () => {
+          if (analyticsLoaded) return
+          analyticsLoaded = true
+          window.dataLayer = window.dataLayer || []
+          window.gtag = function () {
+            window.dataLayer.push(arguments)
+          }
+          window.gtag("js", new Date())
+          window.gtag("config", "G-1DF2LNJPSY")
+          loadScript("https://www.googletagmanager.com/gtag/js?id=G-1DF2LNJPSY")
+        }
+
+        const initClarity = () => {
+          if (clarityLoaded || window.clarity) return
+          clarityLoaded = true
+          const clarity = function () {
+            clarity.q = clarity.q || []
+            clarity.q.push(Array.from(arguments))
+          }
+          window.clarity = clarity
+          loadScript("https://www.clarity.ms/tag/rkga1fxqqs")
+        }
+
+        const initTracking = () => {
+          runWhenIdle(() => {
+            initAnalytics()
+            initClarity()
+          })
+        }
+
+        if (document.readyState === "complete") {
+          initTracking()
+        } else {
+          window.addEventListener("load", initTracking, { once: true })
         }
       })()
     </script>
@@ -143,7 +176,9 @@ const resolvedTwitterDescription = twitterDescription || description
           if (params.has("category") || params.has("tag")) {
             document.documentElement.setAttribute("data-prefilter", "1");
           }
-        } catch {}
+        } catch (error) {
+          void error
+        }
       })();
     </script>
     <ViewTransitions />

@@ -21,10 +21,22 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20)
+    let ticking = false
+
+    const updateScrolledState = () => {
+      const nextScrolled = window.scrollY > 20
+      setScrolled((previous) => (previous === nextScrolled ? previous : nextScrolled))
+      ticking = false
     }
-    window.addEventListener("scroll", handleScroll)
+
+    const handleScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(updateScrolledState)
+    }
+
+    updateScrolledState()
+    window.addEventListener("scroll", handleScroll, { passive: true })
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
