@@ -148,7 +148,6 @@ const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#hom
           {tags.length > 0 ? (
             tags.map((tag: string) => (
               <a
-                key={tag}
                 href={`/?tag=${encodeURIComponent(tag)}#home-main`}
                 class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-full hover:bg-primary hover:text-primary-foreground transition-colors"
               >

@@ -98,7 +98,7 @@ if (post.data.encrypted && post.data.password) {
     {publishedIso ? <meta property="article:published_time" content={publishedIso} /> : null}
     {updatedIso ? <meta property="article:modified_time" content={updatedIso} /> : null}
     {category ? <meta property="article:section" content={category} /> : null}
-    {tags.map((tag) => (
+    {tags.map((tag: string) => (
       <meta property="article:tag" content={tag} />
     ))}
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
