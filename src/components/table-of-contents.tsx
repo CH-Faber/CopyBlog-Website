@@ -168,6 +168,10 @@ export function TableOfContents({ showHeader = true }: TableOfContentsProps) {
     if (!scrollContainer) return
 
     const containerRect = scrollContainer.getBoundingClientRect()
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+    const isContainerVisible = containerRect.bottom > 0 && containerRect.top < viewportHeight
+    if (!isContainerVisible) return
+
     const linkRect = activeLink.getBoundingClientRect()
     const padding = 12
     const isOutOfView =
