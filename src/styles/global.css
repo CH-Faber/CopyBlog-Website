@@ -514,3 +514,22 @@ a.card-github:hover .github-logo {
 .expressive-code .frame.has-title .header {
   border-bottom: 1px solid var(--border);
 }
+
+/* TOC sidebar scrollbar */
+.toc-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.toc-scrollbar::-webkit-scrollbar {
+  width: 3px;
+}
+
+.toc-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.toc-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 3px;
+}
