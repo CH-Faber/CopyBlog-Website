@@ -19,6 +19,7 @@ export function TableOfContents({ showHeader = true }: TableOfContentsProps) {
   const navRef = useRef<HTMLElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const headingElementsRef = useRef<Map<string, IntersectionObserverEntry>>(new Map())
+  const tocAutoScrollTimerRef = useRef<number | null>(null)
   const programmaticTargetRef = useRef<string>("")
   const programmaticLockRef = useRef(false)
   const lockTimerRef = useRef<number | null>(null)
@@ -29,6 +30,13 @@ export function TableOfContents({ showHeader = true }: TableOfContentsProps) {
     if (lockTimerRef.current !== null) {
       window.clearTimeout(lockTimerRef.current)
       lockTimerRef.current = null
+    }
+  }, [])
+
+  const clearTocAutoScrollTimer = useCallback(() => {
+    if (tocAutoScrollTimerRef.current !== null) {
+      window.clearTimeout(tocAutoScrollTimerRef.current)
+      tocAutoScrollTimerRef.current = null
     }
   }, [])
 
@@ -155,33 +163,45 @@ export function TableOfContents({ showHeader = true }: TableOfContentsProps) {
       window.removeEventListener("wheel", handleUserIntent)
       window.removeEventListener("touchstart", handleUserIntent)
       window.removeEventListener("keydown", handleUserIntent)
+      clearTocAutoScrollTimer()
       unlockProgrammaticLock()
     }
-  }, [collectHeadings, setupObserver, unlockProgrammaticLock])
+  }, [clearTocAutoScrollTimer, collectHeadings, setupObserver, unlockProgrammaticLock])
 
   useEffect(() => {
     if (!activeId || !navRef.current) return
-    const activeLink = navRef.current.querySelector<HTMLAnchorElement>(`a[href="#${CSS.escape(activeId)}"]`)
-    if (!activeLink) return
 
-    const scrollContainer = navRef.current.closest<HTMLElement>(".toc-scroll-container")
-    if (!scrollContainer) return
+    clearTocAutoScrollTimer()
+    tocAutoScrollTimerRef.current = window.setTimeout(() => {
+      const nav = navRef.current
+      if (!nav) return
 
-    const containerRect = scrollContainer.getBoundingClientRect()
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight
-    const isContainerVisible = containerRect.bottom > 0 && containerRect.top < viewportHeight
-    if (!isContainerVisible) return
+      const activeLink = nav.querySelector<HTMLAnchorElement>(`a[href="#${CSS.escape(activeId)}"]`)
+      if (!activeLink) return
 
-    const linkRect = activeLink.getBoundingClientRect()
-    const padding = 12
-    const isOutOfView =
-      linkRect.top < containerRect.top + padding ||
-      linkRect.bottom > containerRect.bottom - padding
+      const scrollContainer = nav.closest<HTMLElement>(".toc-scroll-container")
+      if (!scrollContainer) return
 
-    if (isOutOfView) {
-      activeLink.scrollIntoView({ block: "nearest", inline: "nearest" })
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+      const isContainerVisible = containerRect.bottom > 0 && containerRect.top < viewportHeight
+      if (!isContainerVisible) return
+
+      const linkRect = activeLink.getBoundingClientRect()
+      const padding = 12
+      const isOutOfView =
+        linkRect.top < containerRect.top + padding ||
+        linkRect.bottom > containerRect.bottom - padding
+
+      if (isOutOfView) {
+        activeLink.scrollIntoView({ block: "nearest", inline: "nearest" })
+      }
+    }, 90)
+
+    return () => {
+      clearTocAutoScrollTimer()
     }
-  }, [activeId])
+  }, [activeId, clearTocAutoScrollTimer])
 
   const handleClick = (e: React.MouseEvent, id: string) => {
     e.preventDefault()

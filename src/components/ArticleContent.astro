@@ -103,7 +103,7 @@ const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#hom
           </span>
           <span class="text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
         </summary>
-        <div class="toc-scroll-container px-4 pb-3 pt-1 border-t border-border/50 max-h-72 overflow-y-auto overscroll-contain toc-scrollbar">
+        <div class="toc-scroll-container px-4 pb-3 pt-1 border-t border-border/50 max-h-72 overflow-y-auto overscroll-auto toc-scrollbar">
           <TableOfContents showHeader={false} client:media="(max-width: 1279px)" />
         </div>
       </details>
