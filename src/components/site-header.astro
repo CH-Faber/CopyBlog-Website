@@ -1,0 +1,82 @@
+---
+import { profile } from "@/data/profile"
+import { HeaderSearch } from "@/components/header-search"
+import { ThemeToggle } from "@/components/theme-toggle"
+
+const navItems: { name: string; href: string; external?: boolean }[] = [
+  { name: "首页", href: "/#home-main" },
+  { name: "时间线", href: "/timeline/" },
+  { name: "偶得", href: "/thoughts/" },
+  { name: "书架", href: "/bookshelf/" },
+  { name: "友链", href: "/friends/" },
+  { name: "关于", href: "/about/" },
+  { name: "开往", href: "https://www.travellings.cn/go.html", external: true },
+]
+---
+
+<header class="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 py-4">
+  <div class="max-w-6xl mx-auto px-6 grid grid-cols-[1fr_auto_1fr] items-center">
+    <a href="/#home-main" data-astro-prefetch class="group flex items-center gap-3 justify-self-start">
+      <div class="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
+        <img
+          src={profile.avatar}
+          alt={profile.name}
+          width="32"
+          height="32"
+          decoding="async"
+          class="w-full h-full object-cover"
+        />
+      </div>
+      <span class="text-foreground font-medium tracking-tight hidden sm:block">时歌的博客</span>
+    </a>
+
+    <nav class="hidden md:flex items-center gap-8 justify-self-center">
+      {navItems.map((item) => (
+        <a
+          href={item.href}
+          target={item.external ? "_blank" : undefined}
+          rel={item.external ? "noreferrer" : undefined}
+          data-astro-prefetch={item.external ? undefined : ""}
+          class="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 relative group"
+        >
+          {item.name}
+          <span class="absolute -bottom-1 left-0 w-0 h-px bg-primary transition-all duration-300 group-hover:w-full" />
+        </a>
+      ))}
+    </nav>
+
+    <div class="hidden md:flex items-center gap-4 justify-self-end">
+      <HeaderSearch client:visible />
+      <ThemeToggle />
+    </div>
+
+    <details class="md:hidden col-start-3 justify-self-end relative">
+      <summary class="list-none flex items-center gap-2 cursor-pointer">
+        <ThemeToggle />
+        <span class="p-2" aria-label="Toggle menu">
+          <span class="block w-5 h-px bg-foreground mb-1" />
+          <span class="block w-5 h-px bg-foreground mb-1" />
+          <span class="block w-5 h-px bg-foreground" />
+        </span>
+      </summary>
+      <div class="absolute right-0 mt-3 w-56 rounded-xl border border-border bg-card p-3 shadow-xl">
+        <div class="mb-2">
+          <HeaderSearch client:visible />
+        </div>
+        <nav class="flex flex-col gap-1">
+          {navItems.map((item) => (
+            <a
+              href={item.href}
+              target={item.external ? "_blank" : undefined}
+              rel={item.external ? "noreferrer" : undefined}
+              data-astro-prefetch={item.external ? undefined : ""}
+              class="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 px-2 py-1.5 rounded-md hover:bg-muted"
+            >
+              {item.name}
+            </a>
+          ))}
+        </nav>
+      </div>
+    </details>
+  </div>
+</header>

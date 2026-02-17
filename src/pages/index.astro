@@ -2,7 +2,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro"
 import { ArticleList } from "@/components/article-list"
 import { Footer } from "@/components/footer"
-import { Header } from "@/components/header"
+import SiteHeader from "@/components/site-header.astro"
 import { Hero } from "@/components/hero"
 import { PAGE_SIZE } from "@/lib/constants"
 import { buildSidebarMeta, getSortedPosts, toPostMeta } from "@/lib/posts"
@@ -19,12 +19,12 @@ const thoughtPreviews = thoughts.map((thought) => toThoughtPreview(thought)).sli
 
 <BaseLayout {title} {description}>
   <div class="min-h-screen bg-background dark:bg-muted/30">
-    <Header client:idle />
+    <SiteHeader />
     <main>
       <Hero client:idle />
       <section id="home-main" class="scroll-mt-24">
         <ArticleList
-          client:idle
+          client:visible
           articles={allArticles}
           title="全部文章"
           subtitle="All Posts"

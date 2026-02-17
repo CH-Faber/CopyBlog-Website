@@ -1,7 +1,7 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro"
 import ArticleContent from "@/components/ArticleContent.astro"
-import { Header } from "@/components/header"
+import SiteHeader from "@/components/site-header.astro"
 import { Footer } from "@/components/footer"
 import { getPostsWithNav, type PostEntry } from "@/lib/posts"
 import Disclaimer from "@/components/Disclaimer.astro"
@@ -104,7 +104,7 @@ if (post.data.encrypted && post.data.password) {
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
   </Fragment>
   <div class="min-h-screen bg-background dark:bg-muted/30">
-    <Header client:idle />
+    <SiteHeader />
     <ArticleContent post={post} {Content} {words} {minutes}>
       <div class="mb-8">
         <Disclaimer disclaimers={post.data.disclaimer} publishedDate={post.data.published} />

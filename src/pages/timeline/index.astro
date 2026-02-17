@@ -1,7 +1,7 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro"
 import Timeline from "@/components/Timeline.astro"
-import { Header } from "@/components/header"
+import SiteHeader from "@/components/site-header.astro"
 import { Footer } from "@/components/footer"
 import { getSortedPosts } from "@/lib/posts"
 
@@ -20,7 +20,7 @@ const timelineItems = posts.map((post) => ({
 
 <BaseLayout {title} {description}>
   <div class="min-h-screen bg-background dark:bg-muted/30">
-    <Header client:idle />
+    <SiteHeader />
     <main class="pt-24">
       <Timeline items={timelineItems} />
     </main>

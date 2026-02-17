@@ -1,5 +1,5 @@
 ---
-import { Header } from "@/components/header"
+import SiteHeader from "@/components/site-header.astro"
 import friendsData from "@/data/friends.json"
 import { ExternalLink, Heart, CheckCircle2, Copy, Check, Mail } from "lucide-react"
 
@@ -38,7 +38,7 @@ const siteInfoText = [
 ---
 
 <div class="min-h-screen bg-background dark:bg-muted/30 overflow-x-hidden">
-  <Header client:idle />
+  <SiteHeader />
   <main class="pt-24 sm:pt-32 pb-8">
     <div class="max-w-4xl mx-auto px-6">
       <section class="mb-12">

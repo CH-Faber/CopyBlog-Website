@@ -1,5 +1,5 @@
 ---
-import { Header } from "@/components/header"
+import SiteHeader from "@/components/site-header.astro"
 import { Footer } from "@/components/footer"
 import { cn } from "@/lib/utils"
 import booksData from "../../public/data/books.json"
@@ -76,7 +76,7 @@ const booksForClient = allBooks.map((book) => {
 ---
 
 <div class="min-h-screen bg-background dark:bg-muted/30">
-  <Header client:idle />
+  <SiteHeader />
 
   <main class="pt-32 pb-24">
     <div class="max-w-6xl mx-auto px-6">
