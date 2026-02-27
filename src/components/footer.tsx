@@ -1,10 +1,12 @@
-import { Github, MessageCircle, Music, Rss } from "lucide-react"
+import { Github, MessageCircle, Twitter, Rss, Mail, Music } from "lucide-react"
 import { profile, type ProfileLinkType } from "@/data/profile"
 
-const iconMap: Record<ProfileLinkType, typeof Github> = {
+const iconMap: Record<ProfileLinkType, React.ElementType> = {
   qq: MessageCircle,
   music: Music,
   github: Github,
+  twitter: Twitter,
+  email: Mail,
 }
 
 export function Footer() {
@@ -24,10 +26,10 @@ export function Footer() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-foreground font-medium">时歌的博客</span>
+              <span className="text-foreground font-medium">My Blog</span>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              理解以真实为本，但真实本身并不会自动呈现
+              A highly customizable Astro blog template.
             </p>
           </div>
 
@@ -36,25 +38,25 @@ export function Footer() {
             <div>
               <h4 className="text-sm font-medium text-foreground mb-4 uppercase tracking-wide">导航</h4>
               <nav className="flex flex-col gap-3">
-              {[
-                { name: "首页", href: "/" },
-                { name: "时间线", href: "/timeline/" },
-                { name: "书架", href: "/bookshelf/" },
-                { name: "友链", href: "/friends/" },
-                { name: "关于", href: "/about/" },
-                { name: "开往", href: "https://www.travellings.cn/go.html", external: true },
-              ].map((item) => (
-                <a
-                  key={item.name}
-                  href={item.href}
-                  target={item.external ? "_blank" : undefined}
-                  rel={item.external ? "noreferrer" : undefined}
-                  className="text-muted-foreground text-sm hover:text-foreground transition-colors duration-200"
-                >
-                  {item.name}
-                </a>
-              ))}
-            </nav>
+                {[
+                  { name: "首页", href: "/" },
+                  { name: "时间线", href: "/timeline/" },
+                  { name: "书架", href: "/bookshelf/" },
+                  { name: "友链", href: "/friends/" },
+                  { name: "关于", href: "/about/" },
+                  { name: "开往", href: "https://www.travellings.cn/go.html", external: true },
+                ].map((item) => (
+                  <a
+                    key={item.name}
+                    href={item.href}
+                    target={item.external ? "_blank" : undefined}
+                    rel={item.external ? "noreferrer" : undefined}
+                    className="text-muted-foreground text-sm hover:text-foreground transition-colors duration-200"
+                  >
+                    {item.name}
+                  </a>
+                ))}
+              </nav>
             </div>
           </div>
 
@@ -95,14 +97,14 @@ export function Footer() {
 
         {/* Bottom */}
         <div className="mt-16 pt-8 border-t border-border/50 grid gap-4 md:grid-cols-3">
-          <p className="text-muted-foreground text-sm">© 2025 时歌. All rights reserved.</p>
+          <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} John Doe. All rights reserved.</p>
           <a
-            href="https://beian.miit.gov.cn/"
+            href="#"
             target="_blank"
             rel="noreferrer"
             className="text-muted-foreground text-xs hover:text-foreground transition-colors duration-200 md:text-center"
           >
-            辽ICP备2023010881号-1
+            ICP License Placeholder
           </a>
           <a
             href="https://github.com/Lapis0x0/VermilionVoid"
@@ -111,7 +113,7 @@ export function Footer() {
             className="flex items-center gap-2 text-muted-foreground text-xs hover:text-foreground transition-colors duration-200 group md:justify-end md:pr-4"
           >
             <Github className="w-3.5 h-3.5" />
-            <span>博客主题：朱墨留白 | VermilionVoid</span>
+            <span>Theme by VermilionVoid</span>
           </a>
         </div>
       </div>

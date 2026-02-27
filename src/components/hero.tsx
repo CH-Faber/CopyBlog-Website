@@ -3,10 +3,10 @@
 import { useEffect, useState, useCallback } from "react"
 
 const phrases = [
-  { prefix: "探求 AI 的", highlight: "边界" },
-  { prefix: "追问金融的", highlight: "理性" },
-  { prefix: "分析社会的", highlight: "结构" },
-  { prefix: "记录跨学科", highlight: "洞见" },
+  { prefix: "Welcome to ", highlight: "My Blog" },
+  { prefix: "Built with ", highlight: "Astro" },
+  { prefix: "Styled with ", highlight: "Tailwind" },
+  { prefix: "Powered by ", highlight: "React" },
 ]
 
 export function Hero() {
@@ -90,12 +90,11 @@ export function Hero() {
     <section className="relative min-h-[90vh] flex items-center justify-center px-6 bg-muted/30">
       <div className="max-w-4xl mx-auto text-center">
         <div
-          className={`transition-all duration-1000 ease-out ${
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-          }`}
+          className={`transition-all duration-1000 ease-out ${mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+            }`}
         >
           <p className="text-xs sm:text-sm tracking-[0.3em] text-muted-foreground uppercase mb-8">
-            金融学 · 社会学 · AI 大模型
+            Astro · Tailwind · React
           </p>
 
           <h1 className="font-sans text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-foreground leading-[1.1] mb-8 min-h-[1.2em]">
@@ -107,10 +106,10 @@ export function Hero() {
 
           <blockquote className="max-w-xl mx-auto mb-10">
             <p className="text-muted-foreground text-base sm:text-lg leading-relaxed italic">
-              「我不知道我在想什么，直到我读到我写的东西。」
+              "Start writing, no matter what. The water does not flow until the faucet is turned on."
             </p>
             <footer className="mt-2 text-sm text-muted-foreground/70">
-              —— Flannery O'Connor
+              — Louis L'Amour
             </footer>
           </blockquote>
 
@@ -120,7 +119,7 @@ export function Hero() {
               onClick={handleBrowseClick}
               className="group flex items-center gap-2 px-8 py-3 bg-foreground text-background rounded-full font-medium text-sm hover:bg-foreground/90 transition-all duration-300"
             >
-              浏览文章
+              Start Reading
               <svg
                 className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
                 fill="none"
@@ -134,7 +133,7 @@ export function Hero() {
               href="/about/"
               className="px-8 py-3 border border-border rounded-full font-medium text-sm text-foreground hover:border-foreground/40 transition-all duration-300"
             >
-              关于我
+              About Me
             </a>
           </div>
         </div>

@@ -8,8 +8,8 @@ import { PAGE_SIZE } from "@/lib/constants"
 import { buildSidebarMeta, getSortedPosts, toPostMeta } from "@/lib/posts"
 import { getSortedThoughts, toThoughtPreview } from "@/lib/thoughts"
 
-const title = "时歌的博客 | Boundary of Thought"
-const description = "探索金融、社会与人工智能的交汇点"
+const title = "My Blog | Astro Template"
+const description = "A modern, fast, and feature-rich Astro blog template."
 const posts = await getSortedPosts()
 const allArticles = posts.map((post) => toPostMeta(post))
 const sidebarMeta = buildSidebarMeta(allArticles)
@@ -26,7 +26,7 @@ const thoughtPreviews = thoughts.map((thought) => toThoughtPreview(thought)).sli
         <ArticleList
           client:visible
           articles={allArticles}
-          title="全部文章"
+          title="Recent Posts"
           subtitle="All Posts"
           showViewAll={false}
           pagination={{ currentPage: 1, pageSize: PAGE_SIZE, basePath: "/" }}
