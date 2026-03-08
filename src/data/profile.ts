@@ -6,8 +6,8 @@ export const profile: {
   avatar: string
   links: { type: ProfileLinkType; name: string; url: string }[]
 } = {
-  name: "John Doe",
-  bio: "A template for awesome Astro blogs.",
+  name: "Faber",
+  bio: "探索金融、社会与人工智能的交汇点",
   avatar: "/avatar.webp",
   links: [
     {
@@ -22,7 +22,7 @@ export const profile: {
     },
     {
       type: "email",
-      name: "Email",
+      name: "邮箱",
       url: "mailto:hello@example.com",
     },
   ],

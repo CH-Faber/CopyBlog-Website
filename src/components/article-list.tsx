@@ -90,7 +90,7 @@ const buildPageRange = (currentPage: number, totalPages: number) => {
 export function ArticleList({
   articles,
   title = "近期文章",
-  subtitle = "Latest Posts",
+  subtitle = "最新文章",
   showViewAll = true,
   pagination,
   sidebarCategories,

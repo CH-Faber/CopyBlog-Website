@@ -34,7 +34,7 @@ export default function AboutPage() {
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-6">
                   <span className="flex items-center gap-1.5">
                     <MapPin className="w-4 h-4" />
-                    Earth
+                    地球
                   </span>
                 </div>
 
@@ -71,25 +71,25 @@ export default function AboutPage() {
             prose-li:marker:text-primary prose-li:my-1.5"
             >
               <blockquote>
-                "This is a sample blockquote. You can put your favorite quote here."
+                "这里可以放一段你喜欢的名言。"
               </blockquote>
               <p>
-                Hi, I'm {profile.name}. Welcome to my blog.
+                你好，我是{profile.name}，欢迎来到我的博客。
               </p>
               <p>
-                This is a placeholder for your biography. You can describe your background, your profession, and what you love to do.
+                这里是个人简介占位。你可以介绍自己的背景、职业和兴趣爱好。
               </p>
-              <p>I am interested in:</p>
+              <p>我的兴趣方向：</p>
               <ul>
-                <li>Web Development and Design</li>
-                <li>Writing and sharing knowledge</li>
-                <li>Exploring new technologies</li>
+                <li>Web 开发与设计</li>
+                <li>写作与知识分享</li>
+                <li>探索新技术</li>
               </ul>
               <p>
-                <strong>MBTI: INTP</strong>
+                <strong>MBTI：INTP</strong>
               </p>
               <p>
-                📬 Contact: <a href="mailto:hello@example.com">hello@example.com</a>
+                📬 联系我：<a href="mailto:hello@example.com">hello@example.com</a>
               </p>
             </div>
           </section>
@@ -98,13 +98,13 @@ export default function AboutPage() {
           <section className="mb-16">
             <h2 className="text-2xl font-semibold text-foreground mb-6 flex items-center gap-3">
               <span className="w-1 h-6 bg-primary rounded-full" />
-              Support Me
+              支持我
             </h2>
             <div className="p-6 rounded-2xl border border-border bg-card">
               <div className="flex items-start gap-3 mb-6">
                 <Heart className="w-5 h-5 text-primary mt-0.5" />
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  If you find my content helpful, consider supporting me! (Placeholder for your donation links/QR codes)
+                  如果你觉得我的内容有帮助，欢迎支持我！（此处可放置捐赠链接或二维码）
                 </p>
               </div>
             </div>

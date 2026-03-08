@@ -29,7 +29,7 @@ const createAdmonitionComponent = (type) => (properties = {}, children = []) => 
 export default defineConfig({
   srcDir: "./src",
   output: "static",
-  site: "https://example.com",
+  site: "https://faberhu.top",
   trailingSlash: "always",
   alias: {
     "@": "./src",

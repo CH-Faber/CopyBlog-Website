@@ -21,7 +21,7 @@ const currentPage = page.currentPage
 const allThoughts = await getSortedThoughts()
 const thoughtsWithContent = allThoughts.map((thought) => toThoughtMeta(thought))
 const tags = buildThoughtsTags(thoughtsWithContent)
-const title = `偶得 · 第 ${currentPage} 页 | Serendipity`
+const title = `偶得 · 第 ${currentPage} 页 | Faber的博客`
 ---
 
 <BaseLayout {title} {description}>

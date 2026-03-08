@@ -3,10 +3,10 @@
 import { useEffect, useState, useCallback } from "react"
 
 const phrases = [
-  { prefix: "Welcome to ", highlight: "My Blog" },
-  { prefix: "Built with ", highlight: "Astro" },
-  { prefix: "Styled with ", highlight: "Tailwind" },
-  { prefix: "Powered by ", highlight: "React" },
+  { prefix: "欢迎来到 ", highlight: "我的博客" },
+  { prefix: "基于 ", highlight: "Astro" },
+  { prefix: "样式来自 ", highlight: "Tailwind" },
+  { prefix: "驱动于 ", highlight: "React" },
 ]
 
 export function Hero() {
@@ -106,10 +106,10 @@ export function Hero() {
 
           <blockquote className="max-w-xl mx-auto mb-10">
             <p className="text-muted-foreground text-base sm:text-lg leading-relaxed italic">
-              "Start writing, no matter what. The water does not flow until the faucet is turned on."
+              "不管发生什么，我再也不愿品尝那种痛楚了。与其遭受那种苦境，还不如孤独一人静静地离群索居。"
             </p>
             <footer className="mt-2 text-sm text-muted-foreground/70">
-              — Louis L'Amour
+              — 村上春树
             </footer>
           </blockquote>
 
@@ -119,7 +119,7 @@ export function Hero() {
               onClick={handleBrowseClick}
               className="group flex items-center gap-2 px-8 py-3 bg-foreground text-background rounded-full font-medium text-sm hover:bg-foreground/90 transition-all duration-300"
             >
-              Start Reading
+              开始阅读
               <svg
                 className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
                 fill="none"
@@ -133,7 +133,7 @@ export function Hero() {
               href="/about/"
               className="px-8 py-3 border border-border rounded-full font-medium text-sm text-foreground hover:border-foreground/40 transition-all duration-300"
             >
-              About Me
+              关于我
             </a>
           </div>
         </div>

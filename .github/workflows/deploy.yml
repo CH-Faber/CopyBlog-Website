@@ -1,0 +1,47 @@
+name: Deploy Astro Blog to Server
+
+on:
+  push:
+    # 只监听 deploy 分支的变动
+    branches:
+      - deploy
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # 确保拉取 deploy 分支
+          ref: deploy
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Build Static Site
+        run: pnpm run build
+        
+      # 以下是将打包后的产物部署到您的私有服务器
+      # 需要您在 GitHub 仓库的 Settings -> Secrets and variables -> Actions 中设置相关秘钥
+      - name: Deploy to Server via SSH
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          ARGS: "-rltgoDzvO --delete"
+          SOURCE: "dist/"
+          REMOTE_HOST: ${{ secrets.SERVER_HOST }}
+          REMOTE_USER: ${{ secrets.SERVER_USERNAME }}
+          TARGET: ${{ secrets.SERVER_STATIC_DIR }} # 例如：/var/www/html

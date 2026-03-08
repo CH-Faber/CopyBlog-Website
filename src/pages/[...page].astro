@@ -23,8 +23,8 @@ const allArticles = allPosts.map((post) => toPostMeta(post))
 const sidebarMeta = buildSidebarMeta(allArticles)
 const title =
   currentPage > 1
-    ? `时歌的博客 | Boundary of Thought · 第 ${currentPage} 页`
-    : "时歌的博客 | Boundary of Thought"
+    ? `Faber的博客 · 第 ${currentPage} 页`
+    : "Faber的博客"
 ---
 
 <BaseLayout {title} {description}>
@@ -36,7 +36,7 @@ const title =
           client:visible
           articles={allArticles}
           title="全部文章"
-          subtitle="All Posts"
+          subtitle="全部文章"
           showViewAll={false}
           pagination={{ currentPage, pageSize: PAGE_SIZE, basePath: "/" }}
           sidebarCategories={sidebarMeta.categories}

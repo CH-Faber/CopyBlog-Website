@@ -1,24 +1,24 @@
 [
   {
-    "categoryTitle": "Friends",
-    "categoryDesc": "Links to my awesome friends.",
+    "categoryTitle": "友链",
+    "categoryDesc": "我欣赏的创作者们。",
     "links": [
       {
-        "title": "Jane Doe",
+        "title": "示例友链",
         "imgurl": "https://example.com/avatar.png",
-        "desc": "An example friend link.",
+        "desc": "一个示例友链。",
         "siteurl": "https://example.com"
       }
     ]
   },
   {
-    "categoryTitle": "Recommended",
-    "categoryDesc": "Blogs that I often read.",
+    "categoryTitle": "推荐",
+    "categoryDesc": "我常读的博客。",
     "links": [
       {
-        "title": "Astro Docs",
+        "title": "Astro 文档",
         "imgurl": "https://astro.build/favicon.svg",
-        "desc": "The official Astro documentation.",
+        "desc": "Astro 官方文档。",
         "siteurl": "https://docs.astro.build/"
       }
     ]

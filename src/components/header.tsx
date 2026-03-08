@@ -65,7 +65,7 @@ export function Header() {
             <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
               <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
             </div>
-            <span className="text-foreground font-medium tracking-tight hidden sm:block">时歌的博客</span>
+            <span className="text-foreground font-medium tracking-tight hidden sm:block">Faber的博客</span>
           </a>
 
           {/* Center: Navigation */}
@@ -98,7 +98,7 @@ export function Header() {
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2"
-              aria-label="Toggle menu"
+              aria-label="切换菜单"
             >
               <div className="relative w-5 h-4">
                 <span
@@ -145,7 +145,7 @@ export function Header() {
               <button
                 type="button"
                 className="p-2"
-                aria-label="Close menu"
+                aria-label="关闭菜单"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <div className="relative w-5 h-4">

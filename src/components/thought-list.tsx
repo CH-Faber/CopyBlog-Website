@@ -301,7 +301,7 @@ export function ThoughtList({
         {/* Section header */}
         <div className="mb-10 onload-animation" style={{ animationDelay: "50ms" }}>
           <span className="text-primary text-sm font-medium tracking-wide uppercase mb-2 block">
-            Serendipity
+            灵感拾遗
           </span>
           <h2 className="font-serif text-3xl sm:text-4xl font-medium text-foreground">偶得</h2>
         </div>

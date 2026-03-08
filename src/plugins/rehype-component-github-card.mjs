@@ -94,7 +94,7 @@ export function GithubCardComponent(properties, children) {
 	const nDescription = h(
 		`div#${cardUuid}-description`,
 		{ class: "gc-description" },
-		"Loading...",
+		"加载中...",
 	);
 
 	const nStars = h(`div#${cardUuid}-stars`, { class: "gc-stars" }, "—");
@@ -118,7 +118,7 @@ export function GithubCardComponent(properties, children) {
         if (cardEl) cardEl.dataset.githubLoaded = "loading";
         debug("inline fetch", "${repo}");
         fetch('https://api.github.com/repos/${repo}', { referrerPolicy: "no-referrer" }).then(response => response.json()).then(data => {
-          document.getElementById('${cardUuid}-description').innerText = data.description?.replace(/:[a-zA-Z0-9_]+:/g, '') || "No description provided";
+          document.getElementById('${cardUuid}-description').innerText = data.description?.replace(/:[a-zA-Z0-9_]+:/g, '') || "暂无描述";
           const lang = data.language || "";
           const langEl = document.getElementById('${cardUuid}-language');
           langEl.innerText = lang || "—";

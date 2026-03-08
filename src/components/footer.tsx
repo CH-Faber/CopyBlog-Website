@@ -26,10 +26,10 @@ export function Footer() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-foreground font-medium">My Blog</span>
+              <span className="text-foreground font-medium">Faber的博客</span>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              A highly customizable Astro blog template.
+              探索金融、社会与人工智能的交汇点
             </p>
           </div>
 
@@ -37,7 +37,7 @@ export function Footer() {
           <div className="md:flex md:justify-center">
             <div>
               <h4 className="text-sm font-medium text-foreground mb-4 uppercase tracking-wide">导航</h4>
-              <nav className="flex flex-col gap-3">
+              <nav className="flex flex-row flex-wrap gap-x-6 gap-y-3">
                 {[
                   { name: "首页", href: "/" },
                   { name: "时间线", href: "/timeline/" },
@@ -97,14 +97,14 @@ export function Footer() {
 
         {/* Bottom */}
         <div className="mt-16 pt-8 border-t border-border/50 grid gap-4 md:grid-cols-3">
-          <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} John Doe. All rights reserved.</p>
+          <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} Faber. 保留所有权利。</p>
           <a
             href="#"
             target="_blank"
             rel="noreferrer"
             className="text-muted-foreground text-xs hover:text-foreground transition-colors duration-200 md:text-center"
           >
-            ICP License Placeholder
+            ICP 备案号
           </a>
           <a
             href="https://github.com/Lapis0x0/VermilionVoid"
@@ -113,7 +113,7 @@ export function Footer() {
             className="flex items-center gap-2 text-muted-foreground text-xs hover:text-foreground transition-colors duration-200 group md:justify-end md:pr-4"
           >
             <Github className="w-3.5 h-3.5" />
-            <span>Theme by VermilionVoid</span>
+            <span>主题：VermilionVoid</span>
           </a>
         </div>
       </div>
