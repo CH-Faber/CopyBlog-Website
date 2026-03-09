@@ -65,7 +65,7 @@ export function Header() {
             <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
               <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
             </div>
-            <span className="text-foreground font-medium tracking-tight hidden sm:block">Faber的博客</span>
+            <span className="text-foreground font-medium tracking-tight hidden sm:block">一个闪念</span>
           </a>
 
           {/* Center: Navigation */}

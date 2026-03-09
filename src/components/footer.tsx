@@ -26,7 +26,7 @@ export function Footer() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-foreground font-medium">Faber的博客</span>
+              <span className="text-foreground font-medium">一个闪念</span>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed">
               探索金融、社会与人工智能的交汇点

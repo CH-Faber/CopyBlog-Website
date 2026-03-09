@@ -8,7 +8,7 @@ import { PAGE_SIZE } from "@/lib/constants"
 import { buildSidebarMeta, getSortedPosts, toPostMeta } from "@/lib/posts"
 import { getSortedThoughts, toThoughtPreview } from "@/lib/thoughts"
 
-const title = "Faber的博客"
+const title = "一个闪念"
 const description = "探索金融、社会与人工智能的交汇点"
 const posts = await getSortedPosts()
 const allArticles = posts.map((post) => toPostMeta(post))
