@@ -9,6 +9,8 @@ import PasswordProtection from "@/components/PasswordProtection.astro"
 import Comments from "@/components/Comments.astro"
 import bcrypt from "bcryptjs"
 import CryptoJS from "crypto-js"
+import { siteName } from "@/config/site"
+import { profile } from "@/data/profile"
 
 export async function getStaticPaths() {
   const posts = await getPostsWithNav()
@@ -49,7 +51,7 @@ const description = buildMetaDescription(
   post.data.title,
   post.data.encrypted ?? false,
 )
-const title = `${post.data.title} | 一个闪念`
+const title = `${post.data.title} | ${siteName}`
 const publishedIso = post.data.published ? new Date(post.data.published).toISOString() : ""
 const updatedIso = post.data.updated ? new Date(post.data.updated).toISOString() : ""
 const category = (post.data.category ?? "").toString().trim()
@@ -66,11 +68,11 @@ const jsonLd = {
   mainEntityOfPage: canonicalUrl,
   author: {
     "@type": "Person",
-    name: "Faber",
+    name: profile.name,
   },
   publisher: {
     "@type": "Organization",
-    name: "一个闪念",
+    name: siteName,
   },
   keywords: tags.length ? tags.join(", ") : undefined,
   articleSection: category || undefined,

@@ -25,8 +25,8 @@ pnpm install
 
 更新以下配置文件以个性化你的博客：
 
-- **`astro.config.mjs`**: 将 `site` 属性更新为你的域名。
-- **`src/data/profile.ts`**: 更新此文件中的姓名、简介、头像和社交链接。
+- **`src/config/site.ts`**: 站点域名（`siteUrl`）、站点名、版权与备案等；`astro.config.ts` 中的 `site` 从该文件导入，请勿重复填写不一致的域名。
+- **`src/data/profile.ts`**: 姓名、简介、头像和社交链接（简介亦用于默认 SEO 与 RSS）。
 - **`src/data/friends.json`**: 在此处添加你的友人帐链接。
 
 ### 3. 开发环境
@@ -74,11 +74,20 @@ pnpm build
 
 ### 3. 三轨部署架构
 - **方案 A：Go 后端服务 (`scripts/gosync`)**：
-  提供 REST API。调用 `POST /api/sync` 后，服务器在后台异步执行“同步 -> AI 加工 -> Git 提交”。支持秒级响应，无需等待构建完成。
+  提供 REST API。调用 `POST /api/sync` 后，服务器在后台异步执行“同步 -> AI 加工 -> Git 提交”。支持秒级响应，无需等待构建完成。在服务器上从源码编译（勿将二进制提交到仓库）：
+
+  ```bash
+  cd scripts/gosync
+  go build -o sync-server .
+  ```
+
+  Windows 下可执行文件名为 `sync-server.exe`，路径已写入 `.gitignore`。
+
 - **方案 B：GitHub Actions (GitOps)**：
-  Go 服务将更新推送到 `deploy` 分支。GitHub 接到推送后自动启动云端构建 (`pnpm build`)。该方案实现了**模板隔离**，保护 `main` 分支不受文章与部署逻辑污染。
-- **方案 C：本地一键速通脚本 (`deploy.ps1`)**：
-  在本地执行打包并利用 SCP 协议直接覆盖到服务器的 `/var/www/` 目录。适用于不涉及 Git 流程的紧急发布。
+  工作流见 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：仅在 **`deploy` 分支** 有推送时触发（`main` 上的提交不会自动部署）。流水线执行 `pnpm install` 与 `pnpm build`，再通过 SSH 将 `dist/` 同步到服务器。请在仓库 **Settings → Secrets and variables → Actions** 中配置：`SERVER_SSH_KEY`、`SERVER_HOST`、`SERVER_USERNAME`、`SERVER_STATIC_DIR`。Go 服务或其他自动化可将站点变更推送到 `deploy` 分支以触发构建，从而在流程上与 `main` 解耦。
+
+- **方案 C：本地一键脚本 (`deploy.ps1`)**：
+  在本地执行 `pnpm build` 后，通过 SSH/SCP 将 `dist/` 上传到服务器。可通过环境变量覆盖默认占位值：`DEPLOY_SSH_HOST`、`DEPLOY_SSH_USER`、`DEPLOY_TARGET_DIR`（未设置时脚本内为占位符，需自行配置后再用）。
 
 ---
 

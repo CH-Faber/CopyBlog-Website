@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { HeaderSearch } from "./header-search"
 import { ThemeToggle } from "./theme-toggle"
 import { profile } from "@/data/profile"
+import { siteName } from "@/config/site"
 
 const navItems: { name: string; href: string; external?: boolean }[] = [
   { name: "首页", href: "/#home-main" },
@@ -65,7 +66,7 @@ export function Header() {
             <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-secondary transition-transform duration-300 group-hover:scale-105">
               <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
             </div>
-            <span className="text-foreground font-medium tracking-tight hidden sm:block">一个闪念</span>
+            <span className="text-foreground font-medium tracking-tight hidden sm:block">{siteName}</span>
           </a>
 
           {/* Center: Navigation */}

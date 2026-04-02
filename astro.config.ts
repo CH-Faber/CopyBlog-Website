@@ -20,25 +20,36 @@ import { remarkExcerpt } from "./src/plugins/remark-excerpt.js"
 import { remarkReadingTime } from "./src/plugins/remark-reading-time.mjs"
 import { pluginLanguageBadge } from "./src/plugins/expressive-code/language-badge"
 import { pluginCustomCopyButton } from "./src/plugins/expressive-code/custom-copy-button"
+import { siteUrl } from "./src/config/site"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
-const createAdmonitionComponent = (type) => (properties = {}, children = []) => {
-  const normalizedChildren = Array.isArray(children) ? children : []
-  return AdmonitionComponent(properties, normalizedChildren, type)
-}
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+type AdmonitionKind = "note" | "tip" | "important" | "caution" | "warning"
+
+const createAdmonitionComponent =
+  (type: AdmonitionKind) => (properties = {}, children: unknown[] = []) => {
+    const normalizedChildren = Array.isArray(children) ? children : []
+    return AdmonitionComponent(properties, normalizedChildren, type)
+  }
 
 export default defineConfig({
   srcDir: "./src",
   output: "static",
-  site: "https://faberhu.top",
+  site: siteUrl,
   trailingSlash: "always",
-  alias: {
-    "@": "./src",
+  vite: {
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
   },
   integrations: [
     expressiveCode({
       themes: ["github-dark", "github-light"],
       themeCssSelector: (theme) => {
-        // 根据主题名称返回对应的 CSS 选择器
         if (theme.name === "github-light") return ":root:not(.dark)"
         return ".dark"
       },

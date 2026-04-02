@@ -5,8 +5,9 @@ import { Footer } from "@/components/footer"
 import SiteHeader from "@/components/site-header.astro"
 import { PAGE_SIZE } from "@/lib/constants"
 import { getSortedThoughts, toThoughtMeta, buildThoughtsTags } from "@/lib/thoughts"
+import { siteName } from "@/config/site"
 
-const title = "偶得 | 一个闪念"
+const title = `偶得 | ${siteName}`
 const description = "零散的想法与灵感"
 
 const allThoughts = await getSortedThoughts()

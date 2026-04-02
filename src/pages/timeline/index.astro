@@ -4,8 +4,9 @@ import Timeline from "@/components/Timeline.astro"
 import SiteHeader from "@/components/site-header.astro"
 import { Footer } from "@/components/footer"
 import { getSortedPosts } from "@/lib/posts"
+import { siteName } from "@/config/site"
 
-const title = "文章归档 | 一个闪念"
+const title = `文章归档 | ${siteName}`
 const description = "全部文章时间线"
 const posts = await getSortedPosts(true)
 

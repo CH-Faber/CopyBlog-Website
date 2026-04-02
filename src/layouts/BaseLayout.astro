@@ -1,6 +1,8 @@
 ---
 import "@/styles/global.css"
 import { ViewTransitions } from "astro:transitions"
+import { siteName } from "@/config/site"
+import { profile } from "@/data/profile"
 
 interface Props {
   title?: string
@@ -16,8 +18,8 @@ interface Props {
   robots?: string
 }
 
-const defaultTitle = "一个闪念"
-const defaultDescription = "探索金融、社会与人工智能的交汇点"
+const defaultTitle = siteName
+const defaultDescription = profile.bio
 
 const {
   title = defaultTitle,
@@ -54,7 +56,7 @@ const resolvedTwitterDescription = twitterDescription || description
     <meta property="og:title" content={resolvedOgTitle} />
     <meta property="og:description" content={resolvedOgDescription} />
     <meta property="og:url" content={resolvedOgUrl} />
-    <meta property="og:site_name" content="一个闪念" />
+    <meta property="og:site_name" content={siteName} />
     <meta property="og:locale" content="zh_CN" />
     <meta name="twitter:card" content={twitterCard} />
     <meta name="twitter:title" content={resolvedTwitterTitle} />

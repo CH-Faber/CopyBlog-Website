@@ -3,6 +3,8 @@ import type { APIContext } from "astro"
 import MarkdownIt from "markdown-it"
 import sanitizeHtml from "sanitize-html"
 import { getSortedPosts } from "@/lib/posts"
+import { siteName, siteUrl } from "@/config/site"
+import { profile } from "@/data/profile"
 
 const parser = new MarkdownIt()
 
@@ -18,9 +20,9 @@ export async function GET(context: APIContext) {
   const publicPosts = posts.filter((post) => !post.data.encrypted)
 
   return rss({
-    title: "一个闪念",
-    description: "探索金融、社会与人工智能的交汇点",
-    site: context.site ?? "https://example.com",
+    title: siteName,
+    description: profile.bio,
+    site: context.site ?? siteUrl,
     items: publicPosts.map((post) => {
       const content = typeof post.body === "string" ? post.body : String(post.body || "")
       const cleanedContent = stripInvalidXmlChars(content)

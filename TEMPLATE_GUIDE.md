@@ -4,10 +4,10 @@
 
 ## 1. 基础信息配置
 
-网站的基础信息主要集中在两个文件中：
+网站的基础信息主要集中在以下文件中：
 
-*   **`astro.config.mjs`**: 
-    找到 `site: "https://example.com"`，将其替换为你自己的实际域名。这是生成 Sitemap 和 RSS 订阅的必要步骤。
+*   **`src/config/site.ts`**:
+    站点级配置：将 `siteUrl` 改为你的正式域名（需与 `astro.config.ts` 中导入的 `site` 一致）、`siteName`（全站标题）、`copyrightName`、`icpNumber`（不需要备案时保持为 `null`）、`themeRepoUrl` 等。
 *   **`src/data/profile.ts`**:
     这是最重要的个人信息配置文件。你需要在这里更新：
     *   `name`: 你的昵称或名字
@@ -22,7 +22,7 @@
 *   **关于页面**:
     打开 `src/components/pages/AboutPage.tsx` 文件。找到并替换 `<section className="mb-16">` 中的个人履历段落，写下你想向读者展示的关于你自己的故事。如果你需要接受赞赏，请更新带有二维码图片的部分。
 *   **底部信息 (Footer)**:
-    如果有需要备案，请前往 `src/components/footer.tsx` 底部添加你自己的 ICP 备案号。
+    品牌名、简介、备案与主题链接由 `src/config/site.ts` 与 `src/data/profile.ts` 驱动；备案号在 `site.ts` 的 `icpNumber` 中填写，为 `null` 时不显示。
 
 ## 3. 内容创作模块
 

@@ -9,3 +9,7 @@ AGENTS.md
 CLAUDE.md
 TODO.md
 Design/
+
+# Go sync server build artifacts (cd scripts/gosync && go build -o sync-server .)
+scripts/gosync/sync-server
+scripts/gosync/sync-server.exe

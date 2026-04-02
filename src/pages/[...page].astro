@@ -6,8 +6,10 @@ import { Footer } from "@/components/footer"
 import SiteHeader from "@/components/site-header.astro"
 import { PAGE_SIZE } from "@/lib/constants"
 import { buildSidebarMeta, getSortedPosts, toPostMeta } from "@/lib/posts"
+import { siteName } from "@/config/site"
+import { profile } from "@/data/profile"
 
-const description = "探索金融、社会与人工智能的交汇点"
+const description = profile.bio
 
 export const getStaticPaths = (async ({ paginate }) => {
   const posts = await getSortedPosts()
@@ -22,9 +24,7 @@ const allPosts = await getSortedPosts()
 const allArticles = allPosts.map((post) => toPostMeta(post))
 const sidebarMeta = buildSidebarMeta(allArticles)
 const title =
-  currentPage > 1
-    ? `一个闪念 · 第 ${currentPage} 页`
-    : "一个闪念"
+  currentPage > 1 ? `${siteName} · 第 ${currentPage} 页` : siteName
 ---
 
 <BaseLayout {title} {description}>

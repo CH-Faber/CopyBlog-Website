@@ -1,5 +1,6 @@
 import { Github, MessageCircle, Twitter, Rss, Mail, Music } from "lucide-react"
 import { profile, type ProfileLinkType } from "@/data/profile"
+import { copyrightName, icpNumber, siteName, themeRepoUrl } from "@/config/site"
 
 const iconMap: Record<ProfileLinkType, React.ElementType> = {
   qq: MessageCircle,
@@ -26,11 +27,9 @@ export function Footer() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-foreground font-medium">一个闪念</span>
+              <span className="text-foreground font-medium">{siteName}</span>
             </div>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              探索金融、社会与人工智能的交汇点
-            </p>
+            <p className="text-muted-foreground text-sm leading-relaxed">{profile.bio}</p>
           </div>
 
           {/* Navigation */}
@@ -97,17 +96,23 @@ export function Footer() {
 
         {/* Bottom */}
         <div className="mt-16 pt-8 border-t border-border/50 grid gap-4 md:grid-cols-3">
-          <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} Faber. 保留所有权利。</p>
+          <p className="text-muted-foreground text-sm">
+            © {new Date().getFullYear()} {copyrightName}. 保留所有权利。
+          </p>
+          {icpNumber ? (
+            <a
+              href="https://beian.miit.gov.cn/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-muted-foreground text-xs hover:text-foreground transition-colors duration-200 md:text-center"
+            >
+              {icpNumber}
+            </a>
+          ) : (
+            <span className="hidden md:block" aria-hidden="true" />
+          )}
           <a
-            href="https://beian.miit.gov.cn/"
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground text-xs hover:text-foreground transition-colors duration-200 md:text-center"
-          >
-            粤ICP备2026025174号
-          </a>
-          <a
-            href="https://github.com/Lapis0x0/VermilionVoid"
+            href={themeRepoUrl}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-2 text-muted-foreground text-xs hover:text-foreground transition-colors duration-200 group md:justify-end md:pr-4"

@@ -1,6 +1,8 @@
 ---
 import SiteHeader from "@/components/site-header.astro"
 import friendsData from "@/data/friends.json"
+import { absoluteSiteUrl, siteName, siteUrl } from "@/config/site"
+import { profile } from "@/data/profile"
 import { ExternalLink, Heart, CheckCircle2, Copy, Check, Mail } from "lucide-react"
 
 type FriendLink = {
@@ -19,13 +21,16 @@ type FriendCategory = {
 
 const friends = friendsData as FriendCategory[]
 
+const emailFromProfile =
+  profile.links.find((l) => l.type === "email")?.url.replace(/^mailto:/i, "") ?? "hello@example.com"
+
 const siteInfo = {
-  name: "一个闪念",
-  url: "https://faberhu.top",
-  avatar: "https://faberhu.top/avatar.webp",
-  desc: "探索金融、社会与人工智能的交汇点",
-  rss: "https://faberhu.top/rss.xml",
-  email: "hello@example.com",
+  name: siteName,
+  url: siteUrl,
+  avatar: absoluteSiteUrl(profile.avatar),
+  desc: profile.bio,
+  rss: absoluteSiteUrl("/rss.xml"),
+  email: emailFromProfile,
 }
 
 const siteInfoText = [
