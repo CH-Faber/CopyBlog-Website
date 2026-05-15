@@ -18,8 +18,8 @@ export async function GET(context: APIContext) {
   const publicPosts = posts.filter((post) => !post.data.encrypted)
 
   return rss({
-    title: "一个闪念",
-    description: "探索金融、社会与人工智能的交汇点",
+    title: "Faberl的Blog",
+    description: "在无数迷茫中寻找自己人生的定位",
     site: context.site ?? "https://example.com",
     items: publicPosts.map((post) => {
       const content = typeof post.body === "string" ? post.body : String(post.body || "")

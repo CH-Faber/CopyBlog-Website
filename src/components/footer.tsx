@@ -26,10 +26,10 @@ export function Footer() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-foreground font-medium">一个闪念</span>
+              <span className="text-foreground font-medium">Faberl的Blog</span>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              探索金融、社会与人工智能的交汇点
+              在无数迷茫中寻找自己人生的定位
             </p>
           </div>
 
@@ -97,7 +97,7 @@ export function Footer() {
 
         {/* Bottom */}
         <div className="mt-16 pt-8 border-t border-border/50 grid gap-4 md:grid-cols-3">
-          <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} Faber. 保留所有权利。</p>
+          <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} Faberl. 保留所有权利。</p>
           <a
             href="https://beian.miit.gov.cn/"
             target="_blank"
