@@ -6,7 +6,7 @@ export const profile: {
   avatar: string
   links: { type: ProfileLinkType; name: string; url: string }[]
 } = {
-  name: "Faberl",
+  name: "Faber",
   bio: "在无数迷茫中寻找自己人生的定位",
   avatar: "/avatar.webp",
   links: [

@@ -18,7 +18,7 @@ export async function GET(context: APIContext) {
   const publicPosts = posts.filter((post) => !post.data.encrypted)
 
   return rss({
-    title: "Faberl的Blog",
+    title: "Faber的Blog",
     description: "在无数迷茫中寻找自己人生的定位",
     site: context.site ?? "https://example.com",
     items: publicPosts.map((post) => {
