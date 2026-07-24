@@ -1,7 +1,7 @@
 {
 	"name": "vermilion-void-sync",
-	"version": "0.1.0",
-	"description": "Trigger VermilionVoid blog sync from Obsidian.",
+	"version": "0.2.0",
+	"description": "Review, edit and publish VermilionVoid blog articles from Obsidian.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

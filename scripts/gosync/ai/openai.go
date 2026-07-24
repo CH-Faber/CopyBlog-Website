@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"gosync/config"
+	"gosync/taxonomy"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -118,6 +119,101 @@ type FMResponse struct {
 	Description string   `json:"description"`
 	Category    string   `json:"category"`
 	Tags        []string `json:"tags"`
+}
+
+type ProposedTag struct {
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+}
+
+type Suggestion struct {
+	Description  string        `json:"description"`
+	Category     string        `json:"category"`
+	SelectedTags []string      `json:"selectedTags"`
+	ProposedTags []ProposedTag `json:"proposedTags"`
+}
+
+// SuggestMetadata generates reviewable metadata. Existing tags are strictly validated
+// against the taxonomy; unknown model output is moved into proposedTags for approval.
+func (g *Generator) SuggestMetadata(filename, content string, values *taxonomy.Taxonomy) (*Suggestion, error) {
+	if g.cfg.AIApiKey == "" {
+		return &Suggestion{SelectedTags: []string{}, ProposedTags: []ProposedTag{}}, nil
+	}
+	snippet := content
+	if len(snippet) > 6000 {
+		snippet = snippet[:6000]
+	}
+
+	categoryLines := []string{}
+	for _, category := range values.Categories {
+		if category.Enabled {
+			categoryLines = append(categoryLines, fmt.Sprintf("- %s：%s", category.Name, category.Description))
+		}
+	}
+	tagLines := []string{}
+	for _, tag := range values.AllowedTags() {
+		tagLines = append(tagLines, fmt.Sprintf("- %s：%s", tag.Name, tag.Description))
+	}
+	prompt := fmt.Sprintf(`你是博客文章元数据审核助手。只输出一个 JSON 对象，不要 Markdown 围栏或说明。
+输出格式：
+{"description":"1-2句中文摘要","category":"已有分类或建议分类","selectedTags":["只能来自已有标签库"],"proposedTags":[{"name":"建议的新标签","reason":"为什么需要"}]}
+
+规则：selectedTags 只能从已有标签库中选择 3-6 个；确实缺少合适标签时放入 proposedTags，禁止把新标签放进 selectedTags。不要输出标题和发布时间。
+
+已有分类：
+%s
+
+已有标签库：
+%s
+
+文件名：%s
+正文：
+%s`, strings.Join(categoryLines, "\n"), strings.Join(tagLines, "\n"), filename, snippet)
+
+	resp, err := CreateChatCompletionCompat(context.TODO(), g.client, openai.ChatCompletionRequest{
+		Model: g.cfg.AIModel,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleSystem, Content: "你只返回合法 JSON。"},
+			{Role: openai.ChatMessageRoleUser, Content: prompt},
+		},
+	}, 2048)
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("no choices in response")
+	}
+	reply := strings.TrimSpace(resp.Choices[0].Message.Content)
+	reply = strings.ReplaceAll(reply, "```json", "")
+	reply = strings.ReplaceAll(reply, "```", "")
+	if start, end := strings.Index(reply, "{"), strings.LastIndex(reply, "}"); start >= 0 && end >= start {
+		reply = reply[start : end+1]
+	}
+	var result Suggestion
+	if err := json.Unmarshal([]byte(reply), &result); err != nil {
+		return nil, fmt.Errorf("JSON parse error: %w", err)
+	}
+	valid, unknown := values.ValidateTags(result.SelectedTags)
+	if len(valid) > 6 {
+		valid = valid[:6]
+	}
+	result.SelectedTags = valid
+	knownProposals := map[string]bool{}
+	for _, proposal := range result.ProposedTags {
+		knownProposals[strings.ToLower(strings.TrimSpace(proposal.Name))] = true
+	}
+	for _, name := range unknown {
+		if !knownProposals[strings.ToLower(name)] {
+			result.ProposedTags = append(result.ProposedTags, ProposedTag{Name: name, Reason: "AI 返回了标签库外的标签"})
+		}
+	}
+	if result.SelectedTags == nil {
+		result.SelectedTags = []string{}
+	}
+	if result.ProposedTags == nil {
+		result.ProposedTags = []ProposedTag{}
+	}
+	return &result, nil
 }
 
 const (

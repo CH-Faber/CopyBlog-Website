@@ -1,9 +1,9 @@
 {
 	"id": "vermilion-void-sync",
 	"name": "VermilionVoid Sync",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"minAppVersion": "0.15.0",
-	"description": "Trigger VermilionVoid blog sync from Obsidian.",
+	"description": "Review, edit and publish VermilionVoid blog articles from Obsidian.",
 	"author": "Faber",
 	"authorUrl": "https://faberhu.top",
 	"isDesktopOnly": false

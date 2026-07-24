@@ -6,7 +6,7 @@
 # sudo systemctl daemon-reload && sudo systemctl enable --now gosync
 
 [Unit]
-Description=VermilionVoid gosync (S3 sync + AI + git push)
+Description=VermilionVoid gosync (S3 processing + Obsidian review + approved git publish)
 After=network-online.target
 Wants=network-online.target
 

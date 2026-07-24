@@ -4,6 +4,7 @@ dist
 *.log
 .env
 .wrangler
+.gosync/
 
 AGENTS.md
 CLAUDE.md

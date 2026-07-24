@@ -125,6 +125,63 @@ func (s *S3Syncer) SyncArticles() error {
 	return nil
 }
 
+// SyncArticlesTo downloads the current S3 article set into an isolated job directory.
+// When the remote article has no frontmatter, the published article's frontmatter is
+// preserved as a base. It never modifies or deletes files in the published posts directory.
+func (s *S3Syncer) SyncArticlesTo(destination, publishedPostsDir string) error {
+	ctx := context.TODO()
+	if err := os.MkdirAll(destination, 0755); err != nil {
+		return err
+	}
+
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.cfg.S3BucketName),
+		Prefix: aws.String(s.cfg.S3Prefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list objects: %w", err)
+		}
+		for _, obj := range page.Contents {
+			key := aws.ToString(obj.Key)
+			if !strings.HasSuffix(strings.ToLower(key), ".md") && !strings.HasSuffix(strings.ToLower(key), ".mdx") {
+				continue
+			}
+			filename := filepath.Base(key)
+			tempPath := filepath.Join(destination, filename+".download")
+			if err := s.downloadFileImpl(ctx, key, tempPath); err != nil {
+				return fmt.Errorf("download %s: %w", key, err)
+			}
+			remoteBytes, err := os.ReadFile(tempPath)
+			_ = os.Remove(tempPath)
+			if err != nil {
+				return err
+			}
+			remoteFM, remoteBody := extractFrontmatter(string(remoteBytes))
+			finalContent := string(remoteBytes)
+			if remoteFM == "" {
+				publishedBytes, readErr := os.ReadFile(filepath.Join(publishedPostsDir, filename))
+				if readErr == nil {
+					publishedFM, _ := extractFrontmatter(string(publishedBytes))
+					if publishedFM != "" {
+						finalContent = publishedFM + "\n\n" + remoteBody
+					}
+				}
+			}
+			destinationPath := filepath.Join(destination, filename)
+			if err := os.WriteFile(destinationPath, []byte(finalContent), 0644); err != nil {
+				return err
+			}
+			if obj.LastModified != nil {
+				_ = os.Chtimes(destinationPath, time.Now(), *obj.LastModified)
+			}
+		}
+	}
+	return nil
+}
+
 func extractFrontmatter(content string) (fm string, body string) {
 	trimmed := strings.TrimLeft(content, " \t\r\n")
 	if strings.HasPrefix(trimmed, "---") {

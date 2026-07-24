@@ -28,75 +28,536 @@ __export(main_exports, {
   default: () => SyncPlugin
 });
 module.exports = __toCommonJS(main_exports);
+var import_obsidian3 = require("obsidian");
+
+// src/api-client.ts
 var import_obsidian = require("obsidian");
-var DEFAULT_SETTINGS = {
-  syncEndpoint: "http://localhost:3001/api/sync",
-  webhookSecret: ""
-};
-function normalizeSyncEndpoint(raw) {
-  const s = raw.trim();
+function apiBase(endpoint) {
+  const raw = endpoint.trim();
   try {
-    const u = new URL(s);
-    if (u.pathname === "/" || u.pathname === "") {
-      u.pathname = "/api/sync";
-    }
-    if (u.pathname.endsWith("/") && u.pathname.length > 1) {
-      u.pathname = u.pathname.slice(0, -1);
-    }
-    return u.toString();
+    const url = new URL(raw);
+    if (url.pathname.endsWith("/api/sync"))
+      url.pathname = "/api/v1";
+    else if (!url.pathname.includes("/api/v1"))
+      url.pathname = "/api/v1";
+    url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.toString().replace(/\/$/, "");
   } catch (e) {
-    return s;
+    return raw.replace(/\/api\/sync\/?$/, "/api/v1").replace(/\/$/, "");
   }
 }
-var SyncPlugin = class extends import_obsidian.Plugin {
+var ApiClient = class {
+  constructor(settings) {
+    this.base = apiBase(settings.syncEndpoint);
+    this.secret = settings.webhookSecret;
+  }
+  async request(path, method = "GET", body) {
+    var _a, _b, _c;
+    const response = await (0, import_obsidian.requestUrl)({
+      url: `${this.base}${path}`,
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.secret}`
+      },
+      body: body === void 0 ? void 0 : JSON.stringify(body),
+      throw: false
+    });
+    if (response.status < 200 || response.status >= 300) {
+      const message = (_c = (_b = (_a = response.json) == null ? void 0 : _a.message) != null ? _b : response.text) != null ? _c : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+    return response.json;
+  }
+  createJob(localManifest) {
+    return this.request("/jobs", "POST", { clientId: "obsidian", localManifest });
+  }
+  getJob(id) {
+    return this.request(`/jobs/${id}`);
+  }
+  updateArticle(jobId, article) {
+    return this.request(`/jobs/${jobId}/articles/${article.id}`, "PUT", {
+      revision: article.revision,
+      metadata: article.metadata,
+      content: article.content,
+      status: article.status
+    });
+  }
+  getTaxonomy() {
+    return this.request("/taxonomy");
+  }
+  saveTaxonomy(value) {
+    return this.request("/taxonomy", "PUT", value);
+  }
+  publish(jobId, articles) {
+    return this.request(`/jobs/${jobId}/publish`, "POST", {
+      articles: articles.map((article) => ({ id: article.id, revision: article.revision, hash: article.currentHash })),
+      includeTaxonomy: true
+    });
+  }
+};
+
+// src/article-manager-view.ts
+var import_obsidian2 = require("obsidian");
+var ARTICLE_MANAGER_VIEW = "vermilion-void-article-manager";
+async function sha256(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((item) => item.toString(16).padStart(2, "0")).join("");
+}
+var ArticleManagerView = class extends import_obsidian2.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.job = null;
+    this.taxonomy = null;
+    this.activeArticleId = "";
+    this.selected = /* @__PURE__ */ new Set();
+    this.dirtyArticles = /* @__PURE__ */ new Set();
+    this.showTaxonomy = false;
+    this.pollTimer = null;
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return ARTICLE_MANAGER_VIEW;
+  }
+  getDisplayText() {
+    return "VermilionVoid \u6587\u7AE0\u7BA1\u7406";
+  }
+  getIcon() {
+    return "layout-dashboard";
+  }
+  async onOpen() {
+    var _a, _b, _c;
+    this.contentEl.addClass("vermilion-manager");
+    try {
+      this.taxonomy = await this.plugin.api.getTaxonomy();
+      if (this.plugin.settings.activeJobId) {
+        this.job = await this.plugin.api.getJob(this.plugin.settings.activeJobId);
+        this.activeArticleId = (_c = (_b = (_a = this.job.articles) == null ? void 0 : _a[0]) == null ? void 0 : _b.id) != null ? _c : "";
+      }
+    } catch (error) {
+      new import_obsidian2.Notice(`\u52A0\u8F7D\u7BA1\u7406\u6570\u636E\u5931\u8D25\uFF1A${error.message}`);
+    }
+    this.render();
+    this.schedulePoll();
+  }
+  async onClose() {
+    if (this.pollTimer !== null)
+      window.clearTimeout(this.pollTimer);
+  }
+  async prepareSync() {
+    try {
+      const manifest = await this.collectLocalManifest();
+      this.job = await this.plugin.api.createJob(manifest);
+      this.plugin.settings.activeJobId = this.job.id;
+      await this.plugin.saveSettings();
+      this.activeArticleId = "";
+      this.selected.clear();
+      this.dirtyArticles.clear();
+      this.showTaxonomy = false;
+      this.render();
+      this.schedulePoll(true);
+      new import_obsidian2.Notice("\u5904\u7406\u4EFB\u52A1\u5DF2\u521B\u5EFA\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u53D1\u5E03\u3002");
+    } catch (error) {
+      new import_obsidian2.Notice(`\u521B\u5EFA\u4EFB\u52A1\u5931\u8D25\uFF1A${error.message}`);
+    }
+  }
+  async refreshJob() {
+    var _a, _b, _c;
+    if (!this.plugin.settings.activeJobId)
+      return;
+    if (this.dirtyArticles.size > 0) {
+      new import_obsidian2.Notice("\u5B58\u5728\u672A\u4FDD\u5B58\u7684\u6587\u7AE0\uFF0C\u5DF2\u8DF3\u8FC7\u5237\u65B0\u3002");
+      return;
+    }
+    try {
+      this.job = await this.plugin.api.getJob(this.plugin.settings.activeJobId);
+      if (!this.activeArticleId)
+        this.activeArticleId = (_c = (_b = (_a = this.job.articles) == null ? void 0 : _a[0]) == null ? void 0 : _b.id) != null ? _c : "";
+      this.render();
+    } catch (error) {
+      new import_obsidian2.Notice(`\u5237\u65B0\u4EFB\u52A1\u5931\u8D25\uFF1A${error.message}`);
+    }
+  }
+  schedulePoll(force = false) {
+    if (this.pollTimer !== null)
+      window.clearTimeout(this.pollTimer);
+    const running = this.job && ["queued", "syncing", "analyzing", "publishing"].includes(this.job.status);
+    if (!force && !running)
+      return;
+    this.pollTimer = window.setTimeout(async () => {
+      await this.refreshJob();
+      this.schedulePoll();
+    }, 1500);
+  }
+  render() {
+    var _a, _b;
+    const root = this.contentEl;
+    root.empty();
+    const toolbar = root.createDiv({ cls: "vermilion-toolbar" });
+    toolbar.createEl("button", { text: "\u83B7\u53D6\u5E76\u5904\u7406\u6587\u7AE0", cls: "mod-cta" }).onclick = () => void this.prepareSync();
+    toolbar.createEl("button", { text: "\u5237\u65B0" }).onclick = () => void this.refreshJob();
+    toolbar.createEl("button", { text: this.showTaxonomy ? "\u8FD4\u56DE\u6587\u7AE0" : "\u6807\u7B7E\u7BA1\u7406" }).onclick = () => {
+      this.showTaxonomy = !this.showTaxonomy;
+      this.render();
+    };
+    const publishButton = toolbar.createEl("button", { text: `\u53D1\u5E03\u6240\u9009 (${this.selected.size})`, cls: "mod-cta" });
+    publishButton.disabled = this.selected.size === 0 || !this.job || this.job.status === "publishing";
+    publishButton.onclick = () => void this.publishSelected();
+    if (this.job) {
+      const status = root.createDiv({ cls: "vermilion-job-status" });
+      status.createSpan({ text: `${this.job.message} \xB7 ${this.job.progress}%` });
+      const progress = status.createEl("progress");
+      progress.max = 100;
+      progress.value = this.job.progress;
+      if (this.job.publishedSha)
+        status.createEl("code", { text: this.job.publishedSha.slice(0, 12) });
+    }
+    if (this.showTaxonomy) {
+      this.renderTaxonomy(root);
+      return;
+    }
+    if (!this.job) {
+      root.createDiv({ cls: "vermilion-empty", text: "\u70B9\u51FB\u201C\u83B7\u53D6\u5E76\u5904\u7406\u6587\u7AE0\u201D\u521B\u5EFA\u4E00\u4E2A\u5F85\u5BA1\u6838\u4EFB\u52A1\u3002" });
+      return;
+    }
+    if (!((_a = this.job.articles) == null ? void 0 : _a.length)) {
+      root.createDiv({ cls: "vermilion-empty", text: this.job.status === "failed" ? this.job.message : "\u670D\u52A1\u5668\u6B63\u5728\u5904\u7406\u6587\u7AE0\u2026\u2026" });
+      return;
+    }
+    const layout = root.createDiv({ cls: "vermilion-layout" });
+    this.renderArticleList(layout.createDiv({ cls: "vermilion-list" }));
+    const active = (_b = this.job.articles.find((article) => article.id === this.activeArticleId)) != null ? _b : this.job.articles[0];
+    this.activeArticleId = active.id;
+    this.renderEditor(layout.createDiv({ cls: "vermilion-editor" }), active);
+    void this.renderPreview(layout.createDiv({ cls: "vermilion-preview" }), active);
+  }
+  renderArticleList(container) {
+    var _a, _b;
+    container.createEl("h3", { text: "\u6587\u7AE0" });
+    for (const article of (_b = (_a = this.job) == null ? void 0 : _a.articles) != null ? _b : []) {
+      const row = container.createDiv({ cls: `vermilion-list-item ${article.id === this.activeArticleId ? "is-active" : ""}` });
+      const checkbox = row.createEl("input", { type: "checkbox" });
+      checkbox.checked = this.selected.has(article.id);
+      checkbox.onchange = () => {
+        if (checkbox.checked)
+          this.selected.add(article.id);
+        else
+          this.selected.delete(article.id);
+        this.render();
+      };
+      const text = row.createDiv({ cls: "vermilion-list-label" });
+      text.createDiv({ text: article.metadata.title || article.filename });
+      text.createEl("small", { text: article.status });
+      text.onclick = () => {
+        this.activeArticleId = article.id;
+        this.render();
+      };
+    }
+  }
+  labeledInput(container, label, value, onChange, multiline = false) {
+    const field = container.createDiv({ cls: "vermilion-field" });
+    field.createEl("label", { text: label });
+    const input = multiline ? field.createEl("textarea") : field.createEl("input", { type: "text" });
+    input.value = value;
+    input.oninput = () => onChange(input.value);
+    return input;
+  }
+  renderEditor(container, article) {
+    var _a, _b, _c, _d, _e;
+    container.createEl("h3", { text: "\u7F16\u8F91" });
+    if (article.error)
+      container.createDiv({ cls: "vermilion-error", text: article.error });
+    this.labeledInput(container, "\u6807\u9898", (_a = article.metadata.title) != null ? _a : "", (value) => {
+      article.metadata.title = value;
+      this.dirtyArticles.add(article.id);
+    });
+    this.labeledInput(container, "\u6458\u8981", (_b = article.metadata.description) != null ? _b : "", (value) => {
+      article.metadata.description = value;
+      this.dirtyArticles.add(article.id);
+    }, true);
+    this.labeledInput(container, "\u5206\u7C7B", (_c = article.metadata.category) != null ? _c : "", (value) => {
+      article.metadata.category = value;
+      this.dirtyArticles.add(article.id);
+    });
+    this.labeledInput(container, "\u6807\u7B7E\uFF08\u9017\u53F7\u5206\u9694\uFF09", ((_d = article.metadata.tags) != null ? _d : []).join(", "), (value) => {
+      article.metadata.tags = value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean);
+      this.dirtyArticles.add(article.id);
+    });
+    this.labeledInput(container, "\u53D1\u5E03\u65F6\u95F4", (_e = article.metadata.published) != null ? _e : "", (value) => {
+      article.metadata.published = value;
+      this.dirtyArticles.add(article.id);
+    });
+    const flags = container.createDiv({ cls: "vermilion-flags" });
+    for (const [label, key] of [["\u8349\u7A3F", "draft"], ["\u7F6E\u9876", "pinned"]]) {
+      const wrapper = flags.createEl("label");
+      const checkbox = wrapper.createEl("input", { type: "checkbox" });
+      checkbox.checked = Boolean(article.metadata[key]);
+      checkbox.onchange = () => {
+        article.metadata[key] = checkbox.checked;
+        this.dirtyArticles.add(article.id);
+      };
+      wrapper.appendText(label);
+    }
+    const bodyField = container.createDiv({ cls: "vermilion-field" });
+    bodyField.createEl("label", { text: "\u6B63\u6587" });
+    const body = bodyField.createEl("textarea", { cls: "vermilion-body-editor" });
+    body.value = article.content;
+    body.oninput = () => {
+      article.content = body.value;
+      this.dirtyArticles.add(article.id);
+    };
+    if (article.aiSuggestion) {
+      const aiBox = container.createDiv({ cls: "vermilion-ai-box" });
+      aiBox.createEl("h4", { text: "AI \u5EFA\u8BAE" });
+      aiBox.createEl("p", { text: article.aiSuggestion.description || "\u6CA1\u6709\u6458\u8981\u5EFA\u8BAE" });
+      aiBox.createEl("p", { text: `\u5206\u7C7B\uFF1A${article.aiSuggestion.category || "\u65E0"}` });
+      aiBox.createEl("p", { text: `\u5DF2\u6709\u6807\u7B7E\uFF1A${article.aiSuggestion.selectedTags.join("\u3001") || "\u65E0"}` });
+      aiBox.createEl("button", { text: "\u91C7\u7528\u5DF2\u6709\u5EFA\u8BAE" }).onclick = () => {
+        var _a2, _b2, _c2, _d2, _e2;
+        if ((_a2 = article.aiSuggestion) == null ? void 0 : _a2.description)
+          article.metadata.description = article.aiSuggestion.description;
+        if ((_b2 = article.aiSuggestion) == null ? void 0 : _b2.category)
+          article.metadata.category = article.aiSuggestion.category;
+        article.metadata.tags = Array.from(/* @__PURE__ */ new Set([...(_c2 = article.metadata.tags) != null ? _c2 : [], ...(_e2 = (_d2 = article.aiSuggestion) == null ? void 0 : _d2.selectedTags) != null ? _e2 : []]));
+        this.dirtyArticles.add(article.id);
+        this.render();
+      };
+      for (const proposal of article.aiSuggestion.proposedTags) {
+        const proposalRow = aiBox.createDiv({ cls: "vermilion-proposal" });
+        proposalRow.createSpan({ text: `${proposal.name}\uFF1A${proposal.reason}` });
+        proposalRow.createEl("button", { text: "\u6279\u51C6\u65B0\u6807\u7B7E" }).onclick = () => void this.approveProposedTag(article, proposal.name);
+      }
+    }
+    const actions = container.createDiv({ cls: "vermilion-actions" });
+    actions.createEl("button", { text: "\u4FDD\u5B58\u5230\u670D\u52A1\u5668\u548C\u672C\u5730", cls: "mod-cta" }).onclick = () => void this.saveArticle(article);
+    actions.createEl("button", { text: "\u5728 Obsidian \u4E2D\u6253\u5F00" }).onclick = () => void this.openLocalArticle(article);
+  }
+  async renderPreview(container, article) {
+    var _a, _b, _c;
+    container.createEl("h3", { text: "\u9884\u89C8" });
+    const meta = container.createDiv({ cls: "vermilion-preview-meta" });
+    meta.createEl("strong", { text: article.metadata.title });
+    meta.createEl("p", { text: (_a = article.metadata.description) != null ? _a : "" });
+    meta.createEl("small", { text: `${(_b = article.metadata.category) != null ? _b : "\u672A\u5206\u7C7B"} \xB7 ${((_c = article.metadata.tags) != null ? _c : []).join("\u3001")}` });
+    const markdown = container.createDiv({ cls: "markdown-preview-view" });
+    await import_obsidian2.MarkdownRenderer.render(this.app, article.content, markdown, this.localPath(article), this);
+  }
+  renderTaxonomy(container) {
+    const section = container.createDiv({ cls: "vermilion-taxonomy" });
+    section.createEl("h3", { text: "\u6807\u7B7E\u7BA1\u7406" });
+    section.createEl("p", { text: "\u542F\u7528\u4E14\u5141\u8BB8 AI \u4F7F\u7528\u7684\u6807\u7B7E\u4F1A\u8FDB\u5165 AI \u767D\u540D\u5355\u3002" });
+    if (!this.taxonomy) {
+      section.createDiv({ text: "\u6807\u7B7E\u5E93\u5C1A\u672A\u52A0\u8F7D\u3002" });
+      return;
+    }
+    for (const tag of this.taxonomy.tags)
+      this.renderTagRow(section, tag);
+    const actions = section.createDiv({ cls: "vermilion-actions" });
+    actions.createEl("button", { text: "\u65B0\u589E\u6807\u7B7E" }).onclick = () => {
+      var _a;
+      (_a = this.taxonomy) == null ? void 0 : _a.tags.push({ id: "", name: "\u65B0\u6807\u7B7E", aliases: [], description: "", enabled: true, aiSelectable: true, createdAt: "", updatedAt: "" });
+      this.render();
+    };
+    actions.createEl("button", { text: "\u4FDD\u5B58\u6807\u7B7E\u5E93", cls: "mod-cta" }).onclick = () => void this.saveTaxonomy();
+  }
+  renderTagRow(container, tag) {
+    const row = container.createDiv({ cls: "vermilion-tag-row" });
+    const name = row.createEl("input", { type: "text", value: tag.name });
+    name.oninput = () => tag.name = name.value;
+    const description = row.createEl("input", { type: "text", value: tag.description });
+    description.placeholder = "\u544A\u8BC9 AI \u4F55\u65F6\u4F7F\u7528\u8FD9\u4E2A\u6807\u7B7E";
+    description.oninput = () => tag.description = description.value;
+    for (const [label, key] of [["\u542F\u7528", "enabled"], ["\u5141\u8BB8 AI", "aiSelectable"]]) {
+      const wrapper = row.createEl("label");
+      const checkbox = wrapper.createEl("input", { type: "checkbox" });
+      checkbox.checked = tag[key];
+      checkbox.onchange = () => tag[key] = checkbox.checked;
+      wrapper.appendText(label);
+    }
+  }
+  async approveProposedTag(article, name) {
+    var _a;
+    if (!this.taxonomy)
+      return;
+    if (!this.taxonomy.tags.some((tag) => tag.name.toLowerCase() === name.toLowerCase())) {
+      this.taxonomy.tags.push({ id: "", name, aliases: [], description: "", enabled: true, aiSelectable: true, createdAt: "", updatedAt: "" });
+      await this.saveTaxonomy(false);
+    }
+    article.metadata.tags = Array.from(/* @__PURE__ */ new Set([...(_a = article.metadata.tags) != null ? _a : [], name]));
+    this.dirtyArticles.add(article.id);
+    if (article.aiSuggestion)
+      article.aiSuggestion.proposedTags = article.aiSuggestion.proposedTags.filter((tag) => tag.name !== name);
+    this.render();
+    new import_obsidian2.Notice(`\u5DF2\u6279\u51C6\u6807\u7B7E\u201C${name}\u201D\uFF0C\u4FDD\u5B58\u6587\u7AE0\u540E\u751F\u6548\u3002`);
+  }
+  async saveTaxonomy(notify = true) {
+    if (!this.taxonomy)
+      return;
+    try {
+      this.taxonomy = await this.plugin.api.saveTaxonomy(this.taxonomy);
+      if (notify)
+        new import_obsidian2.Notice("\u6807\u7B7E\u5E93\u5DF2\u4FDD\u5B58\uFF0C\u968F\u4E0B\u4E00\u6B21\u53D1\u5E03\u8FDB\u5165 Git\u3002");
+      this.render();
+    } catch (error) {
+      new import_obsidian2.Notice(`\u4FDD\u5B58\u6807\u7B7E\u5E93\u5931\u8D25\uFF1A${error.message}`);
+    }
+  }
+  async saveArticle(article) {
+    var _a, _b;
+    if (!this.job)
+      return;
+    try {
+      await this.assertLocalNotChanged(article);
+      const updated = await this.plugin.api.updateArticle(this.job.id, article);
+      const index = (_b = (_a = this.job.articles) == null ? void 0 : _a.findIndex((item) => item.id === article.id)) != null ? _b : -1;
+      if (index >= 0 && this.job.articles)
+        this.job.articles[index] = updated;
+      this.activeArticleId = updated.id;
+      await this.writeLocalArticle(updated);
+      updated.clientHash = await sha256(this.composeMarkdown(updated));
+      this.dirtyArticles.delete(updated.id);
+      this.render();
+      new import_obsidian2.Notice(`\u5DF2\u4FDD\u5B58\uFF1A${updated.metadata.title}`);
+    } catch (error) {
+      new import_obsidian2.Notice(`\u4FDD\u5B58\u5931\u8D25\uFF1A${error.message}`);
+    }
+  }
+  async publishSelected() {
+    var _a;
+    if (!((_a = this.job) == null ? void 0 : _a.articles))
+      return;
+    const articles = this.job.articles.filter((article) => this.selected.has(article.id));
+    if (articles.some((article) => this.dirtyArticles.has(article.id))) {
+      new import_obsidian2.Notice("\u6240\u9009\u6587\u7AE0\u5B58\u5728\u672A\u4FDD\u5B58\u4FEE\u6539\uFF0C\u8BF7\u5148\u4FDD\u5B58\u5230\u670D\u52A1\u5668\u548C\u672C\u5730\u3002");
+      return;
+    }
+    if (articles.some((article) => article.status === "deleted") && !window.confirm("\u6240\u9009\u5185\u5BB9\u5305\u542B\u5F85\u5220\u9664\u6587\u7AE0\uFF0C\u786E\u8BA4\u4ECE\u7F51\u7AD9\u5220\u9664\u5417\uFF1F"))
+      return;
+    if (!window.confirm(`\u786E\u8BA4\u76F4\u63A5\u53D1\u5E03 ${articles.length} \u7BC7\u6587\u7AE0\u5230 deploy \u5417\uFF1F`))
+      return;
+    try {
+      const response = await this.plugin.api.publish(this.job.id, articles);
+      new import_obsidian2.Notice(`\u53D1\u5E03\u6210\u529F\uFF1A${response.commitSha.slice(0, 12)}`);
+      this.selected.clear();
+      await this.refreshJob();
+    } catch (error) {
+      new import_obsidian2.Notice(`\u53D1\u5E03\u5931\u8D25\uFF1A${error.message}`);
+    }
+  }
+  localPath(article) {
+    return (0, import_obsidian2.normalizePath)([this.plugin.settings.localPostsFolder, article.filename].filter(Boolean).join("/"));
+  }
+  async collectLocalManifest() {
+    const prefix = this.plugin.settings.localPostsFolder ? (0, import_obsidian2.normalizePath)(this.plugin.settings.localPostsFolder) + "/" : "";
+    const files = this.app.vault.getFiles().filter((file) => file.path.startsWith(prefix) && /\.mdx?$/i.test(file.path));
+    return Promise.all(files.map(async (file) => ({ path: file.path, hash: await sha256(await this.app.vault.read(file)) })));
+  }
+  composeMarkdown(article) {
+    var _a;
+    const metadata = { ...(_a = article.metadata.extra) != null ? _a : {} };
+    for (const [key, value] of Object.entries(article.metadata)) {
+      if (key !== "extra" && value !== void 0 && value !== "")
+        metadata[key] = value;
+    }
+    return `---
+${(0, import_obsidian2.stringifyYaml)(metadata).trim()}
+---
+
+${article.content.trim()}
+`;
+  }
+  async ensureFolder(path) {
+    const parts = path.split("/").slice(0, -1);
+    let current = "";
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      if (!this.app.vault.getAbstractFileByPath(current))
+        await this.app.vault.createFolder(current);
+    }
+  }
+  async assertLocalNotChanged(article) {
+    if (!article.clientHash)
+      return;
+    const file = this.app.vault.getAbstractFileByPath(this.localPath(article));
+    if (!(file instanceof import_obsidian2.TFile))
+      throw new Error("\u672C\u5730\u6587\u4EF6\u5DF2\u88AB\u5220\u9664\uFF0C\u8BF7\u91CD\u65B0\u5904\u7406\u4EFB\u52A1\u3002");
+    const currentHash = await sha256(await this.app.vault.read(file));
+    if (currentHash !== article.clientHash)
+      throw new Error("\u672C\u5730\u6587\u4EF6\u5728\u4EFB\u52A1\u5F00\u59CB\u540E\u53D1\u751F\u4E86\u53D8\u5316\uFF0C\u5DF2\u963B\u6B62\u8986\u76D6\uFF0C\u8BF7\u91CD\u65B0\u5904\u7406\u4EFB\u52A1\u3002");
+  }
+  async writeLocalArticle(article) {
+    const path = this.localPath(article);
+    await this.ensureFolder(path);
+    const markdown = this.composeMarkdown(article);
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof import_obsidian2.TFile)
+      await this.app.vault.modify(existing, markdown);
+    else
+      await this.app.vault.create(path, markdown);
+  }
+  async openLocalArticle(article) {
+    const file = this.app.vault.getAbstractFileByPath(this.localPath(article));
+    if (file instanceof import_obsidian2.TFile)
+      await this.app.workspace.getLeaf(true).openFile(file);
+    else
+      new import_obsidian2.Notice("\u672C\u5730\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u8BF7\u5148\u4FDD\u5B58\u5230\u672C\u5730\u3002");
+  }
+};
+
+// main.ts
+var DEFAULT_SETTINGS = {
+  syncEndpoint: "http://localhost:3001/api/sync",
+  webhookSecret: "",
+  localPostsFolder: "",
+  activeJobId: ""
+};
+var SyncPlugin = class extends import_obsidian3.Plugin {
   async onload() {
     await this.loadSettings();
-    const ribbonIconEl = this.addRibbonIcon("refresh-cw", "VermilionVoid: Trigger Sync", (evt) => {
-      this.triggerSync();
+    this.api = new ApiClient(this.settings);
+    this.registerView(ARTICLE_MANAGER_VIEW, (leaf) => new ArticleManagerView(leaf, this));
+    this.addRibbonIcon("layout-dashboard", "VermilionVoid: \u6587\u7AE0\u7BA1\u7406", () => {
+      void this.activateManagerView();
     });
     this.addCommand({
-      id: "trigger-vermilion-void-sync",
-      name: "Trigger Blog Sync",
-      callback: () => {
-        this.triggerSync();
+      id: "open-vermilion-void-manager",
+      name: "\u6253\u5F00\u6587\u7AE0\u7BA1\u7406\u5668",
+      callback: () => void this.activateManagerView()
+    });
+    this.addCommand({
+      id: "prepare-vermilion-void-sync",
+      name: "\u83B7\u53D6\u5E76\u5904\u7406\u6587\u7AE0",
+      callback: async () => {
+        var _a;
+        await this.activateManagerView();
+        const view = (_a = this.app.workspace.getLeavesOfType(ARTICLE_MANAGER_VIEW)[0]) == null ? void 0 : _a.view;
+        if (view instanceof ArticleManagerView)
+          await view.prepareSync();
       }
     });
     this.addSettingTab(new SyncSettingTab(this.app, this));
+  }
+  async onunload() {
+    this.app.workspace.detachLeavesOfType(ARTICLE_MANAGER_VIEW);
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
   async saveSettings() {
     await this.saveData(this.settings);
+    this.api = new ApiClient(this.settings);
   }
-  async triggerSync() {
-    if (!this.settings.syncEndpoint) {
-      new import_obsidian.Notice("Error: Sync endpoint is not configured in settings.");
-      return;
+  async activateManagerView() {
+    let leaf = this.app.workspace.getLeavesOfType(ARTICLE_MANAGER_VIEW)[0];
+    if (!leaf) {
+      leaf = this.app.workspace.getLeaf(true);
+      await leaf.setViewState({ type: ARTICLE_MANAGER_VIEW, active: true });
     }
-    new import_obsidian.Notice("Sync starting...");
-    try {
-      const url = normalizeSyncEndpoint(this.settings.syncEndpoint);
-      const response = await (0, import_obsidian.requestUrl)({
-        url,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${this.settings.webhookSecret}`
-        }
-      });
-      if (response.status === 202 || response.status === 200) {
-        new import_obsidian.Notice("Sync successfully triggered! Go backend is processing.");
-      } else {
-        new import_obsidian.Notice(`Sync failed (Status ${response.status}): ${response.text}`);
-      }
-    } catch (error) {
-      console.error("VermilionVoid Sync Error:", error);
-      new import_obsidian.Notice(`Sync failed: ${error.message}`);
-    }
+    this.app.workspace.revealLeaf(leaf);
   }
 };
-var SyncSettingTab = class extends import_obsidian.PluginSettingTab {
+var SyncSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -104,13 +565,20 @@ var SyncSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "VermilionVoid Sync Settings" });
-    new import_obsidian.Setting(containerEl).setName("Sync Endpoint").setDesc("The URL of your Go sync server /api/sync endpoint.").addText((text) => text.setPlaceholder("http://your-server:3001/api/sync").setValue(this.plugin.settings.syncEndpoint).onChange(async (value) => {
-      this.plugin.settings.syncEndpoint = value;
+    containerEl.createEl("h2", { text: "VermilionVoid \u7BA1\u7406\u8BBE\u7F6E" });
+    new import_obsidian3.Setting(containerEl).setName("\u540C\u6B65\u670D\u52A1\u5730\u5740").setDesc("\u53EF\u4EE5\u586B\u5199\u670D\u52A1\u5668\u6839\u5730\u5740\u3001/api/sync \u6216 /api/v1\u3002").addText((text) => text.setPlaceholder("https://example.com/api/sync").setValue(this.plugin.settings.syncEndpoint).onChange(async (value) => {
+      this.plugin.settings.syncEndpoint = value.trim();
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Webhook Secret").setDesc("The secret key (Bearer token) configured in your server's .env file.").addText((text) => text.setPlaceholder("Enter your secret").setValue(this.plugin.settings.webhookSecret).onChange(async (value) => {
-      this.plugin.settings.webhookSecret = value;
+    new import_obsidian3.Setting(containerEl).setName("Webhook Secret").setDesc("\u670D\u52A1\u5668 WEBHOOK_SECRET\uFF0C\u6240\u6709\u7BA1\u7406\u548C\u53D1\u5E03\u8BF7\u6C42\u5747\u4F7F\u7528\u5B83\u3002").addText((text) => {
+      text.inputEl.type = "password";
+      text.setPlaceholder("\u8F93\u5165\u5BC6\u94A5").setValue(this.plugin.settings.webhookSecret).onChange(async (value) => {
+        this.plugin.settings.webhookSecret = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian3.Setting(containerEl).setName("\u672C\u5730\u6587\u7AE0\u76EE\u5F55").setDesc("Obsidian Vault \u5185\u4FDD\u5B58\u535A\u5BA2\u6587\u7AE0\u7684\u76EE\u5F55\uFF0C\u4F8B\u5982 Blog/Posts\u3002\u7559\u7A7A\u8868\u793A Vault \u6839\u76EE\u5F55\u3002").addText((text) => text.setPlaceholder("Blog/Posts").setValue(this.plugin.settings.localPostsFolder).onChange(async (value) => {
+      this.plugin.settings.localPostsFolder = value.replace(/^\/+|\/+$/g, "");
       await this.plugin.saveSettings();
     }));
   }

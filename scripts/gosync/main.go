@@ -6,8 +6,9 @@ import (
 	"net/http"
 
 	"gosync/ai"
-	"gosync/builder"
+	apiServer "gosync/api"
 	"gosync/config"
+	"gosync/jobs"
 	"gosync/s3sync"
 )
 
@@ -28,8 +29,14 @@ func main() {
 	if cfg.AIApiKey != "" {
 		log.Printf("AI: 使用 BaseURL=%s Model=%s（密钥已配置）\n", cfg.AIBaseURL, cfg.AIModel)
 	}
+	jobManager, err := jobs.NewManager(cfg, syncer, aiGenerator)
+	if err != nil {
+		log.Fatalf("Failed to initialize job manager: %v", err)
+	}
+	mux := http.NewServeMux()
+	apiServer.NewServer(cfg, jobManager).Register(mux)
 
-	http.HandleFunc("/api/sync", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/sync", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -44,36 +51,26 @@ func main() {
 			}
 		}
 
-		// Response immediately
+		job, err := jobManager.Create(jobs.CreateRequest{ClientID: "legacy-obsidian-plugin"})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(StatusResponse{
-			Status:  "accepted",
-			Message: "Sync task has been queued and is running in the background.",
+		json.NewEncoder(w).Encode(struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+			JobID   string `json:"jobId"`
+		}{
+			Status: "accepted", Message: "Sync task is waiting for review and will not publish automatically.", JobID: job.ID,
 		})
-
-		go runSyncPipeline(cfg, syncer, aiGenerator)
 	})
 
 	port := config.GetEnvOrDefault("PORT", "3001")
 	log.Printf("Sync API server is listening on port %s...\n", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func runSyncPipeline(cfg *config.Config, syncer *s3sync.S3Syncer, gen *ai.Generator) {
-	log.Println(">> Pipeline Start: Syncing from S3")
-	syncer.SyncArticles()
-
-	log.Println(">> Pipeline Step: Generating AI Frontmatters")
-	gen.ProcessMissingFrontmatters()
-
-	log.Println(">> Pipeline Step: Pushing to Git Deploy Branch")
-	if err := builder.PushToGit(cfg); err != nil {
-		log.Printf(">> Git push step failed: %v\n", err)
-		return
-	}
-
-	log.Println(">> Pipeline Complete")
 }
