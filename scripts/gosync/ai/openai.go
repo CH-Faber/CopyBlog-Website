@@ -126,11 +126,17 @@ type ProposedTag struct {
 	Reason string `json:"reason"`
 }
 
+type ProposedCategory struct {
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+}
+
 type Suggestion struct {
-	Description  string        `json:"description"`
-	Category     string        `json:"category"`
-	SelectedTags []string      `json:"selectedTags"`
-	ProposedTags []ProposedTag `json:"proposedTags"`
+	Description      string            `json:"description"`
+	Category         string            `json:"category"`
+	ProposedCategory *ProposedCategory `json:"proposedCategory,omitempty"`
+	SelectedTags     []string          `json:"selectedTags"`
+	ProposedTags     []ProposedTag     `json:"proposedTags"`
 }
 
 // SuggestMetadata generates reviewable metadata. Existing tags are strictly validated
@@ -156,9 +162,9 @@ func (g *Generator) SuggestMetadata(filename, content string, values *taxonomy.T
 	}
 	prompt := fmt.Sprintf(`你是博客文章元数据审核助手。只输出一个 JSON 对象，不要 Markdown 围栏或说明。
 输出格式：
-{"description":"1-2句中文摘要","category":"已有分类或建议分类","selectedTags":["只能来自已有标签库"],"proposedTags":[{"name":"建议的新标签","reason":"为什么需要"}]}
+{"description":"1-2句中文摘要","category":"只能填写已有分类，没有合适分类时留空","proposedCategory":{"name":"建议的新分类","reason":"为什么现有分类不合适"},"selectedTags":["只能来自已有标签库"],"proposedTags":[{"name":"建议的新标签","reason":"为什么需要"}]}
 
-规则：selectedTags 只能从已有标签库中选择 3-6 个；确实缺少合适标签时放入 proposedTags，禁止把新标签放进 selectedTags。不要输出标题和发布时间。
+规则：category 只能从已有分类中选择；没有合适分类时 category 必须为空，并在 proposedCategory 中提出一个新分类，否则 proposedCategory 为 null。selectedTags 只能从已有标签库中选择 3-6 个；确实缺少合适标签时放入 proposedTags，禁止把新标签放进 selectedTags。不要输出标题和发布时间。
 
 已有分类：
 %s
@@ -192,6 +198,26 @@ func (g *Generator) SuggestMetadata(filename, content string, values *taxonomy.T
 	var result Suggestion
 	if err := json.Unmarshal([]byte(reply), &result); err != nil {
 		return nil, fmt.Errorf("JSON parse error: %w", err)
+	}
+	categoryName := strings.TrimSpace(result.Category)
+	if canonical, ok := values.ValidateCategory(categoryName); ok {
+		result.Category = canonical
+	} else {
+		result.Category = ""
+		if categoryName != "" && (result.ProposedCategory == nil || strings.TrimSpace(result.ProposedCategory.Name) == "") {
+			result.ProposedCategory = &ProposedCategory{Name: categoryName, Reason: "AI 返回了分类库外的分类"}
+		}
+	}
+	if result.ProposedCategory != nil {
+		result.ProposedCategory.Name = strings.TrimSpace(result.ProposedCategory.Name)
+		if canonical, ok := values.ValidateCategory(result.ProposedCategory.Name); ok {
+			if result.Category == "" {
+				result.Category = canonical
+			}
+			result.ProposedCategory = nil
+		} else if result.ProposedCategory.Name == "" {
+			result.ProposedCategory = nil
+		}
 	}
 	valid, unknown := values.ValidateTags(result.SelectedTags)
 	if len(valid) > 6 {

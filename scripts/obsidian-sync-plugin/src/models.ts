@@ -3,6 +3,15 @@ export interface SyncSettings {
 	webhookSecret: string;
 	localPostsFolder: string;
 	activeJobId: string;
+	aiBaseUrl: string;
+	aiApiKey: string;
+	aiModel: string;
+	aiSystemPrompt: string;
+	aiMetadataPrompt: string;
+	aiTagRules: string;
+	aiMaxProposedTags: number;
+	aiSuggestionJobId: string;
+	aiSuggestions: Record<string, AISuggestion>;
 }
 
 export interface ArticleMetadata {
@@ -23,9 +32,11 @@ export interface ArticleMetadata {
 }
 
 export interface ProposedTag { name: string; reason: string; }
+export interface ProposedCategory { name: string; reason: string; }
 export interface AISuggestion {
 	description: string;
 	category: string;
+	proposedCategory?: ProposedCategory | null;
 	selectedTags: string[];
 	proposedTags: ProposedTag[];
 }
@@ -75,4 +86,5 @@ export interface ManagedTag {
 
 export interface Category { id: string; name: string; description: string; enabled: boolean; }
 export interface Taxonomy { version: number; categories: Category[]; tags: ManagedTag[]; }
+export interface TaxonomyUsage { tags: Record<string, number>; categories: Record<string, number>; }
 export interface LocalFile { path: string; hash: string; }

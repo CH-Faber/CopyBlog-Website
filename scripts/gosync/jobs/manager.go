@@ -74,7 +74,7 @@ func (m *Manager) Create(request CreateRequest) (*Job, error) {
 	if err := m.save(job); err != nil {
 		return nil, err
 	}
-	go m.run(job.ID, request.LocalManifest)
+	go m.run(job.ID, request.LocalManifest, request.ClientID)
 	return cloneJob(job), nil
 }
 
@@ -111,6 +111,13 @@ func (m *Manager) UpdateArticle(jobID, id string, request UpdateArticleRequest) 
 		return nil, fmt.Errorf("标签尚未批准: %s", strings.Join(unknown, ", "))
 	}
 	request.Metadata.Tags = valid
+	if strings.TrimSpace(request.Metadata.Category) != "" {
+		category, ok := values.ValidateCategory(request.Metadata.Category)
+		if !ok {
+			return nil, fmt.Errorf("分类尚未批准或已停用: %s", request.Metadata.Category)
+		}
+		request.Metadata.Category = category
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -145,7 +152,7 @@ func (m *Manager) UpdateArticle(jobID, id string, request UpdateArticleRequest) 
 	return nil, os.ErrNotExist
 }
 
-func (m *Manager) run(jobID string, localManifest []LocalFile) {
+func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) {
 	m.runMu.Lock()
 	defer m.runMu.Unlock()
 	m.setStatus(jobID, StatusSyncing, 5, "正在从 S3 获取文章")
@@ -217,7 +224,9 @@ func (m *Manager) run(jobID string, localManifest []LocalFile) {
 
 		var suggestion *ai.Suggestion
 		articleError := ""
-		needsAI := status == ArticleNew || strings.TrimSpace(doc.Metadata.Description) == "" || strings.TrimSpace(doc.Metadata.Category) == "" || len(doc.Metadata.Tags) == 0
+		// Current Obsidian clients run AI locally so their provider key never reaches this service.
+		// Legacy clients retain the server-side generator until they are migrated.
+		needsAI := clientID != "obsidian" && (status == ArticleNew || strings.TrimSpace(doc.Metadata.Description) == "" || strings.TrimSpace(doc.Metadata.Category) == "" || len(doc.Metadata.Tags) == 0)
 		if needsAI {
 			suggestion, err = m.generator.SuggestMetadata(filename, doc.Content, values)
 			if err != nil {
@@ -318,6 +327,15 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 			return nil, fmt.Errorf("文章 %s 含未批准标签: %s", article.Metadata.Title, strings.Join(unknown, ", "))
 		}
 		article.Metadata.Tags = valid
+		category, categoryOK := values.ValidateCategory(article.Metadata.Category)
+		if !categoryOK {
+			m.mu.Unlock()
+			if strings.TrimSpace(article.Metadata.Category) == "" {
+				return nil, fmt.Errorf("文章 %s 尚未选择分类", article.Metadata.Title)
+			}
+			return nil, fmt.Errorf("文章 %s 的分类尚未批准或已停用: %s", article.Metadata.Title, article.Metadata.Category)
+		}
+		article.Metadata.Category = category
 		data, serializeErr := contentmodel.Serialize(contentmodel.Document{Metadata: article.Metadata, Content: article.Content})
 		if serializeErr != nil {
 			m.mu.Unlock()

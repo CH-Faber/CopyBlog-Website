@@ -53,6 +53,20 @@ func (s *Server) authorized(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) handleV1(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/"), "/")
 	parts := strings.Split(path, "/")
+	if path == "taxonomy/usage" && r.Method == http.MethodGet {
+		value, err := taxonomy.Load(s.cfg)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		usage, err := taxonomy.CountUsage(s.cfg.LocalPostsDir, value)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, usage)
+		return
+	}
 	if path == "taxonomy" {
 		s.handleTaxonomy(w, r)
 		return

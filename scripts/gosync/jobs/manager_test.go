@@ -18,7 +18,7 @@ func TestUpdateArticleValidatesRevisionAndTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{ProjectRootDir: root, LocalPostsDir: posts}
-	values := &taxonomy.Taxonomy{Version: 1, Tags: []taxonomy.ManagedTag{{Name: "已批准", Enabled: true, AISelectable: true}}}
+	values := &taxonomy.Taxonomy{Version: 1, Categories: []taxonomy.Category{{Name: "技术", Enabled: true}}, Tags: []taxonomy.ManagedTag{{Name: "已批准", Enabled: true, AISelectable: true}}}
 	if err := taxonomy.SaveDraft(cfg, values); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,11 @@ func TestUpdateArticleValidatesRevisionAndTags(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown tag to be rejected")
 	}
-	updated, err := manager.UpdateArticle("job", "article", UpdateArticleRequest{Revision: 2, Metadata: contentmodel.ArticleMetadata{Title: "文章", Published: "2026-07-25T00:00:00.000Z", Tags: []string{"已批准"}}, Content: "正文"})
+	_, err = manager.UpdateArticle("job", "article", UpdateArticleRequest{Revision: 2, Metadata: contentmodel.ArticleMetadata{Category: "新分类", Tags: []string{"已批准"}}})
+	if err == nil {
+		t.Fatal("expected unknown category to be rejected")
+	}
+	updated, err := manager.UpdateArticle("job", "article", UpdateArticleRequest{Revision: 2, Metadata: contentmodel.ArticleMetadata{Title: "文章", Published: "2026-07-25T00:00:00.000Z", Category: "技术", Tags: []string{"已批准"}}, Content: "正文"})
 	if err != nil {
 		t.Fatal(err)
 	}

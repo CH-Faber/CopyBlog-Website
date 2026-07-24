@@ -39,6 +39,11 @@ type Taxonomy struct {
 	Tags       []ManagedTag `json:"tags"`
 }
 
+type Usage struct {
+	Tags       map[string]int `json:"tags"`
+	Categories map[string]int `json:"categories"`
+}
+
 func stableID(prefix, name string) string {
 	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(name))))
 	return prefix + "-" + hex.EncodeToString(sum[:6])
@@ -147,6 +152,61 @@ func SeedFromPosts(postsDir string) (*Taxonomy, error) {
 	return result, nil
 }
 
+// CountUsage reports how many published source articles use each canonical tag.
+// Aliases are resolved to their canonical tag so a renamed tag still has a useful count.
+func CountUsage(postsDir string, value *Taxonomy) (*Usage, error) {
+	result := &Usage{Tags: map[string]int{}, Categories: map[string]int{}}
+	for _, tag := range value.Tags {
+		result.Tags[tag.Name] = 0
+	}
+	categoryNames := map[string]string{}
+	for _, category := range value.Categories {
+		result.Categories[category.Name] = 0
+		categoryNames[strings.ToLower(category.Name)] = category.Name
+	}
+	allowed := map[string]string{}
+	for _, tag := range value.Tags {
+		allowed[strings.ToLower(tag.Name)] = tag.Name
+		for _, alias := range tag.Aliases {
+			if alias = strings.TrimSpace(alias); alias != "" {
+				allowed[strings.ToLower(alias)] = tag.Name
+			}
+		}
+	}
+	entries, err := os.ReadDir(postsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result, nil
+		}
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".md") && !strings.EqualFold(filepath.Ext(entry.Name()), ".mdx") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(postsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		doc, err := contentmodel.Parse(string(data))
+		if err != nil {
+			continue
+		}
+		seen := map[string]bool{}
+		if canonical, ok := categoryNames[strings.ToLower(strings.TrimSpace(doc.Metadata.Category))]; ok {
+			result.Categories[canonical]++
+		}
+		for _, raw := range doc.Metadata.Tags {
+			canonical, ok := allowed[strings.ToLower(strings.TrimSpace(raw))]
+			if ok && !seen[canonical] {
+				result.Tags[canonical]++
+				seen[canonical] = true
+			}
+		}
+	}
+	return result, nil
+}
+
 func normalize(value *Taxonomy) {
 	if value.Version == 0 {
 		value.Version = 1
@@ -173,8 +233,42 @@ func normalize(value *Taxonomy) {
 		cleanTags = append(cleanTags, tag)
 	}
 	value.Tags = cleanTags
+	seenCategories := map[string]bool{}
+	cleanCategories := make([]Category, 0, len(value.Categories))
+	for _, category := range value.Categories {
+		category.Name = strings.TrimSpace(category.Name)
+		key := strings.ToLower(category.Name)
+		if category.Name == "" || seenCategories[key] {
+			continue
+		}
+		seenCategories[key] = true
+		if category.ID == "" {
+			category.ID = stableID("category", category.Name)
+		}
+		cleanCategories = append(cleanCategories, category)
+	}
+	value.Categories = cleanCategories
 	sort.Slice(value.Tags, func(i, j int) bool { return value.Tags[i].Name < value.Tags[j].Name })
 	sort.Slice(value.Categories, func(i, j int) bool { return value.Categories[i].Name < value.Categories[j].Name })
+}
+
+func (value *Taxonomy) AllowedCategoryNames() map[string]string {
+	result := map[string]string{}
+	for _, category := range value.Categories {
+		if category.Enabled {
+			result[strings.ToLower(category.Name)] = category.Name
+		}
+	}
+	return result
+}
+
+func (value *Taxonomy) ValidateCategory(input string) (string, bool) {
+	name := strings.TrimSpace(input)
+	if name == "" {
+		return "", false
+	}
+	canonical, ok := value.AllowedCategoryNames()[strings.ToLower(name)]
+	return canonical, ok
 }
 
 func (value *Taxonomy) AllowedTags() []ManagedTag {

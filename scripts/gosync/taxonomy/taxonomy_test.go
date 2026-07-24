@@ -15,3 +15,19 @@ func TestValidateTagsUsesAliasesAndRejectsUnknown(t *testing.T) {
 		t.Fatalf("unexpected unknown tags: %#v", unknown)
 	}
 }
+
+func TestValidateCategoryRejectsUnknownAndDisabled(t *testing.T) {
+	value := &Taxonomy{Version: 1, Categories: []Category{
+		{Name: "技术", Enabled: true},
+		{Name: "停用分类", Enabled: false},
+	}}
+	if canonical, ok := value.ValidateCategory("技术"); !ok || canonical != "技术" {
+		t.Fatalf("expected enabled category, got %q, %v", canonical, ok)
+	}
+	if _, ok := value.ValidateCategory("停用分类"); ok {
+		t.Fatal("disabled category should be rejected")
+	}
+	if _, ok := value.ValidateCategory("新分类"); ok {
+		t.Fatal("unknown category should be rejected")
+	}
+}
