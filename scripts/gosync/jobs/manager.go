@@ -349,6 +349,12 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 		m.mu.Unlock()
 		return nil, fmt.Errorf("没有选择可发布的文章")
 	}
+	if request.IncludeTaxonomy {
+		if err := validateFinalTaxonomyState(m.cfg.LocalPostsDir, values, job.Articles, selected); err != nil {
+			m.mu.Unlock()
+			return nil, err
+		}
+	}
 	job.Status = StatusPublishing
 	job.Message = "正在提交到 deploy"
 	job.UpdatedAt = now()
@@ -385,6 +391,59 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 	m.mu.Unlock()
 	_ = publishedTitles
 	return &PublishResponse{CommitSHA: sha}, nil
+}
+
+// validateFinalTaxonomyState overlays the selected review changes on the currently
+// published posts, then validates the complete result before any Git write occurs.
+func validateFinalTaxonomyState(postsDir string, values *taxonomy.Taxonomy, articles []*ArticleDraft, selected map[string]PublishArticleRequest) error {
+	final := map[string]contentmodel.ArticleMetadata{}
+	entries, err := os.ReadDir(postsDir)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || (!strings.EqualFold(filepath.Ext(entry.Name()), ".md") && !strings.EqualFold(filepath.Ext(entry.Name()), ".mdx")) {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(postsDir, entry.Name()))
+		if readErr != nil {
+			return readErr
+		}
+		doc, parseErr := contentmodel.Parse(string(data))
+		if parseErr != nil {
+			return fmt.Errorf("解析已发布文章 %s 失败: %w", entry.Name(), parseErr)
+		}
+		final[entry.Name()] = doc.Metadata
+	}
+	for _, article := range articles {
+		if _, include := selected[article.ID]; !include {
+			continue
+		}
+		if article.Status == ArticleDeleted {
+			delete(final, article.Filename)
+		} else {
+			final[article.Filename] = article.Metadata
+		}
+	}
+	for filename, metadata := range final {
+		title := strings.TrimSpace(metadata.Title)
+		if title == "" {
+			title = filename
+		}
+		category, ok := values.ValidateCategory(metadata.Category)
+		if !ok {
+			if strings.TrimSpace(metadata.Category) == "" {
+				return fmt.Errorf("无法发布：文章《%s》尚未选择分类", title)
+			}
+			return fmt.Errorf("无法发布：文章《%s》仍在使用未批准或已停用分类“%s”", title, metadata.Category)
+		}
+		_ = category
+		_, unknown := values.ValidateTags(metadata.Tags)
+		if len(unknown) > 0 {
+			return fmt.Errorf("无法发布：文章《%s》仍在使用未批准或已停用标签“%s”，请将该文章加入本次发布", title, strings.Join(unknown, "、"))
+		}
+	}
+	return nil
 }
 
 func (m *Manager) setStatus(id string, status Status, progress int, message string) {

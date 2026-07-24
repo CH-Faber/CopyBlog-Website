@@ -48,3 +48,20 @@ func TestUpdateArticleValidatesRevisionAndTags(t *testing.T) {
 		t.Fatalf("unexpected update: %#v", updated)
 	}
 }
+
+func TestValidateFinalTaxonomyStateOverlaysSelectedArticles(t *testing.T) {
+	posts := t.TempDir()
+	published := "---\ntitle: 旧文章\npublished: 2026-07-25T00:00:00.000Z\ncategory: 随笔\ntags: [旧标签]\n---\n\n正文\n"
+	if err := os.WriteFile(filepath.Join(posts, "old.md"), []byte(published), 0644); err != nil {
+		t.Fatal(err)
+	}
+	values := &taxonomy.Taxonomy{Version: 1, Categories: []taxonomy.Category{{Name: "随笔", Enabled: true}}, Tags: []taxonomy.ManagedTag{}}
+	article := &ArticleDraft{ID: "article", Filename: "old.md", Metadata: contentmodel.ArticleMetadata{Title: "旧文章", Category: "随笔", Tags: []string{}}, Status: ArticleModified}
+	if err := validateFinalTaxonomyState(posts, values, []*ArticleDraft{article}, map[string]PublishArticleRequest{}); err == nil {
+		t.Fatal("expected unselected published article to keep blocking removed tag")
+	}
+	selected := map[string]PublishArticleRequest{"article": {ID: "article"}}
+	if err := validateFinalTaxonomyState(posts, values, []*ArticleDraft{article}, selected); err != nil {
+		t.Fatalf("selected article should remove the final tag reference: %v", err)
+	}
+}

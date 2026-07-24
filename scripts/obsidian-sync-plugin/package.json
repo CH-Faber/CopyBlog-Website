@@ -1,6 +1,6 @@
 {
 	"name": "flash-thought-content-manager",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"description": "Manage, review and publish 一个闪念 articles from Obsidian.",
 	"main": "main.js",
 	"scripts": {

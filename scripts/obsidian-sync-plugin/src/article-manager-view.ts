@@ -411,7 +411,9 @@ export class ArticleManagerView extends ItemView {
 		const name = identity.createEl('input', { type: 'text', value: category.name });
 		name.placeholder = '分类名称';
 		name.oninput = () => category.name = name.value;
-		identity.createEl('small', { text: this.taxonomyUsageLoaded ? `${this.categoryUsage[category.name] ?? 0} 篇文章使用` : '使用次数未加载' });
+		const draftUsage = this.countDraftCategoryUsage(category.name);
+		const publishedUsage = this.categoryUsage[category.name] ?? 0;
+		identity.createEl('small', { text: this.usageLabel(draftUsage, publishedUsage) });
 		const description = row.createEl('input', { type: 'text', value: category.description });
 		description.placeholder = '告诉 AI 何时选择这个分类';
 		description.oninput = () => category.description = description.value;
@@ -421,11 +423,12 @@ export class ArticleManagerView extends ItemView {
 		enabled.onchange = () => category.enabled = enabled.checked;
 		enabledLabel.appendText('启用');
 		const remove = row.createEl('button', { text: '删除' });
-		const usage = this.categoryUsage[category.name] ?? 0;
-		remove.disabled = !this.taxonomyUsageLoaded || usage > 0;
-		remove.title = !this.taxonomyUsageLoaded ? '无法确认使用次数，已禁止删除。' : usage > 0 ? '已有文章使用该分类，请改为停用。' : '删除未使用的分类';
+		const effectiveUsage = draftUsage ?? (this.taxonomyUsageLoaded ? publishedUsage : null);
+		remove.disabled = effectiveUsage === null || effectiveUsage > 0;
+		remove.title = effectiveUsage === null ? '无法确认使用次数，已禁止删除。' : effectiveUsage > 0 ? '当前审核状态仍有文章使用该分类。' : '删除分类，并将相关文章加入本次发布';
 		remove.onclick = () => {
 			if (!this.taxonomy || !window.confirm(`确认删除分类“${category.name || '未命名分类'}”吗？`)) return;
+			this.selectArticlesAffectedByCategory(category.name);
 			this.taxonomy.categories = this.taxonomy.categories.filter((item) => item !== category);
 			this.render();
 		};
@@ -453,7 +456,9 @@ export class ArticleManagerView extends ItemView {
 		const name = identity.createEl('input', { type: 'text', value: tag.name });
 		name.placeholder = '标签名称';
 		name.oninput = () => tag.name = name.value;
-		identity.createEl('small', { text: this.taxonomyUsageLoaded ? `${this.taxonomyUsage[tag.name] ?? 0} 篇文章使用` : '使用次数未加载' });
+		const draftUsage = this.countDraftTagUsage(tag.name);
+		const publishedUsage = this.taxonomyUsage[tag.name] ?? 0;
+		identity.createEl('small', { text: this.usageLabel(draftUsage, publishedUsage) });
 		const details = row.createDiv({ cls: 'vermilion-tag-details' });
 		const description = details.createEl('input', { type: 'text', value: tag.description });
 		description.placeholder = '告诉 AI 何时使用这个标签';
@@ -470,14 +475,62 @@ export class ArticleManagerView extends ItemView {
 			wrapper.appendText(label);
 		}
 		const remove = row.createEl('button', { text: '删除' });
-		const usage = this.taxonomyUsage[tag.name] ?? 0;
-		remove.disabled = !this.taxonomyUsageLoaded || usage > 0;
-		remove.title = !this.taxonomyUsageLoaded ? '无法确认使用次数，已禁止删除。' : usage > 0 ? '已有文章使用该标签，请改为停用。' : '删除未使用的标签';
+		const effectiveUsage = draftUsage ?? (this.taxonomyUsageLoaded ? publishedUsage : null);
+		remove.disabled = effectiveUsage === null || effectiveUsage > 0;
+		remove.title = effectiveUsage === null ? '无法确认使用次数，已禁止删除。' : effectiveUsage > 0 ? '当前审核状态仍有文章使用该标签。' : '删除标签，并将相关文章加入本次发布';
 		remove.onclick = () => {
 			if (!this.taxonomy || !window.confirm(`确认删除标签“${tag.name || '未命名标签'}”吗？`)) return;
+			this.selectArticlesAffectedByTag(tag.name);
 			this.taxonomy.tags = this.taxonomy.tags.filter((item) => item !== tag);
 			this.render();
 		};
+	}
+
+	private usageLabel(draftUsage: number | null, publishedUsage: number) {
+		const published = this.taxonomyUsageLoaded ? `${publishedUsage}` : '未知';
+		return draftUsage === null ? `已发布 ${published} 篇使用` : `当前任务 ${draftUsage} 篇 · 已发布 ${published} 篇`;
+	}
+
+	private countDraftTagUsage(name: string): number | null {
+		if (!this.job?.articles) return null;
+		const target = name.trim().toLowerCase();
+		return this.job.articles.filter((article) => article.status !== 'deleted' && (article.metadata.tags ?? []).some((tag) => tag.trim().toLowerCase() === target)).length;
+	}
+
+	private countDraftCategoryUsage(name: string): number | null {
+		if (!this.job?.articles) return null;
+		const target = name.trim().toLowerCase();
+		return this.job.articles.filter((article) => article.status !== 'deleted' && (article.metadata.category ?? '').trim().toLowerCase() === target).length;
+	}
+
+	private selectArticlesAffectedByTag(name: string) {
+		if (!this.job?.articles) return;
+		const target = name.trim().toLowerCase();
+		let added = 0;
+		for (const article of this.job.articles) {
+			const previouslyUsed = (article.originalMetadata.tags ?? []).some((tag) => tag.trim().toLowerCase() === target);
+			const stillUsed = article.status !== 'deleted' && (article.metadata.tags ?? []).some((tag) => tag.trim().toLowerCase() === target);
+			if (previouslyUsed && !stillUsed && !this.selected.has(article.id)) {
+				this.selected.add(article.id);
+				added++;
+			}
+		}
+		if (added) new Notice(`已自动选择 ${added} 篇受标签“${name}”影响的文章，请确认保存后一起发布。`);
+	}
+
+	private selectArticlesAffectedByCategory(name: string) {
+		if (!this.job?.articles) return;
+		const target = name.trim().toLowerCase();
+		let added = 0;
+		for (const article of this.job.articles) {
+			const previouslyUsed = (article.originalMetadata.category ?? '').trim().toLowerCase() === target;
+			const stillUsed = article.status !== 'deleted' && (article.metadata.category ?? '').trim().toLowerCase() === target;
+			if (previouslyUsed && !stillUsed && !this.selected.has(article.id)) {
+				this.selected.add(article.id);
+				added++;
+			}
+		}
+		if (added) new Notice(`已自动选择 ${added} 篇受分类“${name}”影响的文章，请确认保存后一起发布。`);
 	}
 
 	private collectProposals(): Array<{ article: ArticleDraft; proposal: ProposedTag }> {
@@ -502,7 +555,7 @@ export class ArticleManagerView extends ItemView {
 		if (!category) {
 			category = { id: '', name: proposal.name, description: proposal.reason, enabled: true };
 			this.taxonomy.categories.push(category);
-			await this.saveTaxonomy(false);
+			if (!await this.saveTaxonomy(false)) return;
 		}
 		article.metadata.category = category.name;
 		if (article.aiSuggestion) article.aiSuggestion.proposedCategory = null;
@@ -562,7 +615,7 @@ export class ArticleManagerView extends ItemView {
 		}
 		if (!this.taxonomy.tags.some((tag) => tag.name.toLowerCase() === name.toLowerCase())) {
 			this.taxonomy.tags.push({ id: '', name, aliases: [], description: '', enabled: true, aiSelectable: true, createdAt: '', updatedAt: '' });
-			await this.saveTaxonomy(false);
+			if (!await this.saveTaxonomy(false)) return;
 		}
 		article.metadata.tags = Array.from(new Set([...(article.metadata.tags ?? []), name]));
 		this.dirtyArticles.add(article.id);
@@ -573,26 +626,26 @@ export class ArticleManagerView extends ItemView {
 	}
 
 	private async saveTaxonomy(notify = true) {
-		if (!this.taxonomy) return;
+		if (!this.taxonomy) return false;
 		const names = this.taxonomy.tags.map((tag) => tag.name.trim());
 		if (names.some((name) => !name)) {
 			new Notice('标签名称不能为空。');
-			return;
+			return false;
 		}
 		const normalized = names.map((name) => name.toLowerCase());
 		if (new Set(normalized).size !== normalized.length) {
 			new Notice('标签名称不能重复，请先合并或改名。');
-			return;
+			return false;
 		}
 		const categoryNames = this.taxonomy.categories.map((category) => category.name.trim());
 		if (categoryNames.some((name) => !name)) {
 			new Notice('分类名称不能为空。');
-			return;
+			return false;
 		}
 		const normalizedCategories = categoryNames.map((name) => name.toLowerCase());
 		if (new Set(normalizedCategories).size !== normalizedCategories.length) {
 			new Notice('分类名称不能重复，请先合并或改名。');
-			return;
+			return false;
 		}
 		try {
 			this.taxonomy = await this.plugin.api.saveTaxonomy(this.taxonomy);
@@ -607,8 +660,10 @@ export class ArticleManagerView extends ItemView {
 			}
 			if (notify) new Notice('分类与标签库已保存，随下一次发布进入 Git。');
 			this.render();
+			return true;
 		} catch (error) {
 			new Notice(`保存标签库失败：${describeApiError(error)}`);
+			return false;
 		}
 	}
 
@@ -731,6 +786,7 @@ export class ArticleManagerView extends ItemView {
 		if (articles.some((article) => article.status === 'deleted') && !window.confirm('所选内容包含待删除文章，确认从网站删除吗？')) return;
 		if (!window.confirm(`确认直接发布 ${articles.length} 篇文章到 deploy 吗？`)) return;
 		try {
+			if (!await this.saveTaxonomy(false)) return;
 			const response = await this.plugin.api.publish(this.job.id, articles);
 			new Notice(`发布成功：${response.commitSha.slice(0, 12)}`);
 			this.selected.clear();

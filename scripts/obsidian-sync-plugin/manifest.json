@@ -1,7 +1,7 @@
 {
 	"id": "flash-thought-content-manager",
 	"name": "一个闪念 · 内容管理",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"minAppVersion": "0.15.0",
 	"description": "在 Obsidian 中管理、审核和发布“一个闪念”的文章与标签。",
 	"author": "Faber",

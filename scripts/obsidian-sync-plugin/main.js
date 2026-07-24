@@ -732,13 +732,15 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       this.renderCategoryRow(list, category);
   }
   renderCategoryRow(container, category) {
-    var _a, _b;
+    var _a;
     const row = container.createDiv({ cls: "vermilion-category-row" });
     const identity = row.createDiv({ cls: "vermilion-tag-identity" });
     const name = identity.createEl("input", { type: "text", value: category.name });
     name.placeholder = "\u5206\u7C7B\u540D\u79F0";
     name.oninput = () => category.name = name.value;
-    identity.createEl("small", { text: this.taxonomyUsageLoaded ? `${(_a = this.categoryUsage[category.name]) != null ? _a : 0} \u7BC7\u6587\u7AE0\u4F7F\u7528` : "\u4F7F\u7528\u6B21\u6570\u672A\u52A0\u8F7D" });
+    const draftUsage = this.countDraftCategoryUsage(category.name);
+    const publishedUsage = (_a = this.categoryUsage[category.name]) != null ? _a : 0;
+    identity.createEl("small", { text: this.usageLabel(draftUsage, publishedUsage) });
     const description = row.createEl("input", { type: "text", value: category.description });
     description.placeholder = "\u544A\u8BC9 AI \u4F55\u65F6\u9009\u62E9\u8FD9\u4E2A\u5206\u7C7B";
     description.oninput = () => category.description = description.value;
@@ -748,12 +750,13 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
     enabled.onchange = () => category.enabled = enabled.checked;
     enabledLabel.appendText("\u542F\u7528");
     const remove = row.createEl("button", { text: "\u5220\u9664" });
-    const usage = (_b = this.categoryUsage[category.name]) != null ? _b : 0;
-    remove.disabled = !this.taxonomyUsageLoaded || usage > 0;
-    remove.title = !this.taxonomyUsageLoaded ? "\u65E0\u6CD5\u786E\u8BA4\u4F7F\u7528\u6B21\u6570\uFF0C\u5DF2\u7981\u6B62\u5220\u9664\u3002" : usage > 0 ? "\u5DF2\u6709\u6587\u7AE0\u4F7F\u7528\u8BE5\u5206\u7C7B\uFF0C\u8BF7\u6539\u4E3A\u505C\u7528\u3002" : "\u5220\u9664\u672A\u4F7F\u7528\u7684\u5206\u7C7B";
+    const effectiveUsage = draftUsage != null ? draftUsage : this.taxonomyUsageLoaded ? publishedUsage : null;
+    remove.disabled = effectiveUsage === null || effectiveUsage > 0;
+    remove.title = effectiveUsage === null ? "\u65E0\u6CD5\u786E\u8BA4\u4F7F\u7528\u6B21\u6570\uFF0C\u5DF2\u7981\u6B62\u5220\u9664\u3002" : effectiveUsage > 0 ? "\u5F53\u524D\u5BA1\u6838\u72B6\u6001\u4ECD\u6709\u6587\u7AE0\u4F7F\u7528\u8BE5\u5206\u7C7B\u3002" : "\u5220\u9664\u5206\u7C7B\uFF0C\u5E76\u5C06\u76F8\u5173\u6587\u7AE0\u52A0\u5165\u672C\u6B21\u53D1\u5E03";
     remove.onclick = () => {
       if (!this.taxonomy || !window.confirm(`\u786E\u8BA4\u5220\u9664\u5206\u7C7B\u201C${category.name || "\u672A\u547D\u540D\u5206\u7C7B"}\u201D\u5417\uFF1F`))
         return;
+      this.selectArticlesAffectedByCategory(category.name);
       this.taxonomy.categories = this.taxonomy.categories.filter((item) => item !== category);
       this.render();
     };
@@ -778,13 +781,15 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       this.renderTagRow(container, tag);
   }
   renderTagRow(container, tag) {
-    var _a, _b;
+    var _a;
     const row = container.createDiv({ cls: "vermilion-tag-row" });
     const identity = row.createDiv({ cls: "vermilion-tag-identity" });
     const name = identity.createEl("input", { type: "text", value: tag.name });
     name.placeholder = "\u6807\u7B7E\u540D\u79F0";
     name.oninput = () => tag.name = name.value;
-    identity.createEl("small", { text: this.taxonomyUsageLoaded ? `${(_a = this.taxonomyUsage[tag.name]) != null ? _a : 0} \u7BC7\u6587\u7AE0\u4F7F\u7528` : "\u4F7F\u7528\u6B21\u6570\u672A\u52A0\u8F7D" });
+    const draftUsage = this.countDraftTagUsage(tag.name);
+    const publishedUsage = (_a = this.taxonomyUsage[tag.name]) != null ? _a : 0;
+    identity.createEl("small", { text: this.usageLabel(draftUsage, publishedUsage) });
     const details = row.createDiv({ cls: "vermilion-tag-details" });
     const description = details.createEl("input", { type: "text", value: tag.description });
     description.placeholder = "\u544A\u8BC9 AI \u4F55\u65F6\u4F7F\u7528\u8FD9\u4E2A\u6807\u7B7E";
@@ -801,15 +806,74 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       wrapper.appendText(label);
     }
     const remove = row.createEl("button", { text: "\u5220\u9664" });
-    const usage = (_b = this.taxonomyUsage[tag.name]) != null ? _b : 0;
-    remove.disabled = !this.taxonomyUsageLoaded || usage > 0;
-    remove.title = !this.taxonomyUsageLoaded ? "\u65E0\u6CD5\u786E\u8BA4\u4F7F\u7528\u6B21\u6570\uFF0C\u5DF2\u7981\u6B62\u5220\u9664\u3002" : usage > 0 ? "\u5DF2\u6709\u6587\u7AE0\u4F7F\u7528\u8BE5\u6807\u7B7E\uFF0C\u8BF7\u6539\u4E3A\u505C\u7528\u3002" : "\u5220\u9664\u672A\u4F7F\u7528\u7684\u6807\u7B7E";
+    const effectiveUsage = draftUsage != null ? draftUsage : this.taxonomyUsageLoaded ? publishedUsage : null;
+    remove.disabled = effectiveUsage === null || effectiveUsage > 0;
+    remove.title = effectiveUsage === null ? "\u65E0\u6CD5\u786E\u8BA4\u4F7F\u7528\u6B21\u6570\uFF0C\u5DF2\u7981\u6B62\u5220\u9664\u3002" : effectiveUsage > 0 ? "\u5F53\u524D\u5BA1\u6838\u72B6\u6001\u4ECD\u6709\u6587\u7AE0\u4F7F\u7528\u8BE5\u6807\u7B7E\u3002" : "\u5220\u9664\u6807\u7B7E\uFF0C\u5E76\u5C06\u76F8\u5173\u6587\u7AE0\u52A0\u5165\u672C\u6B21\u53D1\u5E03";
     remove.onclick = () => {
       if (!this.taxonomy || !window.confirm(`\u786E\u8BA4\u5220\u9664\u6807\u7B7E\u201C${tag.name || "\u672A\u547D\u540D\u6807\u7B7E"}\u201D\u5417\uFF1F`))
         return;
+      this.selectArticlesAffectedByTag(tag.name);
       this.taxonomy.tags = this.taxonomy.tags.filter((item) => item !== tag);
       this.render();
     };
+  }
+  usageLabel(draftUsage, publishedUsage) {
+    const published = this.taxonomyUsageLoaded ? `${publishedUsage}` : "\u672A\u77E5";
+    return draftUsage === null ? `\u5DF2\u53D1\u5E03 ${published} \u7BC7\u4F7F\u7528` : `\u5F53\u524D\u4EFB\u52A1 ${draftUsage} \u7BC7 \xB7 \u5DF2\u53D1\u5E03 ${published} \u7BC7`;
+  }
+  countDraftTagUsage(name) {
+    var _a;
+    if (!((_a = this.job) == null ? void 0 : _a.articles))
+      return null;
+    const target = name.trim().toLowerCase();
+    return this.job.articles.filter((article) => {
+      var _a2;
+      return article.status !== "deleted" && ((_a2 = article.metadata.tags) != null ? _a2 : []).some((tag) => tag.trim().toLowerCase() === target);
+    }).length;
+  }
+  countDraftCategoryUsage(name) {
+    var _a;
+    if (!((_a = this.job) == null ? void 0 : _a.articles))
+      return null;
+    const target = name.trim().toLowerCase();
+    return this.job.articles.filter((article) => {
+      var _a2;
+      return article.status !== "deleted" && ((_a2 = article.metadata.category) != null ? _a2 : "").trim().toLowerCase() === target;
+    }).length;
+  }
+  selectArticlesAffectedByTag(name) {
+    var _a, _b, _c;
+    if (!((_a = this.job) == null ? void 0 : _a.articles))
+      return;
+    const target = name.trim().toLowerCase();
+    let added = 0;
+    for (const article of this.job.articles) {
+      const previouslyUsed = ((_b = article.originalMetadata.tags) != null ? _b : []).some((tag) => tag.trim().toLowerCase() === target);
+      const stillUsed = article.status !== "deleted" && ((_c = article.metadata.tags) != null ? _c : []).some((tag) => tag.trim().toLowerCase() === target);
+      if (previouslyUsed && !stillUsed && !this.selected.has(article.id)) {
+        this.selected.add(article.id);
+        added++;
+      }
+    }
+    if (added)
+      new import_obsidian3.Notice(`\u5DF2\u81EA\u52A8\u9009\u62E9 ${added} \u7BC7\u53D7\u6807\u7B7E\u201C${name}\u201D\u5F71\u54CD\u7684\u6587\u7AE0\uFF0C\u8BF7\u786E\u8BA4\u4FDD\u5B58\u540E\u4E00\u8D77\u53D1\u5E03\u3002`);
+  }
+  selectArticlesAffectedByCategory(name) {
+    var _a, _b, _c;
+    if (!((_a = this.job) == null ? void 0 : _a.articles))
+      return;
+    const target = name.trim().toLowerCase();
+    let added = 0;
+    for (const article of this.job.articles) {
+      const previouslyUsed = ((_b = article.originalMetadata.category) != null ? _b : "").trim().toLowerCase() === target;
+      const stillUsed = article.status !== "deleted" && ((_c = article.metadata.category) != null ? _c : "").trim().toLowerCase() === target;
+      if (previouslyUsed && !stillUsed && !this.selected.has(article.id)) {
+        this.selected.add(article.id);
+        added++;
+      }
+    }
+    if (added)
+      new import_obsidian3.Notice(`\u5DF2\u81EA\u52A8\u9009\u62E9 ${added} \u7BC7\u53D7\u5206\u7C7B\u201C${name}\u201D\u5F71\u54CD\u7684\u6587\u7AE0\uFF0C\u8BF7\u786E\u8BA4\u4FDD\u5B58\u540E\u4E00\u8D77\u53D1\u5E03\u3002`);
   }
   collectProposals() {
     var _a, _b, _c, _d;
@@ -836,7 +900,8 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
     if (!category) {
       category = { id: "", name: proposal.name, description: proposal.reason, enabled: true };
       this.taxonomy.categories.push(category);
-      await this.saveTaxonomy(false);
+      if (!await this.saveTaxonomy(false))
+        return;
     }
     article.metadata.category = category.name;
     if (article.aiSuggestion)
@@ -901,7 +966,8 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
     }
     if (!this.taxonomy.tags.some((tag) => tag.name.toLowerCase() === name.toLowerCase())) {
       this.taxonomy.tags.push({ id: "", name, aliases: [], description: "", enabled: true, aiSelectable: true, createdAt: "", updatedAt: "" });
-      await this.saveTaxonomy(false);
+      if (!await this.saveTaxonomy(false))
+        return;
     }
     article.metadata.tags = Array.from(/* @__PURE__ */ new Set([...(_a = article.metadata.tags) != null ? _a : [], name]));
     this.dirtyArticles.add(article.id);
@@ -914,26 +980,26 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
   async saveTaxonomy(notify = true) {
     var _a, _b;
     if (!this.taxonomy)
-      return;
+      return false;
     const names = this.taxonomy.tags.map((tag) => tag.name.trim());
     if (names.some((name) => !name)) {
       new import_obsidian3.Notice("\u6807\u7B7E\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A\u3002");
-      return;
+      return false;
     }
     const normalized = names.map((name) => name.toLowerCase());
     if (new Set(normalized).size !== normalized.length) {
       new import_obsidian3.Notice("\u6807\u7B7E\u540D\u79F0\u4E0D\u80FD\u91CD\u590D\uFF0C\u8BF7\u5148\u5408\u5E76\u6216\u6539\u540D\u3002");
-      return;
+      return false;
     }
     const categoryNames = this.taxonomy.categories.map((category) => category.name.trim());
     if (categoryNames.some((name) => !name)) {
       new import_obsidian3.Notice("\u5206\u7C7B\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A\u3002");
-      return;
+      return false;
     }
     const normalizedCategories = categoryNames.map((name) => name.toLowerCase());
     if (new Set(normalizedCategories).size !== normalizedCategories.length) {
       new import_obsidian3.Notice("\u5206\u7C7B\u540D\u79F0\u4E0D\u80FD\u91CD\u590D\uFF0C\u8BF7\u5148\u5408\u5E76\u6216\u6539\u540D\u3002");
-      return;
+      return false;
     }
     try {
       this.taxonomy = await this.plugin.api.saveTaxonomy(this.taxonomy);
@@ -948,8 +1014,10 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       if (notify)
         new import_obsidian3.Notice("\u5206\u7C7B\u4E0E\u6807\u7B7E\u5E93\u5DF2\u4FDD\u5B58\uFF0C\u968F\u4E0B\u4E00\u6B21\u53D1\u5E03\u8FDB\u5165 Git\u3002");
       this.render();
+      return true;
     } catch (error) {
       new import_obsidian3.Notice(`\u4FDD\u5B58\u6807\u7B7E\u5E93\u5931\u8D25\uFF1A${describeApiError(error)}`);
+      return false;
     }
   }
   applyCachedSuggestions() {
@@ -1080,6 +1148,8 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
     if (!window.confirm(`\u786E\u8BA4\u76F4\u63A5\u53D1\u5E03 ${articles.length} \u7BC7\u6587\u7AE0\u5230 deploy \u5417\uFF1F`))
       return;
     try {
+      if (!await this.saveTaxonomy(false))
+        return;
       const response = await this.plugin.api.publish(this.job.id, articles);
       new import_obsidian3.Notice(`\u53D1\u5E03\u6210\u529F\uFF1A${response.commitSha.slice(0, 12)}`);
       this.selected.clear();
