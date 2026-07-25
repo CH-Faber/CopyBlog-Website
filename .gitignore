@@ -2,6 +2,7 @@ node_modules
 dist
 .astro
 *.log
+*.swp
 .env
 .wrangler
 .gosync/
