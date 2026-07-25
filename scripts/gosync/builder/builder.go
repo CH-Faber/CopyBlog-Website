@@ -69,10 +69,11 @@ func PublishFiles(cfg *config.Config, files map[string]*[]byte, expected map[str
 	}
 
 	type resolvedFile struct {
-		path string
-		rel  string
-		data *[]byte
-		key  string
+		path           string
+		rel            string
+		data           *[]byte
+		key            string
+		alreadyApplied bool
 	}
 	resolved := []resolvedFile{}
 	for key, data := range files {
@@ -80,12 +81,12 @@ func PublishFiles(cfg *config.Config, files map[string]*[]byte, expected map[str
 		if err != nil {
 			return "", err
 		}
+		desiredAlreadyApplied := false
 		if expectedHash, shouldCheck := expected[key]; shouldCheck {
 			currentHash, exists, hashErr := fileHash(path)
 			if hashErr != nil {
 				return "", hashErr
 			}
-			desiredAlreadyApplied := false
 			if data == nil {
 				desiredAlreadyApplied = !exists
 			} else if exists {
@@ -99,10 +100,13 @@ func PublishFiles(cfg *config.Config, files map[string]*[]byte, expected map[str
 				return "", fmt.Errorf("publish conflict: %s changed after review started", key)
 			}
 		}
-		resolved = append(resolved, resolvedFile{path: path, rel: rel, data: data, key: key})
+		resolved = append(resolved, resolvedFile{path: path, rel: rel, data: data, key: key, alreadyApplied: desiredAlreadyApplied})
 	}
 
 	for _, file := range resolved {
+		if file.alreadyApplied {
+			continue
+		}
 		if file.data == nil {
 			if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
 				return "", err
