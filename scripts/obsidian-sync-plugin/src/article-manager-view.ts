@@ -59,7 +59,6 @@ export class ArticleManagerView extends ItemView {
 		]);
 		this.render();
 		this.schedulePoll();
-		if (this.plugin.settings.aiApiKey && this.hasPendingAI()) void this.analyzePendingArticles(true);
 	}
 
 	private async loadTaxonomy(showNotice = false) {
@@ -127,7 +126,6 @@ export class ArticleManagerView extends ItemView {
 			this.applyCachedSuggestions();
 			if (!this.activeArticleId) this.activeArticleId = this.job.articles?.[0]?.id ?? '';
 			this.render();
-			if (this.job.status === 'awaiting_review' && this.plugin.settings.aiApiKey && this.hasPendingAI()) void this.analyzePendingArticles(true);
 		} catch (error) {
 			new Notice(`刷新任务失败：${(error as Error).message}`);
 		}
@@ -148,7 +146,9 @@ export class ArticleManagerView extends ItemView {
 		root.empty();
 		const toolbar = root.createDiv({ cls: 'vermilion-toolbar' });
 		toolbar.createEl('button', { text: '获取并处理文章', cls: 'mod-cta' }).onclick = () => void this.prepareSync();
-		toolbar.createEl('button', { text: '刷新' }).onclick = () => void this.refreshJob();
+		const refreshButton = toolbar.createEl('button', { text: '刷新状态' });
+		refreshButton.title = '仅重新读取服务器任务状态，不会运行 AI 分析';
+		refreshButton.onclick = () => void this.refreshJob();
 		const aiButton = toolbar.createEl('button', { text: this.aiRunning ? 'AI 分析中…' : 'AI 分析待处理' });
 		aiButton.disabled = this.aiRunning || !this.job?.articles?.length;
 		aiButton.onclick = () => void this.analyzePendingArticles();
@@ -684,10 +684,6 @@ export class ArticleManagerView extends ItemView {
 		);
 	}
 
-	private hasPendingAI() {
-		return Boolean(this.job?.articles?.some((article) => this.needsLocalAI(article)));
-	}
-
 	private async cacheAISuggestion(article: ArticleDraft) {
 		if (!this.job || !article.aiSuggestion) return;
 		if (this.plugin.settings.aiSuggestionJobId !== this.job.id) {
@@ -721,19 +717,19 @@ export class ArticleManagerView extends ItemView {
 		}
 	}
 
-	private async analyzePendingArticles(automatic = false) {
+	private async analyzePendingArticles() {
 		if (this.aiRunning || !this.job?.articles) return;
 		const articles = this.job.articles.filter((article) => this.needsLocalAI(article));
 		if (!articles.length) {
-			if (!automatic) new Notice('没有需要 AI 分析的文章；可以在文章编辑区手动重新分析当前文章。');
+			new Notice('没有需要 AI 分析的文章；可以在文章编辑区手动重新分析当前文章。');
 			return;
 		}
 		if (!this.taxonomy) {
-			if (!automatic) new Notice('分类与标签库尚未加载。');
+			new Notice('分类与标签库尚未加载。');
 			return;
 		}
 		if (!this.plugin.settings.aiApiKey.trim()) {
-			if (!automatic) new Notice('请先在插件设置中配置 AI API Key。');
+			new Notice('请先在插件设置中配置 AI API Key。');
 			return;
 		}
 		this.aiRunning = true;

@@ -348,8 +348,6 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
     ]);
     this.render();
     this.schedulePoll();
-    if (this.plugin.settings.aiApiKey && this.hasPendingAI())
-      void this.analyzePendingArticles(true);
   }
   async loadTaxonomy(showNotice = false) {
     var _a, _b;
@@ -420,8 +418,6 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       if (!this.activeArticleId)
         this.activeArticleId = (_c = (_b = (_a = this.job.articles) == null ? void 0 : _a[0]) == null ? void 0 : _b.id) != null ? _c : "";
       this.render();
-      if (this.job.status === "awaiting_review" && this.plugin.settings.aiApiKey && this.hasPendingAI())
-        void this.analyzePendingArticles(true);
     } catch (error) {
       new import_obsidian3.Notice(`\u5237\u65B0\u4EFB\u52A1\u5931\u8D25\uFF1A${error.message}`);
     }
@@ -443,7 +439,9 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
     root.empty();
     const toolbar = root.createDiv({ cls: "vermilion-toolbar" });
     toolbar.createEl("button", { text: "\u83B7\u53D6\u5E76\u5904\u7406\u6587\u7AE0", cls: "mod-cta" }).onclick = () => void this.prepareSync();
-    toolbar.createEl("button", { text: "\u5237\u65B0" }).onclick = () => void this.refreshJob();
+    const refreshButton = toolbar.createEl("button", { text: "\u5237\u65B0\u72B6\u6001" });
+    refreshButton.title = "\u4EC5\u91CD\u65B0\u8BFB\u53D6\u670D\u52A1\u5668\u4EFB\u52A1\u72B6\u6001\uFF0C\u4E0D\u4F1A\u8FD0\u884C AI \u5206\u6790";
+    refreshButton.onclick = () => void this.refreshJob();
     const aiButton = toolbar.createEl("button", { text: this.aiRunning ? "AI \u5206\u6790\u4E2D\u2026" : "AI \u5206\u6790\u5F85\u5904\u7406" });
     aiButton.disabled = this.aiRunning || !((_b = (_a = this.job) == null ? void 0 : _a.articles) == null ? void 0 : _b.length);
     aiButton.onclick = () => void this.analyzePendingArticles();
@@ -1034,10 +1032,6 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
     var _a, _b, _c;
     return article.status !== "deleted" && article.status !== "conflict" && !article.aiSuggestion && (article.status === "new" || !((_a = article.metadata.description) == null ? void 0 : _a.trim()) || !((_b = article.metadata.category) == null ? void 0 : _b.trim()) || ((_c = article.metadata.tags) != null ? _c : []).length === 0);
   }
-  hasPendingAI() {
-    var _a, _b;
-    return Boolean((_b = (_a = this.job) == null ? void 0 : _a.articles) == null ? void 0 : _b.some((article) => this.needsLocalAI(article)));
-  }
   async cacheAISuggestion(article) {
     if (!this.job || !article.aiSuggestion)
       return;
@@ -1071,24 +1065,21 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       this.render();
     }
   }
-  async analyzePendingArticles(automatic = false) {
+  async analyzePendingArticles() {
     var _a;
     if (this.aiRunning || !((_a = this.job) == null ? void 0 : _a.articles))
       return;
     const articles = this.job.articles.filter((article) => this.needsLocalAI(article));
     if (!articles.length) {
-      if (!automatic)
-        new import_obsidian3.Notice("\u6CA1\u6709\u9700\u8981 AI \u5206\u6790\u7684\u6587\u7AE0\uFF1B\u53EF\u4EE5\u5728\u6587\u7AE0\u7F16\u8F91\u533A\u624B\u52A8\u91CD\u65B0\u5206\u6790\u5F53\u524D\u6587\u7AE0\u3002");
+      new import_obsidian3.Notice("\u6CA1\u6709\u9700\u8981 AI \u5206\u6790\u7684\u6587\u7AE0\uFF1B\u53EF\u4EE5\u5728\u6587\u7AE0\u7F16\u8F91\u533A\u624B\u52A8\u91CD\u65B0\u5206\u6790\u5F53\u524D\u6587\u7AE0\u3002");
       return;
     }
     if (!this.taxonomy) {
-      if (!automatic)
-        new import_obsidian3.Notice("\u5206\u7C7B\u4E0E\u6807\u7B7E\u5E93\u5C1A\u672A\u52A0\u8F7D\u3002");
+      new import_obsidian3.Notice("\u5206\u7C7B\u4E0E\u6807\u7B7E\u5E93\u5C1A\u672A\u52A0\u8F7D\u3002");
       return;
     }
     if (!this.plugin.settings.aiApiKey.trim()) {
-      if (!automatic)
-        new import_obsidian3.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E AI API Key\u3002");
+      new import_obsidian3.Notice("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E AI API Key\u3002");
       return;
     }
     this.aiRunning = true;
