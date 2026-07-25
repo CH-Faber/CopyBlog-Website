@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "category-0feae16d5536",
+      "name": "General",
+      "description": "",
+      "enabled": true
+    },
+    {
+      "id": "category-8cf0105d35ee",
+      "name": "思考",
+      "description": "",
+      "enabled": true
+    },
+    {
+      "id": "category-041baf3756ee",
+      "name": "随笔",
+      "description": "",
+      "enabled": true
+    }
+  ],
+  "tags": []
+}

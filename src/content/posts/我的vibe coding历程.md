@@ -1,9 +1,8 @@
 ---
-title: "我的vibe coding历程"
+title: 我的vibe coding历程
 published: 2026-05-08T01:23:31.000Z
-description: "本文回顾作者在游戏与 vibe coding 的创作历程，以及在信息学竞赛、校园项目与实习中的成长与感悟。通过分享亲身经历，呈现创作潜力与探索轨迹。"
-category: "随笔"
-tags: ["vibe编码","游戏创作","信息学竞赛","校园项目","自我成长","实习经历"]
+description: 本文回顾作者在游戏与 vibe coding 的创作历程，以及在信息学竞赛、校园项目与实习中的成长与感悟。通过分享亲身经历，呈现创作潜力与探索轨迹。
+category: 随笔
 ---
 
 # 文章概要
