@@ -114,3 +114,18 @@ func HashDocument(doc Document) (string, error) {
 	}
 	return HashBytes(data), nil
 }
+
+// EquivalentDocuments compares parsed article meaning instead of raw Markdown
+// bytes. This keeps harmless YAML formatting differences (for example an
+// omitted empty tags field versus "tags:") from being reported as edits.
+func EquivalentDocuments(left, right Document) (bool, error) {
+	leftHash, err := HashDocument(left)
+	if err != nil {
+		return false, err
+	}
+	rightHash, err := HashDocument(right)
+	if err != nil {
+		return false, err
+	}
+	return leftHash == rightHash, nil
+}

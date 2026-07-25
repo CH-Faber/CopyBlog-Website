@@ -213,12 +213,12 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 		status := ArticleNew
 		if published, readPublishedErr := os.ReadFile(filepath.Join(m.cfg.LocalPostsDir, filename)); readPublishedErr == nil {
 			originalHash = contentmodel.HashBytes(published)
+			status = ArticleModified
 			if parsed, parsedErr := contentmodel.Parse(string(published)); parsedErr == nil {
 				originalDoc = parsed
-			}
-			status = ArticleModified
-			if originalHash == sourceHash {
-				status = ArticleUnchanged
+				if equivalent, compareErr := contentmodel.EquivalentDocuments(doc, originalDoc); compareErr == nil && equivalent {
+					status = ArticleUnchanged
+				}
 			}
 		}
 
