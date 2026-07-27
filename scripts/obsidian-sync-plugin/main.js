@@ -525,9 +525,12 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
   renderArticleList(container) {
     var _a, _b;
     container.createEl("h3", { text: "\u6587\u7AE0" });
+    container.createEl("small", { text: "\u52FE\u9009\u6587\u7AE0\u8868\u793A\u52A0\u5165\u672C\u6B21\u53D1\u5E03\uFF1B\u4FDD\u5B58\u8349\u7A3F\u4E0D\u4F1A\u81EA\u52A8\u52FE\u9009\u6216\u53D1\u5E03\u3002", cls: "vermilion-list-hint" });
     for (const article of (_b = (_a = this.job) == null ? void 0 : _a.articles) != null ? _b : []) {
       const row = container.createDiv({ cls: `vermilion-list-item ${article.id === this.activeArticleId ? "is-active" : ""}` });
       const checkbox = row.createEl("input", { type: "checkbox" });
+      checkbox.title = "\u52A0\u5165\u672C\u6B21\u53D1\u5E03";
+      checkbox.setAttr("aria-label", `\u5C06\u201C${article.metadata.title || article.filename}\u201D\u52A0\u5165\u672C\u6B21\u53D1\u5E03`);
       checkbox.checked = this.selected.has(article.id);
       checkbox.onchange = () => {
         if (checkbox.checked)
@@ -644,8 +647,11 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       }
     }
     const actions = container.createDiv({ cls: "vermilion-actions" });
-    actions.createEl("button", { text: "\u4FDD\u5B58\u5230\u670D\u52A1\u5668\u548C\u672C\u5730", cls: "mod-cta" }).onclick = () => void this.saveArticle(article);
+    const saveDraft = actions.createEl("button", { text: "\u4FDD\u5B58\u5BA1\u6838\u8349\u7A3F", cls: "mod-cta" });
+    saveDraft.title = "\u4FDD\u5B58\u5230 Obsidian \u672C\u5730\u6587\u4EF6\u548C\u670D\u52A1\u5668\u5BA1\u6838\u4EFB\u52A1\uFF1B\u4E0D\u4F1A\u5199\u56DE S3\u3001\u52A0\u5165\u53D1\u5E03\u5217\u8868\u6216\u53D1\u5E03\u7F51\u7AD9";
+    saveDraft.onclick = () => void this.saveArticle(article);
     actions.createEl("button", { text: "\u5728 Obsidian \u4E2D\u6253\u5F00" }).onclick = () => void this.openLocalArticle(article);
+    container.createEl("small", { text: "\u4FDD\u5B58\u5230 Obsidian \u672C\u5730\u6587\u4EF6\u548C\u670D\u52A1\u5668\u5BA1\u6838\u4EFB\u52A1\uFF0C\u4E0D\u4F1A\u5199\u56DE S3\uFF0C\u4E5F\u4E0D\u4F1A\u81EA\u52A8\u52A0\u5165\u672C\u6B21\u53D1\u5E03\u3002", cls: "vermilion-action-help" });
   }
   async renderPreview(container, article) {
     var _a, _b, _c;
@@ -1372,7 +1378,7 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       updated.clientHash = await sha256(this.composeMarkdown(updated));
       this.dirtyArticles.delete(updated.id);
       this.render();
-      new import_obsidian3.Notice(`\u5DF2\u4FDD\u5B58\uFF1A${updated.metadata.title}`);
+      new import_obsidian3.Notice(`\u5BA1\u6838\u8349\u7A3F\u5DF2\u4FDD\u5B58\u5230\u672C\u5730\u548C\u670D\u52A1\u5668\u4EFB\u52A1\uFF1A${updated.metadata.title}`);
     } catch (error) {
       new import_obsidian3.Notice(`\u4FDD\u5B58\u5931\u8D25\uFF1A${error.message}`);
     }
@@ -1383,7 +1389,7 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
       return;
     const articles = this.job.articles.filter((article) => this.selected.has(article.id));
     if (articles.some((article) => this.dirtyArticles.has(article.id))) {
-      new import_obsidian3.Notice("\u6240\u9009\u6587\u7AE0\u5B58\u5728\u672A\u4FDD\u5B58\u4FEE\u6539\uFF0C\u8BF7\u5148\u4FDD\u5B58\u5230\u670D\u52A1\u5668\u548C\u672C\u5730\u3002");
+      new import_obsidian3.Notice("\u6240\u9009\u6587\u7AE0\u5B58\u5728\u672A\u4FDD\u5B58\u4FEE\u6539\uFF0C\u8BF7\u5148\u4FDD\u5B58\u5BA1\u6838\u8349\u7A3F\u3002");
       return;
     }
     if (articles.some((article) => article.status === "deleted") && !window.confirm("\u6240\u9009\u5185\u5BB9\u5305\u542B\u5F85\u5220\u9664\u6587\u7AE0\uFF0C\u786E\u8BA4\u4ECE\u7F51\u7AD9\u5220\u9664\u5417\uFF1F"))

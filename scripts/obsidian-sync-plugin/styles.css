@@ -12,6 +12,7 @@
 .vermilion-list-label { min-width: 0; flex: 1; cursor: pointer; }
 .vermilion-list-label > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vermilion-list-label small { color: var(--text-muted); }
+.vermilion-list-hint { display: block; margin: -6px 0 10px; color: var(--text-muted); line-height: 1.45; }
 .vermilion-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 11px; }
 .vermilion-editor-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .vermilion-editor-heading h3 { margin: 0 0 12px; }
@@ -19,6 +20,7 @@
 .vermilion-field textarea { min-height: 72px; resize: vertical; }
 .vermilion-field .vermilion-body-editor { min-height: 360px; font-family: var(--font-monospace); }
 .vermilion-ai-box { margin: 12px 0; padding: 12px; background: var(--background-secondary); border-radius: 8px; }
+.vermilion-action-help { display: block; margin-top: 8px; color: var(--text-muted); line-height: 1.45; }
 .vermilion-proposal { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .vermilion-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .vermilion-section-heading h3 { margin: 0; }

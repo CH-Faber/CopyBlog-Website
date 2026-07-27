@@ -244,9 +244,12 @@ export class ArticleManagerView extends ItemView {
 
 	private renderArticleList(container: HTMLElement) {
 		container.createEl('h3', { text: '文章' });
+		container.createEl('small', { text: '勾选文章表示加入本次发布；保存草稿不会自动勾选或发布。', cls: 'vermilion-list-hint' });
 		for (const article of this.job?.articles ?? []) {
 			const row = container.createDiv({ cls: `vermilion-list-item ${article.id === this.activeArticleId ? 'is-active' : ''}` });
 			const checkbox = row.createEl('input', { type: 'checkbox' });
+			checkbox.title = '加入本次发布';
+			checkbox.setAttr('aria-label', `将“${article.metadata.title || article.filename}”加入本次发布`);
 			checkbox.checked = this.selected.has(article.id);
 			checkbox.onchange = () => {
 				if (checkbox.checked) this.selected.add(article.id); else this.selected.delete(article.id);
@@ -343,8 +346,11 @@ export class ArticleManagerView extends ItemView {
 		}
 
 		const actions = container.createDiv({ cls: 'vermilion-actions' });
-		actions.createEl('button', { text: '保存到服务器和本地', cls: 'mod-cta' }).onclick = () => void this.saveArticle(article);
+		const saveDraft = actions.createEl('button', { text: '保存审核草稿', cls: 'mod-cta' });
+		saveDraft.title = '保存到 Obsidian 本地文件和服务器审核任务；不会写回 S3、加入发布列表或发布网站';
+		saveDraft.onclick = () => void this.saveArticle(article);
 		actions.createEl('button', { text: '在 Obsidian 中打开' }).onclick = () => void this.openLocalArticle(article);
+		container.createEl('small', { text: '保存到 Obsidian 本地文件和服务器审核任务，不会写回 S3，也不会自动加入本次发布。', cls: 'vermilion-action-help' });
 	}
 
 	private async renderPreview(container: HTMLElement, article: ArticleDraft) {
@@ -952,7 +958,7 @@ export class ArticleManagerView extends ItemView {
 			updated.clientHash = await sha256(this.composeMarkdown(updated));
 			this.dirtyArticles.delete(updated.id);
 			this.render();
-			new Notice(`已保存：${updated.metadata.title}`);
+			new Notice(`审核草稿已保存到本地和服务器任务：${updated.metadata.title}`);
 		} catch (error) {
 			new Notice(`保存失败：${(error as Error).message}`);
 		}
@@ -962,7 +968,7 @@ export class ArticleManagerView extends ItemView {
 		if (!this.job?.articles) return;
 		const articles = this.job.articles.filter((article) => this.selected.has(article.id));
 		if (articles.some((article) => this.dirtyArticles.has(article.id))) {
-			new Notice('所选文章存在未保存修改，请先保存到服务器和本地。');
+			new Notice('所选文章存在未保存修改，请先保存审核草稿。');
 			return;
 		}
 		if (articles.some((article) => article.status === 'deleted') && !window.confirm('所选内容包含待删除文章，确认从网站删除吗？')) return;
