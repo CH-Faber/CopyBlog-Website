@@ -1,5 +1,7 @@
 .vermilion-manager { padding: 16px; }
 .vermilion-toolbar, .vermilion-actions, .vermilion-flags { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.vermilion-management-tabs { display: flex; gap: 6px; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--background-modifier-border); }
+.vermilion-management-tabs button { min-width: 96px; }
 .vermilion-job-status { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
 .vermilion-job-status progress { flex: 1; }
 .vermilion-ai-progress { margin: 10px 0; padding: 9px 12px; border-radius: 7px; background: var(--background-secondary); color: var(--text-accent); }
@@ -18,26 +20,39 @@
 .vermilion-field .vermilion-body-editor { min-height: 360px; font-family: var(--font-monospace); }
 .vermilion-ai-box { margin: 12px 0; padding: 12px; background: var(--background-secondary); border-radius: 8px; }
 .vermilion-proposal { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.vermilion-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.vermilion-section-heading h3 { margin: 0; }
+.vermilion-dirty { color: var(--text-warning); }
+.vermilion-synced { color: var(--text-muted); }
 .vermilion-taxonomy-summary { color: var(--text-muted); margin: 8px 0 12px; }
-.vermilion-taxonomy-tabs { display: flex; gap: 8px; margin: 10px 0 14px; }
-.vermilion-taxonomy-toolbar { display: grid; grid-template-columns: minmax(180px, 1fr) auto auto auto auto; gap: 8px; align-items: center; margin: 12px 0; }
-.vermilion-taxonomy-toolbar.compact { display: flex; flex-wrap: wrap; }
+.vermilion-taxonomy-tabs { display: flex; gap: 8px; margin: 14px 0; }
+.vermilion-taxonomy-toolbar { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(120px, auto)) auto auto; gap: 8px; align-items: center; margin: 12px 0; }
 .vermilion-taxonomy-toolbar input { width: 100%; }
 .vermilion-state-card { padding: 18px; margin-top: 12px; border: 1px solid var(--background-modifier-border); border-radius: 8px; background: var(--background-secondary); }
 .vermilion-state-card.is-error { border-color: var(--background-modifier-error); }
 .vermilion-state-card.is-error strong { color: var(--text-error); }
-.vermilion-tag-row { display: grid; grid-template-columns: minmax(140px, .65fr) minmax(240px, 1.35fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--background-modifier-border); }
-.vermilion-category-row { display: grid; grid-template-columns: minmax(140px, .65fr) minmax(240px, 1.35fr) auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--background-modifier-border); }
-.vermilion-tag-row label { white-space: nowrap; }
-.vermilion-tag-identity, .vermilion-tag-details { display: flex; flex-direction: column; gap: 5px; }
-.vermilion-tag-identity small { color: var(--text-muted); }
-.vermilion-tag-switches { display: flex; flex-direction: column; gap: 5px; }
-.vermilion-proposal-queue { padding: 12px; margin: 12px 0; border-radius: 8px; background: var(--background-secondary); }
-.vermilion-proposal-review { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(130px, .5fr) auto auto auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--background-modifier-border); }
-.vermilion-proposal-review > div { display: flex; flex-direction: column; gap: 3px; }
-.vermilion-proposal-review small { color: var(--text-muted); }
+.vermilion-bulk-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 42px; margin: 10px 0; padding: 8px 10px; border: 1px solid var(--background-modifier-border); border-radius: 8px; background: var(--background-secondary); }
+.vermilion-bulk-bar span { margin-right: auto; color: var(--text-muted); }
+.vermilion-taxonomy-table, .vermilion-suggestion-table { min-width: 880px; border: 1px solid var(--background-modifier-border); border-radius: 8px; overflow: hidden; }
+.vermilion-taxonomy-row { display: grid; grid-template-columns: 42px minmax(140px, .8fr) minmax(230px, 1.4fr) minmax(125px, .7fr) 64px 82px 72px; gap: 10px; align-items: center; min-height: 54px; padding: 9px 10px; border-bottom: 1px solid var(--background-modifier-border); }
+.vermilion-taxonomy-row:last-child { border-bottom: 0; }
+.vermilion-taxonomy-row.is-header, .vermilion-suggestion-row.is-header { min-height: 38px; font-size: var(--font-ui-smaller); font-weight: 600; color: var(--text-muted); background: var(--background-secondary); }
+.vermilion-taxonomy-row > input[type="checkbox"] { justify-self: center; }
+.vermilion-taxonomy-identity, .vermilion-taxonomy-details { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.vermilion-taxonomy-identity input, .vermilion-taxonomy-details input { width: 100%; }
+.vermilion-usage-cell { color: var(--text-muted); font-size: var(--font-ui-smaller); line-height: 1.35; }
+.vermilion-save-bar { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid var(--background-modifier-border); border-radius: 8px; background: var(--background-primary); box-shadow: 0 -4px 14px rgba(0, 0, 0, .08); }
+.vermilion-save-bar span { margin-right: auto; color: var(--text-muted); }
+.vermilion-save-bar.is-dirty { border-color: var(--text-warning); }
+.vermilion-suggestion-row { display: grid; grid-template-columns: 42px 70px minmax(130px, .7fr) minmax(220px, 1.3fr) minmax(160px, .8fr) auto; gap: 10px; align-items: center; min-height: 54px; padding: 9px 10px; border-bottom: 1px solid var(--background-modifier-border); }
+.vermilion-suggestion-row:last-child { border-bottom: 0; }
+.vermilion-suggestion-source { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vermilion-suggestion-source small { color: var(--text-muted); }
+.vermilion-type-badge { width: fit-content; padding: 2px 7px; border-radius: 999px; color: var(--text-accent); background: var(--background-modifier-hover); }
+.vermilion-row-actions { display: flex; gap: 6px; }
 .vermilion-empty { padding: 48px; text-align: center; color: var(--text-muted); }
 .vermilion-empty.compact { padding: 24px; }
 .vermilion-error { color: var(--text-error); margin-bottom: 8px; }
+@media (max-width: 1100px) { .vermilion-taxonomy-toolbar { grid-template-columns: 1fr 1fr 1fr; } .vermilion-taxonomy-table, .vermilion-suggestion-table { overflow-x: auto; } }
 @media (max-width: 1000px) { .vermilion-layout { grid-template-columns: 220px 1fr; } .vermilion-preview { grid-column: 1 / -1; } }
-@media (max-width: 700px) { .vermilion-layout { display: block; } .vermilion-list, .vermilion-editor, .vermilion-preview { margin-bottom: 12px; } .vermilion-tag-row, .vermilion-category-row, .vermilion-taxonomy-toolbar, .vermilion-proposal-review { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .vermilion-layout { display: block; } .vermilion-list, .vermilion-editor, .vermilion-preview { margin-bottom: 12px; } .vermilion-management-tabs { overflow-x: auto; } .vermilion-taxonomy-toolbar { grid-template-columns: 1fr; } .vermilion-section-heading, .vermilion-save-bar { align-items: flex-start; flex-direction: column; } .vermilion-save-bar span { margin-right: 0; } }

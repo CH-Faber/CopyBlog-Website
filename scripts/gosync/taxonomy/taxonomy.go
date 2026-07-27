@@ -27,10 +27,11 @@ type ManagedTag struct {
 }
 
 type Category struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Enabled     bool   `json:"enabled"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	Enabled      bool   `json:"enabled"`
+	AISelectable bool   `json:"aiSelectable"`
 }
 
 type Taxonomy struct {
@@ -55,7 +56,7 @@ func NewTag(name string) ManagedTag {
 }
 
 func NewCategory(name string) Category {
-	return Category{ID: stableID("category", name), Name: strings.TrimSpace(name), Enabled: true}
+	return Category{ID: stableID("category", name), Name: strings.TrimSpace(name), Enabled: true, AISelectable: true}
 }
 
 func publishedPath(cfg *config.Config) string {
@@ -141,7 +142,7 @@ func SeedFromPosts(postsDir string) (*Taxonomy, error) {
 			}
 		}
 	}
-	result := &Taxonomy{Version: 1, Categories: []Category{}, Tags: []ManagedTag{}}
+	result := &Taxonomy{Version: 2, Categories: []Category{}, Tags: []ManagedTag{}}
 	for name := range categories {
 		result.Categories = append(result.Categories, NewCategory(name))
 	}
@@ -208,9 +209,8 @@ func CountUsage(postsDir string, value *Taxonomy) (*Usage, error) {
 }
 
 func normalize(value *Taxonomy) {
-	if value.Version == 0 {
-		value.Version = 1
-	}
+	legacyCategories := value.Version < 2
+	value.Version = 2
 	now := time.Now().UTC().Format(time.RFC3339)
 	seen := map[string]bool{}
 	cleanTags := make([]ManagedTag, 0, len(value.Tags))
@@ -230,6 +230,9 @@ func normalize(value *Taxonomy) {
 		if tag.Aliases == nil {
 			tag.Aliases = []string{}
 		}
+		if !tag.Enabled {
+			tag.AISelectable = false
+		}
 		cleanTags = append(cleanTags, tag)
 	}
 	value.Tags = cleanTags
@@ -245,6 +248,12 @@ func normalize(value *Taxonomy) {
 		if category.ID == "" {
 			category.ID = stableID("category", category.Name)
 		}
+		if legacyCategories {
+			category.AISelectable = category.Enabled
+		}
+		if !category.Enabled {
+			category.AISelectable = false
+		}
 		cleanCategories = append(cleanCategories, category)
 	}
 	value.Categories = cleanCategories
@@ -257,6 +266,16 @@ func (value *Taxonomy) AllowedCategoryNames() map[string]string {
 	for _, category := range value.Categories {
 		if category.Enabled {
 			result[strings.ToLower(category.Name)] = category.Name
+		}
+	}
+	return result
+}
+
+func (value *Taxonomy) AllowedAICategories() []Category {
+	result := []Category{}
+	for _, category := range value.Categories {
+		if category.Enabled && category.AISelectable {
+			result = append(result, category)
 		}
 	}
 	return result

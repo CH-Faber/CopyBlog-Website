@@ -26,7 +26,7 @@ function extractJSONObject(value: string): RawSuggestion {
 }
 
 export function normalizeSuggestion(raw: RawSuggestion, taxonomy: Taxonomy, maxProposedTags: number): AISuggestion {
-	const categoryMap = new Map(taxonomy.categories.filter((item) => item.enabled).map((item) => [item.name.toLowerCase(), item.name]));
+	const categoryMap = new Map(taxonomy.categories.filter((item) => item.enabled && item.aiSelectable).map((item) => [item.name.toLowerCase(), item.name]));
 	const tagMap = new Map<string, string>();
 	for (const tag of taxonomy.tags.filter((item) => item.enabled && item.aiSelectable)) {
 		tagMap.set(tag.name.toLowerCase(), tag.name);
@@ -96,7 +96,7 @@ export async function analyzeArticleLocally(settings: SyncSettings, taxonomy: Ta
 	if (!settings.aiApiKey.trim()) throw new Error('请先配置 AI API Key。');
 	if (!settings.aiModel.trim()) throw new Error('请先配置 AI 模型。');
 	const endpoint = /\/chat\/completions$/i.test(baseUrl) ? baseUrl : `${baseUrl}/chat/completions`;
-	const categories = taxonomy.categories.filter((item) => item.enabled).map((item) => `- ${item.name}：${item.description || '无说明'}`).join('\n') || '（无）';
+	const categories = taxonomy.categories.filter((item) => item.enabled && item.aiSelectable).map((item) => `- ${item.name}：${item.description || '无说明'}`).join('\n') || '（无）';
 	const tags = taxonomy.tags.filter((item) => item.enabled && item.aiSelectable).map((item) => `- ${item.name}：${item.description || '无说明'}`).join('\n') || '（无）';
 	const prompt = `${settings.aiMetadataPrompt}\n\n${settings.aiTagRules}\n\n请只返回一个 JSON 对象，不要返回 Markdown。格式：\n{"description":"摘要","category":"只能是已有分类或空字符串","proposedCategory":{"name":"新分类","reason":"理由"},"selectedTags":["只能是已有标签"],"proposedTags":[{"name":"新标签","reason":"理由"}]}\n\n规则：\n1. category 只能从已有分类选择；没有合适分类时留空，并填写 proposedCategory，否则 proposedCategory 为 null。\n2. selectedTags 只能从已有标签选择；新标签只能放入 proposedTags。\n3. proposedTags 最多 ${settings.aiMaxProposedTags} 个。\n\n已有分类：\n${categories}\n\n已有标签：\n${tags}\n\n文件名：${article.filename}\n当前标题：${article.metadata.title || '无'}\n正文：\n${article.content.slice(0, 12000)}`;
 	let response;

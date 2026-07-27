@@ -84,7 +84,7 @@ export interface ManagedTag {
 	updatedAt: string;
 }
 
-export interface Category { id: string; name: string; description: string; enabled: boolean; }
+export interface Category { id: string; name: string; description: string; enabled: boolean; aiSelectable: boolean; }
 export interface Taxonomy { version: number; categories: Category[]; tags: ManagedTag[]; }
 export interface TaxonomyUsage { tags: Record<string, number>; categories: Record<string, number>; }
 export interface LocalFile { path: string; hash: string; }

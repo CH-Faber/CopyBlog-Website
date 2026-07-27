@@ -151,10 +151,8 @@ func (g *Generator) SuggestMetadata(filename, content string, values *taxonomy.T
 	}
 
 	categoryLines := []string{}
-	for _, category := range values.Categories {
-		if category.Enabled {
-			categoryLines = append(categoryLines, fmt.Sprintf("- %s：%s", category.Name, category.Description))
-		}
+	for _, category := range values.AllowedAICategories() {
+		categoryLines = append(categoryLines, fmt.Sprintf("- %s：%s", category.Name, category.Description))
 	}
 	tagLines := []string{}
 	for _, tag := range values.AllowedTags() {

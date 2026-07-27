@@ -31,3 +31,45 @@ func TestValidateCategoryRejectsUnknownAndDisabled(t *testing.T) {
 		t.Fatal("unknown category should be rejected")
 	}
 }
+
+func TestNormalizeMigratesLegacyCategoryAISelection(t *testing.T) {
+	value := &Taxonomy{Version: 1, Categories: []Category{
+		{Name: "技术", Enabled: true},
+		{Name: "停用分类", Enabled: false},
+	}}
+	normalize(value)
+	if value.Version != 2 {
+		t.Fatalf("expected taxonomy version 2, got %d", value.Version)
+	}
+	for _, category := range value.Categories {
+		if category.Name == "技术" && !category.AISelectable {
+			t.Fatal("legacy enabled category should become AI selectable")
+		}
+		if category.Name == "停用分类" && category.AISelectable {
+			t.Fatal("disabled category must not be AI selectable")
+		}
+	}
+}
+
+func TestAllowedAICategoriesRequiresBothFlags(t *testing.T) {
+	value := &Taxonomy{Version: 2, Categories: []Category{
+		{Name: "AI 可用", Enabled: true, AISelectable: true},
+		{Name: "仅手动", Enabled: true, AISelectable: false},
+		{Name: "已停用", Enabled: false, AISelectable: true},
+	}}
+	allowed := value.AllowedAICategories()
+	if len(allowed) != 1 || allowed[0].Name != "AI 可用" {
+		t.Fatalf("unexpected AI categories: %#v", allowed)
+	}
+}
+
+func TestNormalizeDisablesAIForDisabledItems(t *testing.T) {
+	value := &Taxonomy{Version: 2,
+		Categories: []Category{{Name: "停用分类", Enabled: false, AISelectable: true}},
+		Tags:       []ManagedTag{{Name: "停用标签", Enabled: false, AISelectable: true}},
+	}
+	normalize(value)
+	if value.Categories[0].AISelectable || value.Tags[0].AISelectable {
+		t.Fatal("disabled taxonomy items must not remain AI selectable")
+	}
+}

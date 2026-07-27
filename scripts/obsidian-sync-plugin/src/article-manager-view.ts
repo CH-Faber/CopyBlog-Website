@@ -6,6 +6,18 @@ import type { ArticleDraft, Category, LocalFile, ManagedTag, ProposedCategory, P
 
 export const ARTICLE_MANAGER_VIEW = 'flash-thought-article-manager';
 
+type ManagementTab = 'articles' | 'taxonomy' | 'suggestions';
+type TaxonomyItem = ManagedTag | Category;
+type TaxonomyStatusFilter = 'all' | 'enabled' | 'disabled';
+type TaxonomyAIFilter = 'all' | 'allowed' | 'blocked';
+type TaxonomyUsageFilter = 'all' | 'used' | 'unused';
+type SuggestionEntry = {
+	key: string;
+	kind: 'tag' | 'category';
+	article: ArticleDraft;
+	proposal: ProposedTag | ProposedCategory;
+};
+
 async function sha256(value: string): Promise<string> {
 	const bytes = new TextEncoder().encode(value);
 	const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -21,13 +33,21 @@ export class ArticleManagerView extends ItemView {
 	private taxonomyUsage: Record<string, number> = {};
 	private categoryUsage: Record<string, number> = {};
 	private taxonomyUsageLoaded = false;
+	private managementTab: ManagementTab = 'articles';
 	private taxonomyTab: 'categories' | 'tags' = 'tags';
-	private tagSearch = '';
-	private tagFilter: 'all' | 'enabled' | 'disabled' = 'all';
+	private taxonomySearch = '';
+	private taxonomyStatusFilter: TaxonomyStatusFilter = 'all';
+	private taxonomyAIFilter: TaxonomyAIFilter = 'all';
+	private taxonomyUsageFilter: TaxonomyUsageFilter = 'all';
+	private selectedTaxonomyItems = new Set<TaxonomyItem>();
+	private taxonomyOriginalNames = new WeakMap<TaxonomyItem, string>();
+	private taxonomyDirty = false;
+	private taxonomyBaseline = '';
+	private suggestionFilter: 'all' | 'tags' | 'categories' = 'all';
+	private selectedAISuggestions = new Set<string>();
 	private activeArticleId = '';
 	private selected = new Set<string>();
 	private dirtyArticles = new Set<string>();
-	private showTaxonomy = false;
 	private pollTimer: number | null = null;
 	private aiRunning = false;
 	private aiProgress = '';
@@ -67,6 +87,15 @@ export class ArticleManagerView extends ItemView {
 		this.render();
 		try {
 			this.taxonomy = await this.plugin.api.getTaxonomy();
+			for (const category of this.taxonomy.categories) {
+				if (typeof category.aiSelectable !== 'boolean') category.aiSelectable = category.enabled;
+				if (!category.enabled) category.aiSelectable = false;
+			}
+			this.taxonomyOriginalNames = new WeakMap<TaxonomyItem, string>();
+			for (const item of [...this.taxonomy.categories, ...this.taxonomy.tags]) this.taxonomyOriginalNames.set(item, item.name);
+			this.taxonomyBaseline = JSON.stringify(this.taxonomy);
+			this.taxonomyDirty = false;
+			this.selectedTaxonomyItems.clear();
 			this.taxonomyState = 'loaded';
 			try {
 				const usage = await this.plugin.api.getTaxonomyUsage();
@@ -79,12 +108,12 @@ export class ArticleManagerView extends ItemView {
 				this.taxonomyUsageLoaded = false;
 				if (!(error instanceof ApiError && error.status === 404)) console.warn('Failed to load taxonomy usage', error);
 			}
-			if (showNotice) new Notice(`标签库加载成功：${this.taxonomy.tags.length} 个标签。`);
+			if (showNotice) new Notice(`分类体系加载成功：${this.taxonomy.categories.length} 个分类，${this.taxonomy.tags.length} 个标签。`);
 		} catch (error) {
 			this.taxonomy = null;
 			this.taxonomyState = 'error';
 			this.taxonomyError = describeApiError(error);
-			if (showNotice) new Notice(`标签库加载失败：${this.taxonomyError}`);
+			if (showNotice) new Notice(`分类体系加载失败：${this.taxonomyError}`);
 		} finally {
 			this.render();
 		}
@@ -106,7 +135,7 @@ export class ArticleManagerView extends ItemView {
 			this.plugin.settings.aiSuggestionJobId = this.job.id;
 			this.plugin.settings.aiSuggestions = {};
 			await this.plugin.saveSettings();
-			this.showTaxonomy = false;
+			this.managementTab = 'articles';
 			this.render();
 			this.schedulePoll(true);
 			new Notice('处理任务已创建，不会自动发布。');
@@ -144,6 +173,26 @@ export class ArticleManagerView extends ItemView {
 	private render() {
 		const root = this.contentEl;
 		root.empty();
+		const navigation = root.createDiv({ cls: 'vermilion-management-tabs' });
+		const pendingSuggestions = this.collectProposals().length + this.collectCategoryProposals().length;
+		for (const [label, tab] of [
+			['文章管理', 'articles'],
+			['分类体系', 'taxonomy'],
+			[`AI 建议${pendingSuggestions ? ` (${pendingSuggestions})` : ''}`, 'suggestions'],
+		] as Array<[string, ManagementTab]>) {
+			const button = navigation.createEl('button', { text: label, cls: this.managementTab === tab ? 'mod-cta' : '' });
+			button.onclick = () => this.switchManagementTab(tab);
+		}
+
+		if (this.managementTab === 'taxonomy') {
+			this.renderTaxonomy(root);
+			return;
+		}
+		if (this.managementTab === 'suggestions') {
+			this.renderAISuggestions(root);
+			return;
+		}
+
 		const toolbar = root.createDiv({ cls: 'vermilion-toolbar' });
 		toolbar.createEl('button', { text: '获取并处理文章', cls: 'mod-cta' }).onclick = () => void this.prepareSync();
 		const refreshButton = toolbar.createEl('button', { text: '刷新状态' });
@@ -152,10 +201,6 @@ export class ArticleManagerView extends ItemView {
 		const aiButton = toolbar.createEl('button', { text: this.aiRunning ? 'AI 分析中…' : 'AI 分析待处理' });
 		aiButton.disabled = this.aiRunning || !this.job?.articles?.length;
 		aiButton.onclick = () => void this.analyzePendingArticles();
-		toolbar.createEl('button', { text: this.showTaxonomy ? '返回文章' : '分类与标签' }).onclick = () => {
-			this.showTaxonomy = !this.showTaxonomy;
-			this.render();
-		};
 		const publishButton = toolbar.createEl('button', { text: `发布所选 (${this.selected.size})`, cls: 'mod-cta' });
 		publishButton.disabled = this.selected.size === 0 || !this.job || this.job.status === 'publishing';
 		publishButton.onclick = () => void this.publishSelected();
@@ -170,10 +215,6 @@ export class ArticleManagerView extends ItemView {
 		}
 		if (this.aiProgress) root.createDiv({ cls: 'vermilion-ai-progress', text: this.aiProgress });
 
-		if (this.showTaxonomy) {
-			this.renderTaxonomy(root);
-			return;
-		}
 		if (!this.job) {
 			root.createDiv({ cls: 'vermilion-empty', text: '点击“获取并处理文章”创建一个待审核任务。' });
 			return;
@@ -189,6 +230,16 @@ export class ArticleManagerView extends ItemView {
 		this.activeArticleId = active.id;
 		this.renderEditor(layout.createDiv({ cls: 'vermilion-editor' }), active);
 		void this.renderPreview(layout.createDiv({ cls: 'vermilion-preview' }), active);
+	}
+
+	private switchManagementTab(tab: ManagementTab) {
+		if (tab === this.managementTab) return;
+		if (this.managementTab === 'taxonomy' && this.taxonomyDirty) {
+			new Notice('分类体系存在未保存修改，请先保存或放弃修改。');
+			return;
+		}
+		this.managementTab = tab;
+		this.render();
 	}
 
 	private renderArticleList(container: HTMLElement) {
@@ -308,14 +359,16 @@ export class ArticleManagerView extends ItemView {
 
 	private renderTaxonomy(container: HTMLElement) {
 		const section = container.createDiv({ cls: 'vermilion-taxonomy' });
-		section.createEl('h3', { text: '分类与标签管理' });
+		const heading = section.createDiv({ cls: 'vermilion-section-heading' });
+		heading.createEl('h3', { text: '分类体系' });
+		heading.createEl('span', { text: this.taxonomyDirty ? '● 有未保存修改' : '已与服务器同步', cls: this.taxonomyDirty ? 'vermilion-dirty' : 'vermilion-synced' });
 		if (this.taxonomyState === 'loading') {
-			section.createDiv({ cls: 'vermilion-state-card', text: '正在加载标签库…' });
+			section.createDiv({ cls: 'vermilion-state-card', text: '正在加载分类体系…' });
 			return;
 		}
 		if (this.taxonomyState === 'error' || !this.taxonomy) {
 			const card = section.createDiv({ cls: 'vermilion-state-card is-error' });
-			card.createEl('strong', { text: '标签库加载失败' });
+			card.createEl('strong', { text: '分类体系加载失败' });
 			card.createEl('p', { text: this.taxonomyError || '未知错误' });
 			const actions = card.createDiv({ cls: 'vermilion-actions' });
 			actions.createEl('button', { text: '重新加载', cls: 'mod-cta' }).onclick = () => void this.loadTaxonomy(true);
@@ -327,163 +380,208 @@ export class ArticleManagerView extends ItemView {
 			return;
 		}
 		const tabs = section.createDiv({ cls: 'vermilion-taxonomy-tabs' });
-		for (const [label, value] of [['分类', 'categories'], ['标签', 'tags']] as const) {
+		for (const [label, value] of [[`标签 (${this.taxonomy.tags.length})`, 'tags'], [`分类 (${this.taxonomy.categories.length})`, 'categories']] as const) {
 			const button = tabs.createEl('button', { text: label, cls: this.taxonomyTab === value ? 'mod-cta' : '' });
-			button.onclick = () => { this.taxonomyTab = value; this.render(); };
+			button.onclick = () => { this.taxonomyTab = value; this.selectedTaxonomyItems.clear(); this.render(); };
 		}
-		if (this.taxonomyTab === 'categories') {
-			this.renderCategories(section);
-			return;
-		}
-		section.createEl('p', { text: '启用且允许 AI 使用的标签会进入 AI 白名单。已被文章使用的标签请停用或改名，不直接删除。' });
-
-		const enabledCount = this.taxonomy.tags.filter((tag) => tag.enabled).length;
-		section.createDiv({ cls: 'vermilion-taxonomy-summary', text: `共 ${this.taxonomy.tags.length} 个标签 · ${enabledCount} 个启用 · ${this.collectProposals().length} 个待审批建议` });
-		this.renderProposalQueue(section);
-
+		const allItems = this.currentTaxonomyItems();
+		const enabledCount = allItems.filter((item) => item.enabled).length;
+		const aiCount = allItems.filter((item) => item.enabled && item.aiSelectable).length;
+		section.createDiv({ cls: 'vermilion-taxonomy-summary', text: `共 ${allItems.length} 项 · ${enabledCount} 项启用 · ${aiCount} 项允许 AI · 使用中的项目不能直接删除` });
 		const toolbar = section.createDiv({ cls: 'vermilion-taxonomy-toolbar' });
-		const search = toolbar.createEl('input', { type: 'search', value: this.tagSearch });
+		const search = toolbar.createEl('input', { type: 'search', value: this.taxonomySearch });
 		search.placeholder = '搜索名称、别名或说明';
-		const filter = toolbar.createEl('select');
-		for (const [label, value] of [['全部标签', 'all'], ['仅启用', 'enabled'], ['仅停用', 'disabled']] as const) {
-			const option = filter.createEl('option', { text: label, value });
-			option.selected = value === this.tagFilter;
-		}
-		const addButton = toolbar.createEl('button', { text: '新增标签' });
+		const statusFilter = this.createFilter(toolbar, [['全部状态', 'all'], ['已启用', 'enabled'], ['已停用', 'disabled']], this.taxonomyStatusFilter);
+		const aiFilter = this.createFilter(toolbar, [['全部 AI 状态', 'all'], ['允许 AI', 'allowed'], ['禁止 AI', 'blocked']], this.taxonomyAIFilter);
+		const usageFilter = this.createFilter(toolbar, [['全部使用状态', 'all'], ['正在使用', 'used'], ['未使用', 'unused']], this.taxonomyUsageFilter);
+		const addButton = toolbar.createEl('button', { text: this.taxonomyTab === 'tags' ? '新增标签' : '新增分类' });
 		const reloadButton = toolbar.createEl('button', { text: '重新加载' });
-		const saveButton = toolbar.createEl('button', { text: '保存标签库', cls: 'mod-cta' });
-		const list = section.createDiv({ cls: 'vermilion-tag-list' });
-		const updateList = () => this.renderTagList(list);
-		search.oninput = () => { this.tagSearch = search.value; updateList(); };
-		filter.onchange = () => { this.tagFilter = filter.value as typeof this.tagFilter; updateList(); };
+		search.oninput = () => { this.taxonomySearch = search.value; this.render(); };
+		statusFilter.onchange = () => { this.taxonomyStatusFilter = statusFilter.value as TaxonomyStatusFilter; this.render(); };
+		aiFilter.onchange = () => { this.taxonomyAIFilter = aiFilter.value as TaxonomyAIFilter; this.render(); };
+		usageFilter.onchange = () => { this.taxonomyUsageFilter = usageFilter.value as TaxonomyUsageFilter; this.render(); };
 		addButton.onclick = () => {
-			this.taxonomy?.tags.unshift({ id: '', name: '', aliases: [], description: '', enabled: true, aiSelectable: true, createdAt: '', updatedAt: '' });
-			this.tagSearch = '';
-			this.tagFilter = 'all';
+			if (!this.taxonomy) return;
+			if (this.taxonomyTab === 'tags') this.taxonomy.tags.unshift({ id: '', name: '', aliases: [], description: '', enabled: true, aiSelectable: true, createdAt: '', updatedAt: '' });
+			else this.taxonomy.categories.unshift({ id: '', name: '', description: '', enabled: true, aiSelectable: true });
+			this.taxonomySearch = '';
+			this.taxonomyStatusFilter = 'all';
+			this.markTaxonomyDirty();
 			this.render();
 		};
 		reloadButton.onclick = () => {
-			if (window.confirm('重新加载会丢弃尚未保存的标签修改，确认继续吗？')) void this.loadTaxonomy(true);
+			if (!this.taxonomyDirty || window.confirm('重新加载会丢弃尚未保存的修改，确认继续吗？')) void this.loadTaxonomy(true);
 		};
+
+		const filtered = this.filteredTaxonomyItems();
+		this.renderTaxonomyBulkActions(section, filtered);
+		const table = section.createDiv({ cls: 'vermilion-taxonomy-table' });
+		const header = table.createDiv({ cls: 'vermilion-taxonomy-row is-header' });
+		header.createSpan({ text: '选择' });
+		header.createSpan({ text: '名称' });
+		header.createSpan({ text: '说明 / 别名' });
+		header.createSpan({ text: '使用量' });
+		header.createSpan({ text: '启用' });
+		header.createSpan({ text: '允许 AI' });
+		header.createSpan({ text: '操作' });
+		if (!filtered.length) table.createDiv({ cls: 'vermilion-empty compact', text: allItems.length ? '没有符合筛选条件的项目。' : `暂无${this.taxonomyTab === 'tags' ? '标签' : '分类'}，可以先新增一个。` });
+		for (const item of filtered) this.renderTaxonomyRow(table, item);
+
+		const footer = section.createDiv({ cls: `vermilion-save-bar ${this.taxonomyDirty ? 'is-dirty' : ''}` });
+		footer.createSpan({ text: this.taxonomyDirty ? '● 分类体系有尚未保存的修改' : '没有尚未保存的修改' });
+		footer.createEl('button', { text: '放弃修改' }).onclick = () => {
+			if (this.taxonomyDirty && window.confirm('确认放弃全部未保存修改吗？')) void this.loadTaxonomy();
+		};
+		const saveButton = footer.createEl('button', { text: '保存全部修改', cls: 'mod-cta' });
+		saveButton.disabled = !this.taxonomyDirty;
 		saveButton.onclick = () => void this.saveTaxonomy();
-		updateList();
 	}
 
-	private renderCategories(container: HTMLElement) {
+	private createFilter<T extends string>(container: HTMLElement, options: Array<[string, T]>, value: T) {
+		const select = container.createEl('select');
+		for (const [label, optionValue] of options) {
+			const option = select.createEl('option', { text: label, value: optionValue });
+			option.selected = optionValue === value;
+		}
+		return select;
+	}
+
+	private currentTaxonomyItems(): TaxonomyItem[] {
+		if (!this.taxonomy) return [];
+		return this.taxonomyTab === 'tags' ? this.taxonomy.tags : this.taxonomy.categories;
+	}
+
+	private isTag(item: TaxonomyItem): item is ManagedTag {
+		return 'aliases' in item;
+	}
+
+	private itemUsage(item: TaxonomyItem) {
+		const names = Array.from(new Set([item.name, this.taxonomyOriginalNames.get(item) ?? ''].filter(Boolean)));
+		const draftValues = names.map((name) => this.isTag(item) ? this.countDraftTagUsage(name) : this.countDraftCategoryUsage(name)).filter((value): value is number => value !== null);
+		const publishedValues = names.map((name) => this.isTag(item) ? (this.taxonomyUsage[name] ?? 0) : (this.categoryUsage[name] ?? 0));
+		const draft = draftValues.length ? Math.max(...draftValues) : null;
+		const published = publishedValues.length ? Math.max(...publishedValues) : 0;
+		const effective = draft ?? (this.taxonomyUsageLoaded ? published : null);
+		return { draft, published, effective };
+	}
+
+	private filteredTaxonomyItems() {
+		const query = this.taxonomySearch.trim().toLowerCase();
+		return this.currentTaxonomyItems().filter((item) => {
+			const searchable = [item.name, item.description, ...(this.isTag(item) ? item.aliases : [])];
+			if (query && !searchable.some((value) => value.toLowerCase().includes(query))) return false;
+			if (this.taxonomyStatusFilter === 'enabled' && !item.enabled) return false;
+			if (this.taxonomyStatusFilter === 'disabled' && item.enabled) return false;
+			if (this.taxonomyAIFilter === 'allowed' && (!item.enabled || !item.aiSelectable)) return false;
+			if (this.taxonomyAIFilter === 'blocked' && item.enabled && item.aiSelectable) return false;
+			const usage = this.itemUsage(item).effective;
+			if (this.taxonomyUsageFilter === 'used' && (usage === null || usage === 0)) return false;
+			if (this.taxonomyUsageFilter === 'unused' && usage !== 0) return false;
+			return true;
+		});
+	}
+
+	private renderTaxonomyBulkActions(container: HTMLElement, filtered: TaxonomyItem[]) {
+		const bar = container.createDiv({ cls: 'vermilion-bulk-bar' });
+		const selectAll = bar.createEl('input', { type: 'checkbox' });
+		selectAll.checked = filtered.length > 0 && filtered.every((item) => this.selectedTaxonomyItems.has(item));
+		selectAll.indeterminate = filtered.some((item) => this.selectedTaxonomyItems.has(item)) && !selectAll.checked;
+		selectAll.onchange = () => {
+			for (const item of filtered) selectAll.checked ? this.selectedTaxonomyItems.add(item) : this.selectedTaxonomyItems.delete(item);
+			this.render();
+		};
+		bar.createSpan({ text: `全选当前结果 · 已选择 ${this.selectedTaxonomyItems.size} 项` });
+		for (const [label, action] of [['启用', 'enable'], ['停用', 'disable'], ['允许 AI', 'allow-ai'], ['禁止 AI', 'block-ai'], ['删除', 'delete']] as const) {
+			const button = bar.createEl('button', { text: label, cls: action === 'delete' ? 'mod-warning' : '' });
+			button.disabled = this.selectedTaxonomyItems.size === 0;
+			button.onclick = () => this.applyTaxonomyBulkAction(action);
+		}
+	}
+
+	private renderTaxonomyRow(container: HTMLElement, item: TaxonomyItem) {
+		const usage = this.itemUsage(item);
+		const row = container.createDiv({ cls: 'vermilion-taxonomy-row' });
+		const selected = row.createEl('input', { type: 'checkbox' });
+		selected.checked = this.selectedTaxonomyItems.has(item);
+		selected.onchange = () => { selected.checked ? this.selectedTaxonomyItems.add(item) : this.selectedTaxonomyItems.delete(item); this.render(); };
+		const identity = row.createDiv({ cls: 'vermilion-taxonomy-identity' });
+		const name = identity.createEl('input', { type: 'text', value: item.name });
+		name.placeholder = this.isTag(item) ? '标签名称' : '分类名称';
+		name.oninput = () => { item.name = name.value; this.markTaxonomyDirty(); };
+		const details = row.createDiv({ cls: 'vermilion-taxonomy-details' });
+		const description = details.createEl('input', { type: 'text', value: item.description });
+		description.placeholder = '告诉 AI 何时使用';
+		description.oninput = () => { item.description = description.value; this.markTaxonomyDirty(); };
+		if (this.isTag(item)) {
+			const aliases = details.createEl('input', { type: 'text', value: item.aliases.join(', ') });
+			aliases.placeholder = '别名（逗号分隔）';
+			aliases.oninput = () => { item.aliases = aliases.value.split(/[,，]/).map((value) => value.trim()).filter(Boolean); this.markTaxonomyDirty(); };
+		}
+		row.createDiv({ cls: 'vermilion-usage-cell', text: this.usageLabel(usage.draft, usage.published) });
+		const enabled = row.createEl('input', { type: 'checkbox' });
+		enabled.checked = item.enabled;
+		enabled.title = '启用后可由用户手动选择';
+		enabled.onchange = () => { item.enabled = enabled.checked; if (!item.enabled) item.aiSelectable = false; this.markTaxonomyDirty(); this.render(); };
+		const aiSelectable = row.createEl('input', { type: 'checkbox' });
+		aiSelectable.checked = item.enabled && item.aiSelectable;
+		aiSelectable.disabled = !item.enabled;
+		aiSelectable.title = item.enabled ? '允许 AI 主动选择' : '请先启用该项目';
+		aiSelectable.onchange = () => { item.aiSelectable = aiSelectable.checked; this.markTaxonomyDirty(); };
+		const remove = row.createEl('button', { text: '删除' });
+		remove.disabled = usage.effective === null || usage.effective > 0;
+		remove.title = usage.effective === null ? '无法确认使用次数，已禁止删除。' : usage.effective > 0 ? '当前仍有文章使用，建议先停用。' : '删除未使用项目';
+		remove.onclick = () => this.removeTaxonomyItem(item);
+	}
+
+	private markTaxonomyDirty() {
+		this.taxonomyDirty = Boolean(this.taxonomy && JSON.stringify(this.taxonomy) !== this.taxonomyBaseline);
+		const indicator = this.contentEl.querySelector('.vermilion-section-heading > span');
+		if (indicator instanceof HTMLElement) {
+			indicator.setText(this.taxonomyDirty ? '● 有未保存修改' : '已与服务器同步');
+			indicator.classList.toggle('vermilion-dirty', this.taxonomyDirty);
+			indicator.classList.toggle('vermilion-synced', !this.taxonomyDirty);
+		}
+		const saveBar = this.contentEl.querySelector('.vermilion-save-bar');
+		if (saveBar instanceof HTMLElement) {
+			saveBar.classList.toggle('is-dirty', this.taxonomyDirty);
+			const message = saveBar.querySelector('span');
+			if (message instanceof HTMLElement) message.setText(this.taxonomyDirty ? '● 分类体系有尚未保存的修改' : '没有尚未保存的修改');
+			const save = saveBar.querySelector('button.mod-cta');
+			if (save instanceof HTMLButtonElement) save.disabled = !this.taxonomyDirty;
+		}
+	}
+
+	private removeTaxonomyItem(item: TaxonomyItem) {
+		if (!this.taxonomy || this.itemUsage(item).effective !== 0 || !window.confirm(`确认删除“${item.name || '未命名项目'}”吗？`)) return;
+		if (this.isTag(item)) this.taxonomy.tags = this.taxonomy.tags.filter((value) => value !== item);
+		else this.taxonomy.categories = this.taxonomy.categories.filter((value) => value !== item);
+		this.selectedTaxonomyItems.delete(item);
+		this.markTaxonomyDirty();
+		this.render();
+	}
+
+	private applyTaxonomyBulkAction(action: 'enable' | 'disable' | 'allow-ai' | 'block-ai' | 'delete') {
 		if (!this.taxonomy) return;
-		container.createEl('p', { text: '每篇文章只能选择一个已启用分类。已被文章使用的分类不能直接删除。' });
-		const proposals = this.collectCategoryProposals();
-		container.createDiv({ cls: 'vermilion-taxonomy-summary', text: `共 ${this.taxonomy.categories.length} 个分类 · ${this.taxonomy.categories.filter((item) => item.enabled).length} 个启用 · ${proposals.length} 个待审批建议` });
-		if (proposals.length) {
-			const box = container.createDiv({ cls: 'vermilion-proposal-queue' });
-			box.createEl('h4', { text: 'AI 新分类待审批' });
-			for (const { article, proposal } of proposals) {
-				const row = box.createDiv({ cls: 'vermilion-proposal-review' });
-				const description = row.createDiv();
-				description.createEl('strong', { text: proposal.name });
-				description.createEl('small', { text: `${article.metadata.title || article.filename} · ${proposal.reason || '未提供理由'}` });
-				const replacement = row.createEl('select');
-				for (const category of this.taxonomy.categories.filter((item) => item.enabled)) replacement.createEl('option', { text: category.name, value: category.name });
-				row.createEl('button', { text: '批准' }).onclick = () => void this.approveProposedCategory(article, proposal);
-				const replace = row.createEl('button', { text: '替换' });
-				replace.disabled = replacement.options.length === 0;
-				replace.onclick = () => this.resolveCategoryProposal(article, replacement.value);
-				row.createEl('button', { text: '拒绝' }).onclick = () => this.resolveCategoryProposal(article);
+		const items = Array.from(this.selectedTaxonomyItems);
+		let changed = 0;
+		let blocked = 0;
+		if (action === 'delete' && !window.confirm(`准备删除 ${items.length} 个项目。仍被文章使用的项目会保留，是否继续？`)) return;
+		for (const item of items) {
+			if (action === 'enable') { item.enabled = true; changed++; }
+			if (action === 'disable') { item.enabled = false; item.aiSelectable = false; changed++; }
+			if (action === 'allow-ai') { if (item.enabled) { item.aiSelectable = true; changed++; } else blocked++; }
+			if (action === 'block-ai') { item.aiSelectable = false; changed++; }
+			if (action === 'delete') {
+				if (this.itemUsage(item).effective !== 0) { blocked++; continue; }
+				if (this.isTag(item)) this.taxonomy.tags = this.taxonomy.tags.filter((value) => value !== item);
+				else this.taxonomy.categories = this.taxonomy.categories.filter((value) => value !== item);
+				changed++;
 			}
 		}
-		const actions = container.createDiv({ cls: 'vermilion-taxonomy-toolbar compact' });
-		actions.createEl('button', { text: '新增分类' }).onclick = () => {
-			this.taxonomy?.categories.unshift({ id: '', name: '', description: '', enabled: true });
-			this.render();
-		};
-		actions.createEl('button', { text: '重新加载' }).onclick = () => {
-			if (window.confirm('重新加载会丢弃尚未保存的分类修改，确认继续吗？')) void this.loadTaxonomy(true);
-		};
-		actions.createEl('button', { text: '保存分类库', cls: 'mod-cta' }).onclick = () => void this.saveTaxonomy();
-		const list = container.createDiv({ cls: 'vermilion-tag-list' });
-		if (!this.taxonomy.categories.length) list.createDiv({ cls: 'vermilion-empty compact', text: '分类库为空，可以创建第一个分类。' });
-		for (const category of this.taxonomy.categories) this.renderCategoryRow(list, category);
-	}
-
-	private renderCategoryRow(container: HTMLElement, category: Category) {
-		const row = container.createDiv({ cls: 'vermilion-category-row' });
-		const identity = row.createDiv({ cls: 'vermilion-tag-identity' });
-		const name = identity.createEl('input', { type: 'text', value: category.name });
-		name.placeholder = '分类名称';
-		name.oninput = () => category.name = name.value;
-		const draftUsage = this.countDraftCategoryUsage(category.name);
-		const publishedUsage = this.categoryUsage[category.name] ?? 0;
-		identity.createEl('small', { text: this.usageLabel(draftUsage, publishedUsage) });
-		const description = row.createEl('input', { type: 'text', value: category.description });
-		description.placeholder = '告诉 AI 何时选择这个分类';
-		description.oninput = () => category.description = description.value;
-		const enabledLabel = row.createEl('label');
-		const enabled = enabledLabel.createEl('input', { type: 'checkbox' });
-		enabled.checked = category.enabled;
-		enabled.onchange = () => category.enabled = enabled.checked;
-		enabledLabel.appendText('启用');
-		const remove = row.createEl('button', { text: '删除' });
-		const effectiveUsage = draftUsage ?? (this.taxonomyUsageLoaded ? publishedUsage : null);
-		remove.disabled = effectiveUsage === null || effectiveUsage > 0;
-		remove.title = effectiveUsage === null ? '无法确认使用次数，已禁止删除。' : effectiveUsage > 0 ? '当前审核状态仍有文章使用该分类。' : '删除分类，并将相关文章加入本次发布';
-		remove.onclick = () => {
-			if (!this.taxonomy || !window.confirm(`确认删除分类“${category.name || '未命名分类'}”吗？`)) return;
-			this.selectArticlesAffectedByCategory(category.name);
-			this.taxonomy.categories = this.taxonomy.categories.filter((item) => item !== category);
-			this.render();
-		};
-	}
-
-	private renderTagList(container: HTMLElement) {
-		container.empty();
-		if (!this.taxonomy) return;
-		const query = this.tagSearch.trim().toLowerCase();
-		const tags = this.taxonomy.tags.filter((tag) => {
-			if (this.tagFilter === 'enabled' && !tag.enabled) return false;
-			if (this.tagFilter === 'disabled' && tag.enabled) return false;
-			return !query || [tag.name, tag.description, ...tag.aliases].some((value) => value.toLowerCase().includes(query));
-		});
-		if (!tags.length) {
-			container.createDiv({ cls: 'vermilion-empty compact', text: this.taxonomy.tags.length ? '没有符合条件的标签。' : '标签库为空，可以创建第一个标签。' });
-			return;
-		}
-		for (const tag of tags) this.renderTagRow(container, tag);
-	}
-
-	private renderTagRow(container: HTMLElement, tag: ManagedTag) {
-		const row = container.createDiv({ cls: 'vermilion-tag-row' });
-		const identity = row.createDiv({ cls: 'vermilion-tag-identity' });
-		const name = identity.createEl('input', { type: 'text', value: tag.name });
-		name.placeholder = '标签名称';
-		name.oninput = () => tag.name = name.value;
-		const draftUsage = this.countDraftTagUsage(tag.name);
-		const publishedUsage = this.taxonomyUsage[tag.name] ?? 0;
-		identity.createEl('small', { text: this.usageLabel(draftUsage, publishedUsage) });
-		const details = row.createDiv({ cls: 'vermilion-tag-details' });
-		const description = details.createEl('input', { type: 'text', value: tag.description });
-		description.placeholder = '告诉 AI 何时使用这个标签';
-		description.oninput = () => tag.description = description.value;
-		const aliases = details.createEl('input', { type: 'text', value: tag.aliases.join(', ') });
-		aliases.placeholder = '别名（逗号分隔）';
-		aliases.oninput = () => tag.aliases = aliases.value.split(/[,，]/).map((value) => value.trim()).filter(Boolean);
-		const switches = row.createDiv({ cls: 'vermilion-tag-switches' });
-		for (const [label, key] of [['启用', 'enabled'], ['允许 AI', 'aiSelectable']] as const) {
-			const wrapper = switches.createEl('label');
-			const checkbox = wrapper.createEl('input', { type: 'checkbox' });
-			checkbox.checked = tag[key];
-			checkbox.onchange = () => tag[key] = checkbox.checked;
-			wrapper.appendText(label);
-		}
-		const remove = row.createEl('button', { text: '删除' });
-		const effectiveUsage = draftUsage ?? (this.taxonomyUsageLoaded ? publishedUsage : null);
-		remove.disabled = effectiveUsage === null || effectiveUsage > 0;
-		remove.title = effectiveUsage === null ? '无法确认使用次数，已禁止删除。' : effectiveUsage > 0 ? '当前审核状态仍有文章使用该标签。' : '删除标签，并将相关文章加入本次发布';
-		remove.onclick = () => {
-			if (!this.taxonomy || !window.confirm(`确认删除标签“${tag.name || '未命名标签'}”吗？`)) return;
-			this.selectArticlesAffectedByTag(tag.name);
-			this.taxonomy.tags = this.taxonomy.tags.filter((item) => item !== tag);
-			this.render();
-		};
+		this.selectedTaxonomyItems.clear();
+		this.markTaxonomyDirty();
+		this.render();
+		new Notice(`批量操作完成：修改 ${changed} 项${blocked ? `，跳过 ${blocked} 项` : ''}。`);
 	}
 
 	private usageLabel(draftUsage: number | null, publishedUsage: number) {
@@ -533,6 +631,105 @@ export class ArticleManagerView extends ItemView {
 		if (added) new Notice(`已自动选择 ${added} 篇受分类“${name}”影响的文章，请确认保存后一起发布。`);
 	}
 
+	private suggestionEntries(): SuggestionEntry[] {
+		const entries: SuggestionEntry[] = [];
+		for (const { article, proposal } of this.collectProposals()) entries.push({ key: `tag:${article.id}:${proposal.name}`, kind: 'tag', article, proposal });
+		for (const { article, proposal } of this.collectCategoryProposals()) entries.push({ key: `category:${article.id}:${proposal.name}`, kind: 'category', article, proposal });
+		return entries;
+	}
+
+	private renderAISuggestions(container: HTMLElement) {
+		const section = container.createDiv({ cls: 'vermilion-taxonomy vermilion-suggestions' });
+		section.createEl('h3', { text: 'AI 建议审批' });
+		section.createEl('p', { text: '这里只审批 AI 提出的新分类和新标签。运行 AI 分析仍需在文章管理中主动点击。' });
+		const entries = this.suggestionEntries();
+		const tabs = section.createDiv({ cls: 'vermilion-taxonomy-tabs' });
+		for (const [label, value] of [['全部', 'all'], ['新标签', 'tags'], ['新分类', 'categories']] as const) {
+			const count = value === 'all' ? entries.length : entries.filter((entry) => entry.kind === (value === 'tags' ? 'tag' : 'category')).length;
+			const button = tabs.createEl('button', { text: `${label} (${count})`, cls: this.suggestionFilter === value ? 'mod-cta' : '' });
+			button.onclick = () => { this.suggestionFilter = value; this.selectedAISuggestions.clear(); this.render(); };
+		}
+		const filtered = entries.filter((entry) => this.suggestionFilter === 'all' || entry.kind === (this.suggestionFilter === 'tags' ? 'tag' : 'category'));
+		if (!filtered.length) {
+			section.createDiv({ cls: 'vermilion-empty', text: entries.length ? '当前筛选没有待审批建议。' : '目前没有 AI 提出的新分类或新标签。' });
+			return;
+		}
+		const bulk = section.createDiv({ cls: 'vermilion-bulk-bar' });
+		const selectAll = bulk.createEl('input', { type: 'checkbox' });
+		selectAll.checked = filtered.every((entry) => this.selectedAISuggestions.has(entry.key));
+		selectAll.indeterminate = filtered.some((entry) => this.selectedAISuggestions.has(entry.key)) && !selectAll.checked;
+		selectAll.onchange = () => {
+			for (const entry of filtered) selectAll.checked ? this.selectedAISuggestions.add(entry.key) : this.selectedAISuggestions.delete(entry.key);
+			this.render();
+		};
+		bulk.createSpan({ text: `全选当前结果 · 已选择 ${this.selectedAISuggestions.size} 项` });
+		const approveAll = bulk.createEl('button', { text: '批量批准', cls: 'mod-cta' });
+		approveAll.disabled = this.selectedAISuggestions.size === 0;
+		approveAll.onclick = () => void this.applySuggestionBulkAction('approve');
+		const rejectAll = bulk.createEl('button', { text: '批量拒绝' });
+		rejectAll.disabled = this.selectedAISuggestions.size === 0;
+		rejectAll.onclick = () => void this.applySuggestionBulkAction('reject');
+
+		const table = section.createDiv({ cls: 'vermilion-suggestion-table' });
+		const header = table.createDiv({ cls: 'vermilion-suggestion-row is-header' });
+		for (const label of ['选择', '类型', '建议名称', '来源与理由', '替换为已有项目', '操作']) header.createSpan({ text: label });
+		for (const entry of filtered) this.renderSuggestionRow(table, entry);
+	}
+
+	private renderSuggestionRow(container: HTMLElement, entry: SuggestionEntry) {
+		const row = container.createDiv({ cls: 'vermilion-suggestion-row' });
+		const selected = row.createEl('input', { type: 'checkbox' });
+		selected.checked = this.selectedAISuggestions.has(entry.key);
+		selected.onchange = () => { selected.checked ? this.selectedAISuggestions.add(entry.key) : this.selectedAISuggestions.delete(entry.key); this.render(); };
+		row.createSpan({ text: entry.kind === 'tag' ? '标签' : '分类', cls: 'vermilion-type-badge' });
+		row.createEl('strong', { text: entry.proposal.name });
+		const source = row.createDiv({ cls: 'vermilion-suggestion-source' });
+		source.createSpan({ text: entry.article.metadata.title || entry.article.filename });
+		source.createEl('small', { text: entry.proposal.reason || '未提供理由' });
+		const replacement = row.createEl('select');
+		replacement.createEl('option', { text: '选择已有项目', value: '' });
+		if (entry.kind === 'tag') {
+			for (const tag of this.taxonomy?.tags.filter((item) => item.enabled) ?? []) replacement.createEl('option', { text: tag.name, value: tag.name });
+		} else {
+			for (const category of this.taxonomy?.categories.filter((item) => item.enabled) ?? []) replacement.createEl('option', { text: category.name, value: category.name });
+		}
+		const actions = row.createDiv({ cls: 'vermilion-row-actions' });
+		actions.createEl('button', { text: '批准', cls: 'mod-cta' }).onclick = () => void this.approveSuggestionEntry(entry);
+		const replace = actions.createEl('button', { text: '替换' });
+		replace.disabled = replacement.options.length <= 1;
+		replace.onclick = () => {
+			if (!replacement.value) { new Notice('请先选择一个已有项目。'); return; }
+			this.selectedAISuggestions.delete(entry.key);
+			if (entry.kind === 'tag') this.resolveProposal(entry.article, entry.proposal.name, replacement.value);
+			else this.resolveCategoryProposal(entry.article, replacement.value);
+		};
+		actions.createEl('button', { text: '拒绝' }).onclick = () => {
+			this.selectedAISuggestions.delete(entry.key);
+			if (entry.kind === 'tag') this.resolveProposal(entry.article, entry.proposal.name);
+			else this.resolveCategoryProposal(entry.article);
+		};
+	}
+
+	private async approveSuggestionEntry(entry: SuggestionEntry) {
+		if (entry.kind === 'tag') await this.approveProposedTag(entry.article, entry.proposal.name);
+		else await this.approveProposedCategory(entry.article, entry.proposal as ProposedCategory);
+		this.selectedAISuggestions.delete(entry.key);
+	}
+
+	private async applySuggestionBulkAction(action: 'approve' | 'reject') {
+		const entries = this.suggestionEntries().filter((entry) => this.selectedAISuggestions.has(entry.key));
+		if (!entries.length) return;
+		if (!window.confirm(`${action === 'approve' ? '批准' : '拒绝'}所选 ${entries.length} 条 AI 建议吗？`)) return;
+		for (const entry of entries) {
+			if (action === 'approve') await this.approveSuggestionEntry(entry);
+			else if (entry.kind === 'tag') this.resolveProposal(entry.article, entry.proposal.name);
+			else this.resolveCategoryProposal(entry.article);
+		}
+		this.selectedAISuggestions.clear();
+		this.render();
+		new Notice(`已${action === 'approve' ? '批准' : '拒绝'} ${entries.length} 条 AI 建议。`);
+	}
+
 	private collectProposals(): Array<{ article: ArticleDraft; proposal: ProposedTag }> {
 		const result: Array<{ article: ArticleDraft; proposal: ProposedTag }> = [];
 		for (const article of this.job?.articles ?? []) {
@@ -553,7 +750,7 @@ export class ArticleManagerView extends ItemView {
 		if (!this.taxonomy) return;
 		let category = this.taxonomy.categories.find((item) => item.name.toLowerCase() === proposal.name.toLowerCase());
 		if (!category) {
-			category = { id: '', name: proposal.name, description: proposal.reason, enabled: true };
+			category = { id: '', name: proposal.name, description: proposal.reason, enabled: true, aiSelectable: true };
 			this.taxonomy.categories.push(category);
 			if (!await this.saveTaxonomy(false)) return;
 		}
@@ -575,26 +772,6 @@ export class ArticleManagerView extends ItemView {
 		void this.cacheAISuggestion(article);
 		this.render();
 		new Notice(replacement ? `已将“${proposedName}”替换为“${replacement}”。` : `已拒绝新分类“${proposedName}”。`);
-	}
-
-	private renderProposalQueue(container: HTMLElement) {
-		const proposals = this.collectProposals();
-		if (!proposals.length) return;
-		const box = container.createDiv({ cls: 'vermilion-proposal-queue' });
-		box.createEl('h4', { text: 'AI 新标签待审批' });
-		for (const { article, proposal } of proposals) {
-			const row = box.createDiv({ cls: 'vermilion-proposal-review' });
-			const description = row.createDiv();
-			description.createEl('strong', { text: proposal.name });
-			description.createEl('small', { text: `${article.metadata.title || article.filename} · ${proposal.reason || '未提供理由'}` });
-			const replacement = row.createEl('select');
-			for (const tag of this.taxonomy?.tags.filter((item) => item.enabled) ?? []) replacement.createEl('option', { text: tag.name, value: tag.name });
-			row.createEl('button', { text: '批准' }).onclick = () => void this.approveProposedTag(article, proposal.name);
-			const replace = row.createEl('button', { text: '替换' });
-			replace.disabled = replacement.options.length === 0;
-			replace.onclick = () => this.resolveProposal(article, proposal.name, replacement.value);
-			row.createEl('button', { text: '拒绝' }).onclick = () => this.resolveProposal(article, proposal.name);
-		}
 	}
 
 	private resolveProposal(article: ArticleDraft, proposedName: string, replacement?: string) {
@@ -627,6 +804,10 @@ export class ArticleManagerView extends ItemView {
 
 	private async saveTaxonomy(notify = true) {
 		if (!this.taxonomy) return false;
+		this.taxonomy.version = Math.max(2, this.taxonomy.version || 0);
+		for (const item of [...this.taxonomy.categories, ...this.taxonomy.tags]) {
+			if (!item.enabled) item.aiSelectable = false;
+		}
 		const names = this.taxonomy.tags.map((tag) => tag.name.trim());
 		if (names.some((name) => !name)) {
 			new Notice('标签名称不能为空。');
@@ -649,6 +830,11 @@ export class ArticleManagerView extends ItemView {
 		}
 		try {
 			this.taxonomy = await this.plugin.api.saveTaxonomy(this.taxonomy);
+			this.taxonomyBaseline = JSON.stringify(this.taxonomy);
+			this.taxonomyDirty = false;
+			this.selectedTaxonomyItems.clear();
+			this.taxonomyOriginalNames = new WeakMap<TaxonomyItem, string>();
+			for (const item of [...this.taxonomy.categories, ...this.taxonomy.tags]) this.taxonomyOriginalNames.set(item, item.name);
 			try {
 				const usage = await this.plugin.api.getTaxonomyUsage();
 				this.taxonomyUsage = usage.tags ?? {};
@@ -662,7 +848,7 @@ export class ArticleManagerView extends ItemView {
 			this.render();
 			return true;
 		} catch (error) {
-			new Notice(`保存标签库失败：${describeApiError(error)}`);
+			new Notice(`保存分类体系失败：${describeApiError(error)}`);
 			return false;
 		}
 	}

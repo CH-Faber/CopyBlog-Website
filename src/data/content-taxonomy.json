@@ -1,23 +1,26 @@
 {
-  "version": 1,
+  "version": 2,
   "categories": [
     {
       "id": "category-0feae16d5536",
       "name": "General",
       "description": "",
-      "enabled": true
+      "enabled": true,
+      "aiSelectable": true
     },
     {
       "id": "category-8cf0105d35ee",
       "name": "思考",
       "description": "",
-      "enabled": true
+      "enabled": true,
+      "aiSelectable": true
     },
     {
       "id": "category-041baf3756ee",
       "name": "随笔",
       "description": "",
-      "enabled": true
+      "enabled": true,
+      "aiSelectable": true
     }
   ],
   "tags": []
