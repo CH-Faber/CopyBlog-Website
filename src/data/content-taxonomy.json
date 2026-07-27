@@ -2,26 +2,71 @@
   "version": 2,
   "categories": [
     {
-      "id": "category-0feae16d5536",
-      "name": "General",
-      "description": "",
+      "id": "category-8cf0105d35ee",
+      "name": "思考",
+      "description": "当你看到作者已经对某些人，物，事进行了深入的剖析以及思考，那么可以使用这个分类",
       "enabled": true,
       "aiSelectable": true
     },
     {
-      "id": "category-8cf0105d35ee",
-      "name": "思考",
-      "description": "",
+      "id": "category-0feae16d5536",
+      "name": "杂",
+      "description": "当你实在不知道怎么分的时候，你可以考虑这个分类",
+      "enabled": true,
+      "aiSelectable": true
+    },
+    {
+      "id": "category-b778e307964f",
+      "name": "笔记",
+      "description": "有些时候作者会发布自己的上课的笔记或者一些心得体会，经验分享等等，我们可以使用这个分类",
+      "enabled": true,
+      "aiSelectable": true
+    },
+    {
+      "id": "category-a009e1ec8fdf",
+      "name": "虚构",
+      "description": "作者可能会写小说或者使用一些荒诞叙事，当你认为存在这样的情况的时候，使用虚构分类",
       "enabled": true,
       "aiSelectable": true
     },
     {
       "id": "category-041baf3756ee",
       "name": "随笔",
-      "description": "",
+      "description": "当作者是随便的写了一些小文章，发表了一下自己的小感想，那么我们可以或者说是记住了一些事件，我们可以把它归类为随笔",
       "enabled": true,
       "aiSelectable": true
     }
   ],
-  "tags": []
+  "tags": [
+    {
+      "id": "tag-2c56afdd8aa6",
+      "name": "Vibe Coding",
+      "aliases": [],
+      "description": "",
+      "enabled": true,
+      "aiSelectable": true,
+      "createdAt": "2026-07-27T17:53:41Z",
+      "updatedAt": "2026-07-27T17:54:26Z"
+    },
+    {
+      "id": "tag-d4b0a965ab49",
+      "name": "个人经历",
+      "aliases": [],
+      "description": "",
+      "enabled": true,
+      "aiSelectable": true,
+      "createdAt": "2026-07-27T17:54:07Z",
+      "updatedAt": "2026-07-27T17:54:26Z"
+    },
+    {
+      "id": "tag-1d4560395d39",
+      "name": "大学生实习",
+      "aliases": [],
+      "description": "",
+      "enabled": true,
+      "aiSelectable": true,
+      "createdAt": "2026-07-27T17:54:08Z",
+      "updatedAt": "2026-07-27T17:54:26Z"
+    }
+  ]
 }
