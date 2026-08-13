@@ -46,7 +46,7 @@
       "enabled": true,
       "aiSelectable": true,
       "createdAt": "2026-07-27T17:53:41Z",
-      "updatedAt": "2026-07-27T17:54:26Z"
+      "updatedAt": "2026-08-13T17:03:55Z"
     },
     {
       "id": "tag-d4b0a965ab49",
@@ -56,7 +56,17 @@
       "enabled": true,
       "aiSelectable": true,
       "createdAt": "2026-07-27T17:54:07Z",
-      "updatedAt": "2026-07-27T17:54:26Z"
+      "updatedAt": "2026-08-13T17:03:55Z"
+    },
+    {
+      "id": "tag-6a3f05181870",
+      "name": "反抗",
+      "aliases": [],
+      "description": "",
+      "enabled": true,
+      "aiSelectable": true,
+      "createdAt": "2026-08-13T17:03:45Z",
+      "updatedAt": "2026-08-13T17:03:55Z"
     },
     {
       "id": "tag-1d4560395d39",
@@ -66,7 +76,17 @@
       "enabled": true,
       "aiSelectable": true,
       "createdAt": "2026-07-27T17:54:08Z",
-      "updatedAt": "2026-07-27T17:54:26Z"
+      "updatedAt": "2026-08-13T17:03:55Z"
+    },
+    {
+      "id": "tag-6125f086d05d",
+      "name": "滑板",
+      "aliases": [],
+      "description": "",
+      "enabled": true,
+      "aiSelectable": true,
+      "createdAt": "2026-08-13T17:03:45Z",
+      "updatedAt": "2026-08-13T17:03:55Z"
     }
   ]
 }
