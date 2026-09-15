@@ -18,6 +18,7 @@ import (
 	"gosync/builder"
 	"gosync/config"
 	"gosync/contentmodel"
+	"gosync/media"
 	"gosync/s3sync"
 	"gosync/taxonomy"
 )
@@ -162,6 +163,12 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 		m.fail(jobID, err)
 		return
 	}
+	imageObjects, err := m.syncer.ListImageObjects()
+	if err != nil {
+		m.fail(jobID, err)
+		return
+	}
+	imageIndex := media.NewIndex(imageObjects)
 	m.setStatus(jobID, StatusAnalyzing, 30, "正在解析文章并生成 AI 建议")
 
 	values, err := taxonomy.Load(m.cfg)
@@ -207,6 +214,22 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 		}
 		contentmodel.EnsureDefaults(&doc, filename, modified)
 		sourceHash := contentmodel.HashBytes(data)
+		publishedDoc := doc
+		publishedContent, referencedAssets, imageErr := imageIndex.RewriteDocument(doc.Content, pathJoinS3(m.cfg.S3Prefix, filename))
+		publishedDoc.Content = publishedContent
+		if strings.TrimSpace(doc.Metadata.Image) != "" && !isPublishedImageURL(doc.Metadata.Image) {
+			cover, coverErr := imageIndex.Resolve(doc.Metadata.Image, pathJoinS3(m.cfg.S3Prefix, filename))
+			if coverErr != nil {
+				if imageErr == nil {
+					imageErr = fmt.Errorf("封面图片无效: %w", coverErr)
+				} else {
+					imageErr = fmt.Errorf("%v; 封面图片无效: %w", imageErr, coverErr)
+				}
+			} else {
+				publishedDoc.Metadata.Image = cover.PublicURL
+				referencedAssets = appendAsset(referencedAssets, cover)
+			}
+		}
 
 		originalDoc := contentmodel.Document{Metadata: contentmodel.ArticleMetadata{Tags: []string{}}, Content: ""}
 		originalHash := ""
@@ -216,7 +239,7 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 			status = ArticleModified
 			if parsed, parsedErr := contentmodel.Parse(string(published)); parsedErr == nil {
 				originalDoc = parsed
-				if equivalent, compareErr := contentmodel.EquivalentDocuments(doc, originalDoc); compareErr == nil && equivalent {
+				if equivalent, compareErr := contentmodel.EquivalentDocuments(publishedDoc, originalDoc); compareErr == nil && equivalent {
 					status = ArticleUnchanged
 				}
 			}
@@ -224,13 +247,20 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 
 		var suggestion *ai.Suggestion
 		articleError := ""
+		if imageErr != nil {
+			articleError = imageErr.Error()
+			status = ArticleConflict
+		}
 		// Current Obsidian clients run AI locally so their provider key never reaches this service.
 		// Legacy clients retain the server-side generator until they are migrated.
 		needsAI := clientID != "obsidian" && (status == ArticleNew || strings.TrimSpace(doc.Metadata.Description) == "" || strings.TrimSpace(doc.Metadata.Category) == "" || len(doc.Metadata.Tags) == 0)
 		if needsAI {
 			suggestion, err = m.generator.SuggestMetadata(filename, doc.Content, values)
 			if err != nil {
-				articleError = "AI 处理失败: " + err.Error()
+				if articleError != "" {
+					articleError += "; "
+				}
+				articleError += "AI 处理失败: " + err.Error()
 				suggestion = &ai.Suggestion{SelectedTags: []string{}, ProposedTags: []ai.ProposedTag{}}
 			}
 			if doc.Metadata.Description == "" {
@@ -244,7 +274,7 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 			}
 		}
 		currentHash, _ := contentmodel.HashDocument(doc)
-		article := &ArticleDraft{ID: articleID(filename), Path: filename, Filename: filename, Status: status, Metadata: doc.Metadata, Content: doc.Content, OriginalMetadata: originalDoc.Metadata, OriginalContent: originalDoc.Content, AISuggestion: suggestion, SourceHash: sourceHash, OriginalHash: originalHash, ClientHash: clientHashes[strings.ToLower(filename)], CurrentHash: currentHash, Revision: 1, Error: articleError}
+		article := &ArticleDraft{ID: articleID(filename), Path: filename, Filename: filename, Status: status, Metadata: doc.Metadata, Content: doc.Content, OriginalMetadata: originalDoc.Metadata, OriginalContent: originalDoc.Content, AISuggestion: suggestion, SourceHash: sourceHash, OriginalHash: originalHash, ClientHash: clientHashes[strings.ToLower(filename)], CurrentHash: currentHash, Revision: 1, Error: articleError, Assets: referencedAssets}
 		articles = append(articles, article)
 		progress := 30
 		if len(eligible) > 0 {
@@ -305,6 +335,7 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 	}
 	files := map[string]*[]byte{}
 	expected := map[string]string{}
+	assetsToDownload := map[string]media.PublishedAsset{}
 	publishedTitles := []string{}
 	for _, article := range job.Articles {
 		item, include := selected[article.ID]
@@ -314,6 +345,10 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 		if article.Revision != item.Revision || article.CurrentHash != item.Hash {
 			m.mu.Unlock()
 			return nil, ErrConflict
+		}
+		if article.Status == ArticleConflict {
+			m.mu.Unlock()
+			return nil, fmt.Errorf("文章 %s 存在未解决的图片或内容冲突: %s", article.Metadata.Title, article.Error)
 		}
 		if article.Status == ArticleDeleted {
 			files[article.Filename] = nil
@@ -336,7 +371,27 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 			return nil, fmt.Errorf("文章 %s 的分类尚未批准或已停用: %s", article.Metadata.Title, article.Metadata.Category)
 		}
 		article.Metadata.Category = category
-		data, serializeErr := contentmodel.Serialize(contentmodel.Document{Metadata: article.Metadata, Content: article.Content})
+		approvedAssets := media.NewIndex(assetObjects(article.Assets))
+		publishedContent, usedAssets, imageErr := approvedAssets.RewriteDocument(article.Content, pathJoinS3(m.cfg.S3Prefix, article.Filename))
+		if imageErr != nil {
+			m.mu.Unlock()
+			return nil, fmt.Errorf("文章 %s 的图片引用在审核后发生变化，请重新创建同步任务: %w", article.Metadata.Title, imageErr)
+		}
+		publishedMetadata := article.Metadata
+		if strings.TrimSpace(publishedMetadata.Image) != "" && !isPublishedImageURL(publishedMetadata.Image) {
+			cover, coverErr := approvedAssets.Resolve(publishedMetadata.Image, pathJoinS3(m.cfg.S3Prefix, article.Filename))
+			if coverErr != nil {
+				m.mu.Unlock()
+				return nil, fmt.Errorf("文章 %s 的封面图片无法发布，请重新创建同步任务: %w", article.Metadata.Title, coverErr)
+			}
+			publishedMetadata.Image = cover.PublicURL
+			usedAssets = appendAsset(usedAssets, cover)
+		}
+		for _, asset := range usedAssets {
+			key := builder.ProjectFilePrefix + "public" + asset.PublicURL
+			assetsToDownload[key] = asset
+		}
+		data, serializeErr := contentmodel.Serialize(contentmodel.Document{Metadata: publishedMetadata, Content: publishedContent})
 		if serializeErr != nil {
 			m.mu.Unlock()
 			return nil, serializeErr
@@ -361,13 +416,24 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 	_ = m.saveLocked(job)
 	m.mu.Unlock()
 
+	for key, asset := range assetsToDownload {
+		data, downloadErr := m.syncer.DownloadImage(asset.SourceKey, asset.ETag)
+		if downloadErr != nil {
+			m.fail(jobID, downloadErr)
+			return nil, downloadErr
+		}
+		imageData := data
+		files[key] = &imageData
+		expected[key] = ""
+	}
+
 	if request.IncludeTaxonomy {
 		data, taxonomyErr := taxonomy.PublishedJSON(values)
 		if taxonomyErr != nil {
 			m.fail(jobID, taxonomyErr)
 			return nil, taxonomyErr
 		}
-		files["../../data/content-taxonomy.json"] = &data
+		files[builder.ProjectFilePrefix+"src/data/content-taxonomy.json"] = &data
 	}
 	message := fmt.Sprintf("Publish %d approved posts from Obsidian", len(request.Articles))
 	sha, publishErr := builder.PublishFiles(m.cfg, files, expected, message)
@@ -391,6 +457,37 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 	m.mu.Unlock()
 	_ = publishedTitles
 	return &PublishResponse{CommitSHA: sha}, nil
+}
+
+func pathJoinS3(prefix, filename string) string {
+	prefix = strings.Trim(strings.ReplaceAll(prefix, `\`, "/"), "/")
+	filename = strings.TrimLeft(strings.ReplaceAll(filename, `\`, "/"), "/")
+	if prefix == "" {
+		return filename
+	}
+	return prefix + "/" + filename
+}
+
+func isPublishedImageURL(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") || strings.HasPrefix(value, "data:") || strings.HasPrefix(value, "/")
+}
+
+func appendAsset(values []media.PublishedAsset, candidate media.PublishedAsset) []media.PublishedAsset {
+	for _, value := range values {
+		if value.PublicURL == candidate.PublicURL {
+			return values
+		}
+	}
+	return append(values, candidate)
+}
+
+func assetObjects(values []media.PublishedAsset) []media.Object {
+	objects := make([]media.Object, 0, len(values))
+	for _, value := range values {
+		objects = append(objects, media.Object{Key: value.SourceKey, ETag: value.ETag})
+	}
+	return objects
 }
 
 // validateFinalTaxonomyState overlays the selected review changes on the currently

@@ -13,6 +13,8 @@ import (
 	"gosync/config"
 )
 
+const ProjectFilePrefix = "@project/"
+
 func runCommand(dir string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
@@ -37,6 +39,22 @@ func fileHash(path string) (string, bool, error) {
 }
 
 func approvedPath(cfg *config.Config, name string) (string, string, error) {
+	if strings.HasPrefix(filepath.ToSlash(name), ProjectFilePrefix) {
+		rel := strings.TrimPrefix(filepath.ToSlash(name), ProjectFilePrefix)
+		target := filepath.Clean(filepath.Join(cfg.ProjectRootDir, filepath.FromSlash(rel)))
+		projectRel, err := filepath.Rel(filepath.Clean(cfg.ProjectRootDir), target)
+		if err != nil || projectRel == "." || filepath.IsAbs(projectRel) || strings.HasPrefix(projectRel, ".."+string(filepath.Separator)) {
+			return "", "", fmt.Errorf("publish path is outside the project root: %s", name)
+		}
+		assetRoot := filepath.Clean(filepath.Join(cfg.ProjectRootDir, "public", "obsidian-assets"))
+		assetRel, _ := filepath.Rel(assetRoot, target)
+		isAsset := assetRel != "." && !filepath.IsAbs(assetRel) && !strings.HasPrefix(assetRel, ".."+string(filepath.Separator))
+		taxonomyPath := filepath.Clean(filepath.Join(cfg.ProjectRootDir, "src", "data", "content-taxonomy.json"))
+		if !isAsset && target != taxonomyPath {
+			return "", "", fmt.Errorf("publish path is outside the approved project roots: %s", name)
+		}
+		return target, filepath.ToSlash(projectRel), nil
+	}
 	postsRoot := filepath.Clean(cfg.LocalPostsDir)
 	target := filepath.Clean(filepath.Join(postsRoot, name))
 	rel, err := filepath.Rel(cfg.ProjectRootDir, target)

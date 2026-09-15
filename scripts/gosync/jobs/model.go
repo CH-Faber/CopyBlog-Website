@@ -3,6 +3,7 @@ package jobs
 import (
 	"gosync/ai"
 	"gosync/contentmodel"
+	"gosync/media"
 )
 
 type Status string
@@ -56,6 +57,7 @@ type ArticleDraft struct {
 	CurrentHash      string                       `json:"currentHash"`
 	Revision         int                          `json:"revision"`
 	Error            string                       `json:"error,omitempty"`
+	Assets           []media.PublishedAsset       `json:"assets,omitempty"`
 }
 
 type Job struct {

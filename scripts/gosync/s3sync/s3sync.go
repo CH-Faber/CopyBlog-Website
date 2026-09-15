@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"gosync/config"
+	"gosync/media"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -22,6 +23,63 @@ type S3Syncer struct {
 	client        *s3.Client
 	cfg           *config.Config
 	downloadCount int
+}
+
+const maxPublishedImageBytes int64 = 50 << 20
+
+// ListImageObjects returns metadata only. Images are downloaded later, and
+// only when an explicitly approved article actually references them.
+func (s *S3Syncer) ListImageObjects() ([]media.Object, error) {
+	ctx := context.TODO()
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.cfg.S3BucketName),
+	})
+	objects := []media.Object{}
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list image objects: %w", err)
+		}
+		for _, object := range page.Contents {
+			key := aws.ToString(object.Key)
+			if media.IsImageKey(key) {
+				objects = append(objects, media.Object{Key: key, ETag: strings.Trim(aws.ToString(object.ETag), `"`)})
+			}
+		}
+	}
+	return objects, nil
+}
+
+// DownloadImage verifies that the reviewed S3 object has not changed and caps
+// memory use before returning bytes for the website's public asset directory.
+func (s *S3Syncer) DownloadImage(key, expectedETag string) ([]byte, error) {
+	if !media.IsImageKey(key) {
+		return nil, fmt.Errorf("refusing to download unsupported image object: %s", key)
+	}
+	out, err := s.client.GetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket: aws.String(s.cfg.S3BucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("download image %s: %w", key, err)
+	}
+	defer out.Body.Close()
+	actualETag := strings.Trim(aws.ToString(out.ETag), `"`)
+	expectedETag = strings.Trim(strings.TrimSpace(expectedETag), `"`)
+	if expectedETag != "" && actualETag != "" && actualETag != expectedETag {
+		return nil, fmt.Errorf("image changed after review started, please create a new sync task: %s", key)
+	}
+	if out.ContentLength != nil && *out.ContentLength > maxPublishedImageBytes {
+		return nil, fmt.Errorf("image exceeds the 50 MiB publish limit: %s", key)
+	}
+	data, err := io.ReadAll(io.LimitReader(out.Body, maxPublishedImageBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read image %s: %w", key, err)
+	}
+	if int64(len(data)) > maxPublishedImageBytes {
+		return nil, fmt.Errorf("image exceeds the 50 MiB publish limit: %s", key)
+	}
+	return data, nil
 }
 
 func NewS3Syncer(cfg *config.Config) (*S3Syncer, error) {
