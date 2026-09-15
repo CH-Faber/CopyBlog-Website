@@ -189,3 +189,123 @@ const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#hom
     </footer>
   </div>
 </main>
+
+<dialog id="article-lightbox" class="article-lightbox" aria-label="图片查看器">
+  <div class="article-lightbox-shell">
+    <button type="button" class="article-lightbox-close" data-lightbox-action="close" aria-label="关闭图片查看器">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 6l12 12M18 6 6 18" />
+      </svg>
+    </button>
+
+    <button type="button" class="article-lightbox-nav article-lightbox-prev" data-lightbox-action="prev" aria-label="上一张图片">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+    </button>
+
+    <div class="article-lightbox-stage">
+      <img class="article-lightbox-image" alt="" />
+      <div class="article-lightbox-meta">
+        <p class="article-lightbox-caption"></p>
+        <span class="article-lightbox-counter" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <button type="button" class="article-lightbox-nav article-lightbox-next" data-lightbox-action="next" aria-label="下一张图片">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m9 18 6-6-6-6" />
+      </svg>
+    </button>
+  </div>
+</dialog>
+
+<script>
+  type ArticleLightboxGlobal = typeof globalThis & {
+    __articleLightboxInstalled?: boolean
+    __articleLightboxIndex?: number
+  }
+
+  const lightboxGlobal = globalThis as ArticleLightboxGlobal
+
+  const getDialog = () => document.querySelector<HTMLDialogElement>("#article-lightbox")
+  const getTriggers = () => Array.from(document.querySelectorAll<HTMLButtonElement>("article.prose [data-article-image]"))
+
+  const closeLightbox = () => {
+    const dialog = getDialog()
+    if (!dialog) return
+    if (dialog.open && typeof dialog.close === "function") dialog.close()
+    else dialog.removeAttribute("open")
+    document.documentElement.classList.remove("article-lightbox-open")
+    const image = dialog.querySelector<HTMLImageElement>(".article-lightbox-image")
+    image?.removeAttribute("src")
+  }
+
+  const openImage = (requestedIndex: number) => {
+    const dialog = getDialog()
+    const triggers = getTriggers()
+    if (!dialog || triggers.length === 0) return
+
+    const index = ((requestedIndex % triggers.length) + triggers.length) % triggers.length
+    const trigger = triggers[index]
+    const image = dialog.querySelector<HTMLImageElement>(".article-lightbox-image")
+    const caption = dialog.querySelector<HTMLElement>(".article-lightbox-caption")
+    const counter = dialog.querySelector<HTMLElement>(".article-lightbox-counter")
+    const navigation = dialog.querySelectorAll<HTMLButtonElement>(".article-lightbox-nav")
+    const sourceImage = trigger.querySelector<HTMLImageElement>("img")
+    const label = trigger.dataset.imageCaption?.trim() || sourceImage?.alt.trim() || ""
+
+    if (!image || !caption || !counter) return
+    lightboxGlobal.__articleLightboxIndex = index
+    image.src = trigger.dataset.imageSrc || sourceImage?.currentSrc || sourceImage?.src || ""
+    image.alt = sourceImage?.alt || label
+    caption.textContent = label
+    caption.hidden = !label
+    counter.textContent = triggers.length > 1 ? `${index + 1} / ${triggers.length}` : ""
+    navigation.forEach((button) => { button.hidden = triggers.length < 2 })
+
+    if (!dialog.open) {
+      if (typeof dialog.showModal === "function") dialog.showModal()
+      else dialog.setAttribute("open", "")
+      document.documentElement.classList.add("article-lightbox-open")
+    }
+  }
+
+  if (!lightboxGlobal.__articleLightboxInstalled) {
+    lightboxGlobal.__articleLightboxInstalled = true
+
+    document.addEventListener("click", (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      const trigger = target.closest<HTMLButtonElement>("[data-article-image]")
+      if (trigger) {
+        const index = getTriggers().indexOf(trigger)
+        if (index >= 0) openImage(index)
+        return
+      }
+
+      const action = target.closest<HTMLButtonElement>("[data-lightbox-action]")?.dataset.lightboxAction
+      if (action) {
+        if (action === "close") closeLightbox()
+        if (action === "prev") openImage((lightboxGlobal.__articleLightboxIndex ?? 0) - 1)
+        if (action === "next") openImage((lightboxGlobal.__articleLightboxIndex ?? 0) + 1)
+        return
+      }
+
+      const dialog = getDialog()
+      const clickedBackdrop = target === dialog
+        || Boolean(target.closest(".article-lightbox-shell") && !target.closest(".article-lightbox-image, .article-lightbox-meta"))
+      if (dialog && clickedBackdrop) closeLightbox()
+    })
+
+    document.addEventListener("keydown", (event) => {
+      if (!getDialog()?.open) return
+      if (event.key === "Escape") closeLightbox()
+      if (event.key === "ArrowLeft") openImage((lightboxGlobal.__articleLightboxIndex ?? 0) - 1)
+      if (event.key === "ArrowRight") openImage((lightboxGlobal.__articleLightboxIndex ?? 0) + 1)
+    })
+
+    document.addEventListener("astro:before-swap", closeLightbox)
+  }
+</script>

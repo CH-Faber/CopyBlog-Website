@@ -26,6 +26,9 @@ func TestRewriteDocument(t *testing.T) {
 	if !strings.Contains(output, "![回家路上的晚霞](/obsidian-assets/") {
 		t.Fatalf("alias was not preserved: %s", output)
 	}
+	if !strings.Contains(output, ` "回家路上的晚霞")`) {
+		t.Fatalf("alias was not retained as a visible caption: %s", output)
+	}
 	if !strings.Contains(output, "![Pasted image](/obsidian-assets/") {
 		t.Fatalf("numeric width should fall back to filename alt text: %s", output)
 	}
@@ -59,6 +62,9 @@ func TestRewriteMarkdownDestinationWithTitle(t *testing.T) {
 	}
 	if !strings.HasPrefix(output, "![晚霞](/obsidian-assets/") || len(assets) != 1 {
 		t.Fatalf("Markdown destination with a title was not rewritten: %s", output)
+	}
+	if !strings.Contains(output, ` "标题")`) {
+		t.Fatalf("Markdown image title was not preserved: %s", output)
 	}
 }
 

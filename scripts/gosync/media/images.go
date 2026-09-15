@@ -215,8 +215,10 @@ func (index *Index) RewriteDocument(content, articleKey string) (string, []Publi
 					return match
 				}
 				alt := strings.TrimSuffix(path.Base(cleanTarget(target)), path.Ext(cleanTarget(target)))
+				caption := ""
 				if len(pieces) == 2 && strings.TrimSpace(pieces[1]) != "" && !allDigits(strings.TrimSpace(pieces[1])) {
 					alt = strings.TrimSpace(pieces[1])
+					caption = alt
 				}
 				asset, err := index.Resolve(target, articleKey)
 				if err != nil {
@@ -224,7 +226,7 @@ func (index *Index) RewriteDocument(content, articleKey string) (string, []Publi
 					return match
 				}
 				assets[asset.PublicURL] = asset
-				return "![" + escapeAlt(alt) + "](" + asset.PublicURL + ")"
+				return markdownImage(alt, asset.PublicURL, caption)
 			})
 
 			return markdownImagePattern.ReplaceAllStringFunc(segment, func(match string) string {
@@ -232,7 +234,7 @@ func (index *Index) RewriteDocument(content, articleKey string) (string, []Publi
 				if len(parts) != 3 {
 					return match
 				}
-				rawDestination := markdownDestination(parts[2])
+				rawDestination, title := markdownDestination(parts[2])
 				if isRemoteOrAbsolute(rawDestination) {
 					return match
 				}
@@ -242,7 +244,7 @@ func (index *Index) RewriteDocument(content, articleKey string) (string, []Publi
 					return match
 				}
 				assets[asset.PublicURL] = asset
-				return "![" + parts[1] + "](" + asset.PublicURL + ")"
+				return markdownImage(parts[1], asset.PublicURL, title)
 			})
 		})
 		lines[lineIndex] = line
@@ -297,21 +299,45 @@ func rewriteOutsideInlineCode(line string, rewrite func(string) string) string {
 	return result.String()
 }
 
-func markdownDestination(value string) string {
+func markdownDestination(value string) (string, string) {
 	value = strings.TrimSpace(value)
 	if strings.HasPrefix(value, "<") {
 		if end := strings.Index(value, ">"); end > 0 {
-			return strings.TrimSpace(value[1:end])
+			return strings.TrimSpace(value[1:end]), markdownTitle(value[end+1:])
 		}
 	}
 	// A Markdown title follows the destination after whitespace and a quote.
 	// Keep spaces in ordinary Obsidian filenames such as "Pasted image.png".
 	for _, marker := range []string{` "`, ` '`, " ("} {
 		if index := strings.Index(value, marker); index > 0 {
-			return strings.TrimSpace(value[:index])
+			return strings.TrimSpace(value[:index]), markdownTitle(value[index+1:])
 		}
 	}
-	return value
+	return value, ""
+}
+
+func markdownTitle(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) >= 2 {
+		first, last := value[0], value[len(value)-1]
+		if (first == '"' && last == '"') || (first == '\'' && last == '\'') || (first == '(' && last == ')') {
+			value = value[1 : len(value)-1]
+		}
+	}
+	return strings.TrimSpace(value)
+}
+
+func markdownImage(alt, destination, title string) string {
+	result := "![" + escapeAlt(alt) + "](" + destination
+	if strings.TrimSpace(title) != "" {
+		result += ` "` + escapeTitle(strings.TrimSpace(title)) + `"`
+	}
+	return result + ")"
+}
+
+func escapeTitle(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	return strings.ReplaceAll(value, `"`, `\"`)
 }
 
 func allDigits(value string) bool {
