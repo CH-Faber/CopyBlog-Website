@@ -4,14 +4,15 @@ import AboutPage from "@/components/pages/AboutPage"
 import Comments from "@/components/Comments.astro"
 import { Footer } from "@/components/footer"
 import SiteHeader from "@/components/site-header.astro"
+import { getSitePage } from "@/lib/site-pages"
 
-const title = "关于 | 一个闪念"
-const description = "了解更多关于博客作者的信息。"
+const pageInfo = getSitePage("about")
+const { title, description } = pageInfo
 ---
 
 <BaseLayout {title} {description}>
   <SiteHeader />
-  <AboutPage />
+  <AboutPage heading={pageInfo.heading} subtitle={pageInfo.subtitle} />
   <Comments />
   <Footer />
 </BaseLayout>

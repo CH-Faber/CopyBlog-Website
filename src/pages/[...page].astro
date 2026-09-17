@@ -6,8 +6,10 @@ import { Footer } from "@/components/footer"
 import SiteHeader from "@/components/site-header.astro"
 import { PAGE_SIZE } from "@/lib/constants"
 import { buildSidebarMeta, getSortedPosts, toPostMeta } from "@/lib/posts"
+import { getSitePage } from "@/lib/site-pages"
 
-const description = "探索金融、社会与人工智能的交汇点"
+const pageInfo = getSitePage("home")
+const description = pageInfo.description
 
 export const getStaticPaths = (async ({ paginate }) => {
   const posts = await getSortedPosts()
@@ -23,8 +25,8 @@ const allArticles = allPosts.map((post) => toPostMeta(post))
 const sidebarMeta = buildSidebarMeta(allArticles)
 const title =
   currentPage > 1
-    ? `一个闪念 · 第 ${currentPage} 页`
-    : "一个闪念"
+    ? `${pageInfo.title} · 第 ${currentPage} 页`
+    : pageInfo.title
 ---
 
 <BaseLayout {title} {description}>
@@ -35,8 +37,8 @@ const title =
         <ArticleList
           client:visible
           articles={allArticles}
-          title="全部文章"
-          subtitle="全部文章"
+          title={pageInfo.heading}
+          subtitle={pageInfo.subtitle}
           showViewAll={false}
           pagination={{ currentPage, pageSize: PAGE_SIZE, basePath: "/" }}
           sidebarCategories={sidebarMeta.categories}

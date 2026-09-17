@@ -41,6 +41,7 @@ export function Footer() {
                 {[
                   { name: "首页", href: "/" },
                   { name: "时间线", href: "/timeline/" },
+                  { name: "闪念", href: "/thoughts/" },
                   { name: "书架", href: "/bookshelf/" },
                   { name: "友链", href: "/friends/" },
                   { name: "关于", href: "/about/" },

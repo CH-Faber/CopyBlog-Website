@@ -46,18 +46,19 @@ func NormalizeAIBaseURL(raw string) string {
 }
 
 type Config struct {
-	S3Endpoint     string
-	S3Region       string
-	S3AccessKey    string
-	S3SecretKey    string
-	S3BucketName   string
-	S3Prefix       string
-	AIApiKey       string
-	AIBaseURL      string
-	AIModel        string
-	WebhookSecret  string
-	LocalPostsDir  string
-	ProjectRootDir string
+	S3Endpoint       string
+	S3Region         string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3BucketName     string
+	S3Prefix         string
+	AIApiKey         string
+	AIBaseURL        string
+	AIModel          string
+	WebhookSecret    string
+	LocalPostsDir    string
+	LocalThoughtsDir string
+	ProjectRootDir   string
 }
 
 func LoadConfig() *Config {
@@ -76,18 +77,19 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		S3Endpoint:     GetEnvOrDefault("S3_ENDPOINT", "https://s3.cn-north-1.qiniucs.com"),
-		S3Region:       GetEnvOrDefault("S3_REGION", "cn-north-1"),
-		S3AccessKey:    os.Getenv("S3_ACCESS_KEY"),
-		S3SecretKey:    os.Getenv("S3_SECRET_KEY"),
-		S3BucketName:   os.Getenv("S3_BUCKET_NAME"),
-		S3Prefix:       GetEnvOrDefault("S3_PREFIX", "website/"),
-		AIApiKey:       CleanEnvString(os.Getenv("AI_API_KEY")),
-		AIBaseURL:      NormalizeAIBaseURL(envCleanOrDefault("AI_BASE_URL", defaultAIBaseURL)),
-		AIModel:        envCleanOrDefault("AI_MODEL", "gpt-4o-mini"),
-		WebhookSecret:  os.Getenv("WEBHOOK_SECRET"),
-		LocalPostsDir:  filepath.Join(rootDir, "src", "content", "posts"),
-		ProjectRootDir: rootDir,
+		S3Endpoint:       GetEnvOrDefault("S3_ENDPOINT", "https://s3.cn-north-1.qiniucs.com"),
+		S3Region:         GetEnvOrDefault("S3_REGION", "cn-north-1"),
+		S3AccessKey:      os.Getenv("S3_ACCESS_KEY"),
+		S3SecretKey:      os.Getenv("S3_SECRET_KEY"),
+		S3BucketName:     os.Getenv("S3_BUCKET_NAME"),
+		S3Prefix:         GetEnvOrDefault("S3_PREFIX", "website/"),
+		AIApiKey:         CleanEnvString(os.Getenv("AI_API_KEY")),
+		AIBaseURL:        NormalizeAIBaseURL(envCleanOrDefault("AI_BASE_URL", defaultAIBaseURL)),
+		AIModel:          envCleanOrDefault("AI_MODEL", "gpt-4o-mini"),
+		WebhookSecret:    os.Getenv("WEBHOOK_SECRET"),
+		LocalPostsDir:    filepath.Join(rootDir, "src", "content", "posts"),
+		LocalThoughtsDir: filepath.Join(rootDir, "src", "content", "thoughts"),
+		ProjectRootDir:   rootDir,
 	}
 }
 

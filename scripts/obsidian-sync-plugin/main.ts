@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, requestUrl } from 'obsidian';
+import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, normalizePath, requestUrl } from 'obsidian';
 import { ApiClient, describeApiError } from './src/api-client';
 import { ArticleManagerView, ARTICLE_MANAGER_VIEW } from './src/article-manager-view';
 import type { SyncSettings } from './src/models';
@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS: SyncSettings = {
 	syncEndpoint: 'http://localhost:3001/api/sync',
 	webhookSecret: '',
 	localPostsFolder: '',
+	localThoughtsFolder: '闪念',
 	activeJobId: '',
 	aiBaseUrl: 'https://api.openai.com/v1',
 	aiApiKey: '',
@@ -42,12 +43,17 @@ export default class SyncPlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'prepare-flash-thought-sync',
-			name: '获取并处理文章',
+			name: '获取并处理文章与闪念',
 			callback: async () => {
 				await this.activateManagerView();
 				const view = this.app.workspace.getLeavesOfType(ARTICLE_MANAGER_VIEW)[0]?.view;
 				if (view instanceof ArticleManagerView) await view.prepareSync();
 			},
+		});
+		this.addCommand({
+			id: 'create-flash-thought',
+			name: '新建闪念',
+			callback: () => void this.createThought(),
 		});
 		this.addSettingTab(new SyncSettingTab(this.app, this));
 	}
@@ -117,6 +123,22 @@ export default class SyncPlugin extends Plugin {
 			await leaf.setViewState({ type: ARTICLE_MANAGER_VIEW, active: true });
 		}
 		this.app.workspace.revealLeaf(leaf);
+	}
+
+	async createThought() {
+		const folder = normalizePath(this.settings.localThoughtsFolder || '闪念');
+		let current = '';
+		for (const part of folder.split('/').filter(Boolean)) {
+			current = current ? `${current}/${part}` : part;
+			if (!this.app.vault.getAbstractFileByPath(current)) await this.app.vault.createFolder(current);
+		}
+		const now = new Date();
+		const filename = now.toISOString().replace(/[:.]/g, '-').replace('T', '-').replace(/Z$/, '') + '.md';
+		const path = normalizePath(`${folder}/${filename}`);
+		const content = `---\ntype: thought\npublished: ${now.toISOString()}\ntags: []\n---\n\n`;
+		const file = await this.app.vault.create(path, content);
+		await this.app.workspace.getLeaf(true).openFile(file);
+		new Notice('闪念草稿已创建；写完后按现有 S3 流程同步，再到内容管理中审核发布。');
 	}
 }
 
@@ -199,6 +221,14 @@ class SyncSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				});
 			});
+
+		new Setting(containerEl)
+			.setName('本地闪念目录')
+			.setDesc('Obsidian Vault 内保存闪念的目录，例如 闪念 或 Blog/闪念。同步到 S3 后，thoughts/、flashes/、闪念/ 目录会被识别；也可用 frontmatter 的 type: thought 标记。')
+			.addText((text) => text.setPlaceholder('Blog/闪念').setValue(this.plugin.settings.localThoughtsFolder).onChange(async (value) => {
+				this.plugin.settings.localThoughtsFolder = value.replace(/^\/+|\/+$/g, '');
+				await this.plugin.saveSettings();
+			}));
 
 		new Setting(containerEl)
 			.setName('模型')

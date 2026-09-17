@@ -42,7 +42,7 @@ pnpm dev
 ### 4. 撰写内容
 
 - **文章 (Posts)**: 向 `src/content/posts/` 目录添加 `.md` 或 `.mdx` 文件。
-- **碎碎念 (Thoughts)**: 在 `src/content/thoughts/` 目录添加短动态。
+- **闪念 (Thoughts)**: 在 `src/content/thoughts/` 目录添加短动态。
 
 参考现有的示例文章来了解 Frontmatter（头信息）的可用字段，如 `title`（标题）、`description`（描述）、`tags`（标签）等。
 

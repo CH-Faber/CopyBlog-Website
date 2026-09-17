@@ -10,13 +10,16 @@ import (
 func TestApprovedPathAllowsOnlyExplicitContentRoots(t *testing.T) {
 	root := t.TempDir()
 	cfg := &config.Config{
-		ProjectRootDir: root,
-		LocalPostsDir:  filepath.Join(root, "src", "content", "posts"),
+		ProjectRootDir:   root,
+		LocalPostsDir:    filepath.Join(root, "src", "content", "posts"),
+		LocalThoughtsDir: filepath.Join(root, "src", "content", "thoughts"),
 	}
 
 	allowed := []string{
 		"article.md",
 		ProjectFilePrefix + "src/data/content-taxonomy.json",
+		ProjectFilePrefix + "src/data/site-pages.json",
+		ProjectFilePrefix + "src/content/thoughts/flash.md",
 		ProjectFilePrefix + "public/obsidian-assets/ab/image.jpg",
 	}
 	for _, name := range allowed {

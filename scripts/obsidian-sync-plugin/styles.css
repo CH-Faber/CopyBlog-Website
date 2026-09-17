@@ -2,11 +2,12 @@
 .vermilion-toolbar, .vermilion-actions, .vermilion-flags { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .vermilion-management-tabs { display: flex; gap: 6px; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--background-modifier-border); }
 .vermilion-management-tabs button { min-width: 96px; }
+.vermilion-content-tabs { display: flex; gap: 8px; margin: 0 0 10px; }
 .vermilion-job-status { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
 .vermilion-job-status progress { flex: 1; }
 .vermilion-ai-progress { margin: 10px 0; padding: 9px 12px; border-radius: 7px; background: var(--background-secondary); color: var(--text-accent); }
 .vermilion-layout { display: grid; grid-template-columns: minmax(190px, 0.65fr) minmax(320px, 1.3fr) minmax(280px, 1fr); gap: 16px; min-height: 65vh; }
-.vermilion-list, .vermilion-editor, .vermilion-preview, .vermilion-taxonomy { border: 1px solid var(--background-modifier-border); border-radius: 10px; padding: 12px; overflow: auto; }
+.vermilion-list, .vermilion-editor, .vermilion-preview, .vermilion-taxonomy, .vermilion-pages { border: 1px solid var(--background-modifier-border); border-radius: 10px; padding: 12px; overflow: auto; }
 .vermilion-list-item { display: flex; gap: 8px; padding: 9px; border-radius: 7px; align-items: flex-start; }
 .vermilion-list-item:hover, .vermilion-list-item.is-active { background: var(--background-modifier-hover); }
 .vermilion-list-label { min-width: 0; flex: 1; cursor: pointer; }
@@ -46,6 +47,10 @@
 .vermilion-save-bar { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid var(--background-modifier-border); border-radius: 8px; background: var(--background-primary); box-shadow: 0 -4px 14px rgba(0, 0, 0, .08); }
 .vermilion-save-bar span { margin-right: auto; color: var(--text-muted); }
 .vermilion-save-bar.is-dirty { border-color: var(--text-warning); }
+.vermilion-page-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.vermilion-page-card { padding: 12px; border: 1px solid var(--background-modifier-border); border-radius: 8px; background: var(--background-secondary); }
+.vermilion-page-card h4 { margin: 0; }
+.vermilion-page-card > small { display: block; margin: 2px 0 12px; color: var(--text-muted); font-family: var(--font-monospace); }
 .vermilion-suggestion-row { display: grid; grid-template-columns: 42px 70px minmax(130px, .7fr) minmax(220px, 1.3fr) minmax(160px, .8fr) auto; gap: 10px; align-items: center; min-height: 54px; padding: 9px 10px; border-bottom: 1px solid var(--background-modifier-border); }
 .vermilion-suggestion-row:last-child { border-bottom: 0; }
 .vermilion-suggestion-source { display: flex; flex-direction: column; gap: 3px; min-width: 0; }

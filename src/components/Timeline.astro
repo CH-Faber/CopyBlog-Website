@@ -8,9 +8,11 @@ export interface TimelineItem {
 
 interface Props {
   items: TimelineItem[]
+  heading?: string
+  subtitle?: string
 }
 
-const { items } = Astro.props
+const { items, heading = "文章归档", subtitle = "时间线" } = Astro.props
 
 // 按年份分组
 const groupedByYear = items.reduce(
@@ -40,10 +42,10 @@ const formatDate = (dateStr: string) => {
     <!-- 页面标题 -->
     <div class="mb-12 onload-animation" style="animation-delay: 50ms;">
       <span class="text-primary text-sm font-medium tracking-wide uppercase mb-2 block">
-        时间线
+        {subtitle}
       </span>
       <h1 class="font-serif text-3xl sm:text-4xl font-medium text-foreground">
-        文章归档
+        {heading}
       </h1>
       <p class="mt-3 text-muted-foreground font-serif">
         共 {items.length} 篇文章

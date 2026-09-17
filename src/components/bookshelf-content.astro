@@ -4,6 +4,13 @@ import { Footer } from "@/components/footer"
 import { cn } from "@/lib/utils"
 import booksData from "../../public/data/books.json"
 
+interface Props {
+  heading?: string
+  subtitle?: string
+}
+
+const { heading = "书架", subtitle = "博学而笃志，切问而近思" } = Astro.props
+
 interface BookFields {
   书名: string
   作者?: string[]
@@ -83,9 +90,9 @@ const booksForClient = allBooks.map((book) => {
       <div class="mb-16">
         <div class="flex items-center gap-3 mb-4">
           <div class="w-1 h-[3em] bg-primary rounded-full translate-y-1.5" />
-          <h1 class="text-4xl md:text-5xl font-bold text-foreground font-serif">书架</h1>
+          <h1 class="text-4xl md:text-5xl font-bold text-foreground font-serif">{heading}</h1>
         </div>
-        <p class="text-muted-foreground text-lg font-serif">博学而笃志，切问而近思</p>
+        <p class="text-muted-foreground text-lg font-serif">{subtitle}</p>
       </div>
 
       <div class="flex items-center gap-6 text-sm text-muted-foreground mb-8">

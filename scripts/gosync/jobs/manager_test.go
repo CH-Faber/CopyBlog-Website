@@ -65,3 +65,40 @@ func TestValidateFinalTaxonomyStateOverlaysSelectedArticles(t *testing.T) {
 		t.Fatalf("selected article should remove the final tag reference: %v", err)
 	}
 }
+
+func TestUpdateThoughtDoesNotRequireArticleTaxonomy(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{ProjectRootDir: root, LocalPostsDir: filepath.Join(root, "src", "content", "posts")}
+	manager, err := NewManager(cfg, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.jobs["job"] = &Job{ID: "job", Articles: []*ArticleDraft{{
+		ID: "thought", Kind: ContentThought, Filename: "flash.md", Revision: 1,
+		Metadata: contentmodel.ArticleMetadata{Published: "2026-09-16T00:00:00.000Z", Tags: []string{"无需 taxonomy"}},
+	}}}
+	updated, err := manager.UpdateArticle("job", "thought", UpdateArticleRequest{
+		Revision: 1,
+		Metadata: contentmodel.ArticleMetadata{Title: "可选标题", Published: "2026-09-16T00:00:00.000Z", Tags: []string{"随手记"}},
+		Content:  "一条闪念。",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Kind != ContentThought || updated.Metadata.ContentType != "thought" || updated.Revision != 2 {
+		t.Fatalf("unexpected thought update: %#v", updated)
+	}
+}
+
+func TestDetectContentKind(t *testing.T) {
+	if got := detectContentKind("闪念/一条.md", contentmodel.Document{}); got != ContentThought {
+		t.Fatalf("expected Chinese flash folder to be detected, got %q", got)
+	}
+	doc := contentmodel.Document{Metadata: contentmodel.ArticleMetadata{ContentType: "thought"}}
+	if got := detectContentKind("flat.md", doc); got != ContentThought {
+		t.Fatalf("expected frontmatter type to be detected, got %q", got)
+	}
+	if got := detectContentKind("article.md", contentmodel.Document{}); got != ContentPost {
+		t.Fatalf("expected root Markdown to remain a post, got %q", got)
+	}
+}

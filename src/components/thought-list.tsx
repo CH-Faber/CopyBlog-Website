@@ -178,10 +178,14 @@ export function ThoughtList({
   thoughts,
   tags: sidebarTags,
   pagination,
+  heading = "闪念",
+  subtitle = "灵感拾遗",
 }: {
   thoughts: ThoughtMeta[]
   tags: string[]
   pagination?: PaginationMeta
+  heading?: string
+  subtitle?: string
 }) {
   const sectionRef = useRef<HTMLElement | null>(null)
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -301,9 +305,9 @@ export function ThoughtList({
         {/* Section header */}
         <div className="mb-10 onload-animation" style={{ animationDelay: "50ms" }}>
           <span className="text-primary text-sm font-medium tracking-wide uppercase mb-2 block">
-            灵感拾遗
+            {subtitle}
           </span>
-          <h2 className="font-serif text-3xl sm:text-4xl font-medium text-foreground">偶得</h2>
+          <h2 className="font-serif text-3xl sm:text-4xl font-medium text-foreground">{heading}</h2>
         </div>
 
         {/* Main layout: Tags + Timeline */}
@@ -344,7 +348,7 @@ export function ThoughtList({
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 text-muted-foreground">暂无偶得</div>
+              <div className="text-center py-12 text-muted-foreground">暂无闪念</div>
             )}
 
             {/* Pagination */}

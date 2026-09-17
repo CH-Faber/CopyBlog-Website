@@ -71,3 +71,39 @@ func TestTaxonomyUsageAPI(t *testing.T) {
 		t.Fatalf("unexpected usage: %s", response.Body.String())
 	}
 }
+
+func TestSitePagesAPIReadsAndSavesDraft(t *testing.T) {
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "src", "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	published := `{"version":1,"pages":[{"key":"home","name":"首页","title":"旧标题","description":"描述","heading":"文章","subtitle":"副标题"}]}`
+	if err := os.WriteFile(filepath.Join(dataDir, "site-pages.json"), []byte(published), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{ProjectRootDir: root, LocalPostsDir: filepath.Join(root, "src", "content", "posts"), WebhookSecret: "test-secret"}
+	manager, err := jobs.NewManager(cfg, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	NewServer(cfg, manager).Register(mux)
+
+	body := `{"version":1,"pages":[{"key":"home","name":"首页","title":"新标题","description":"描述","heading":"近期文章","subtitle":"全部文章"}]}`
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/site-pages", strings.NewReader(body))
+	request.Header.Set("Authorization", "Bearer test-secret")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "新标题") {
+		t.Fatalf("unexpected save response %d: %s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/site-pages", nil)
+	request.Header.Set("Authorization", "Bearer test-secret")
+	response = httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "近期文章") {
+		t.Fatalf("unexpected read response %d: %s", response.Code, response.Body.String())
+	}
+}

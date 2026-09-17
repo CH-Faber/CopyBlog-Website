@@ -32,9 +32,17 @@ const (
 )
 
 type LocalFile struct {
-	Path string `json:"path"`
-	Hash string `json:"hash"`
+	Path string      `json:"path"`
+	Hash string      `json:"hash"`
+	Kind ContentKind `json:"kind,omitempty"`
 }
+
+type ContentKind string
+
+const (
+	ContentPost    ContentKind = "post"
+	ContentThought ContentKind = "thought"
+)
 
 type CreateRequest struct {
 	ClientID      string      `json:"clientId"`
@@ -45,6 +53,7 @@ type ArticleDraft struct {
 	ID               string                       `json:"id"`
 	Path             string                       `json:"path"`
 	Filename         string                       `json:"filename"`
+	Kind             ContentKind                  `json:"kind"`
 	Status           ArticleStatus                `json:"status"`
 	Metadata         contentmodel.ArticleMetadata `json:"metadata"`
 	Content          string                       `json:"content"`

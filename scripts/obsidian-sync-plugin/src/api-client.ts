@@ -1,5 +1,5 @@
 import { requestUrl } from 'obsidian';
-import type { ArticleDraft, LocalFile, SyncJob, SyncSettings, Taxonomy, TaxonomyUsage } from './models';
+import type { ArticleDraft, LocalFile, SitePages, SyncJob, SyncSettings, Taxonomy, TaxonomyUsage } from './models';
 
 export class ApiError extends Error {
 	constructor(public readonly status: number, message: string) {
@@ -85,6 +85,9 @@ export class ApiClient {
 	getTaxonomy() { return this.request<Taxonomy>('/taxonomy'); }
 	getTaxonomyUsage() { return this.request<TaxonomyUsage>('/taxonomy/usage'); }
 	saveTaxonomy(value: Taxonomy) { return this.request<Taxonomy>('/taxonomy', 'PUT', value); }
+	getSitePages() { return this.request<SitePages>('/site-pages'); }
+	saveSitePages(value: SitePages) { return this.request<SitePages>('/site-pages', 'PUT', value); }
+	publishSitePages() { return this.request<{ commitSha: string }>('/site-pages/publish', 'POST', {}); }
 	testConnection() { return this.getTaxonomy(); }
 	publish(jobId: string, articles: ArticleDraft[]) {
 		return this.request<{ commitSha: string }>(`/jobs/${jobId}/publish`, 'POST', {

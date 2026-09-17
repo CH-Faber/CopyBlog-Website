@@ -50,7 +50,11 @@ func approvedPath(cfg *config.Config, name string) (string, string, error) {
 		assetRel, _ := filepath.Rel(assetRoot, target)
 		isAsset := assetRel != "." && !filepath.IsAbs(assetRel) && !strings.HasPrefix(assetRel, ".."+string(filepath.Separator))
 		taxonomyPath := filepath.Clean(filepath.Join(cfg.ProjectRootDir, "src", "data", "content-taxonomy.json"))
-		if !isAsset && target != taxonomyPath {
+		sitePagesPath := filepath.Clean(filepath.Join(cfg.ProjectRootDir, "src", "data", "site-pages.json"))
+		thoughtsRoot := filepath.Clean(cfg.LocalThoughtsDir)
+		thoughtRel, _ := filepath.Rel(thoughtsRoot, target)
+		isThought := thoughtRel != "." && !filepath.IsAbs(thoughtRel) && !strings.HasPrefix(thoughtRel, ".."+string(filepath.Separator))
+		if !isAsset && !isThought && target != taxonomyPath && target != sitePagesPath {
 			return "", "", fmt.Errorf("publish path is outside the approved project roots: %s", name)
 		}
 		return target, filepath.ToSlash(projectRel), nil
@@ -64,7 +68,8 @@ func approvedPath(cfg *config.Config, name string) (string, string, error) {
 	allowedPost, _ := filepath.Rel(postsRoot, target)
 	isPost := allowedPost != "." && !strings.HasPrefix(allowedPost, ".."+string(filepath.Separator)) && !filepath.IsAbs(allowedPost)
 	taxonomyPath := filepath.Clean(filepath.Join(cfg.ProjectRootDir, "src", "data", "content-taxonomy.json"))
-	if !isPost && target != taxonomyPath {
+	sitePagesPath := filepath.Clean(filepath.Join(cfg.ProjectRootDir, "src", "data", "site-pages.json"))
+	if !isPost && target != taxonomyPath && target != sitePagesPath {
 		return "", "", fmt.Errorf("publish path is outside the approved content roots: %s", name)
 	}
 	return target, filepath.ToSlash(rel), nil

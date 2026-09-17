@@ -2,6 +2,7 @@ export interface SyncSettings {
 	syncEndpoint: string;
 	webhookSecret: string;
 	localPostsFolder: string;
+	localThoughtsFolder: string;
 	activeJobId: string;
 	aiBaseUrl: string;
 	aiApiKey: string;
@@ -15,6 +16,7 @@ export interface SyncSettings {
 }
 
 export interface ArticleMetadata {
+	contentType?: 'post' | 'thought' | 'flash';
 	title: string;
 	published: string;
 	updated?: string;
@@ -47,6 +49,7 @@ export interface ArticleDraft {
 	id: string;
 	path: string;
 	filename: string;
+	kind: 'post' | 'thought';
 	status: ArticleStatus;
 	metadata: ArticleMetadata;
 	content: string;
@@ -87,4 +90,15 @@ export interface ManagedTag {
 export interface Category { id: string; name: string; description: string; enabled: boolean; aiSelectable: boolean; }
 export interface Taxonomy { version: number; categories: Category[]; tags: ManagedTag[]; }
 export interface TaxonomyUsage { tags: Record<string, number>; categories: Record<string, number>; }
-export interface LocalFile { path: string; hash: string; }
+export interface LocalFile { path: string; hash: string; kind: 'post' | 'thought'; }
+
+export interface SitePageInfo {
+	key: string;
+	name: string;
+	title: string;
+	description: string;
+	heading: string;
+	subtitle: string;
+}
+
+export interface SitePages { version: number; pages: SitePageInfo[]; }

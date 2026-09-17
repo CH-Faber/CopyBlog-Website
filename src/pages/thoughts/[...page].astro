@@ -6,8 +6,10 @@ import { Footer } from "@/components/footer"
 import SiteHeader from "@/components/site-header.astro"
 import { PAGE_SIZE } from "@/lib/constants"
 import { getSortedThoughts, toThoughtMeta, buildThoughtsTags } from "@/lib/thoughts"
+import { getSitePage } from "@/lib/site-pages"
 
-const description = "零散的想法与灵感"
+const pageInfo = getSitePage("thoughts")
+const description = pageInfo.description
 
 export const getStaticPaths = (async ({ paginate }) => {
   const allThoughts = await getSortedThoughts()
@@ -21,7 +23,7 @@ const currentPage = page.currentPage
 const allThoughts = await getSortedThoughts()
 const thoughtsWithContent = allThoughts.map((thought) => toThoughtMeta(thought))
 const tags = buildThoughtsTags(thoughtsWithContent)
-const title = `偶得 · 第 ${currentPage} 页 | 一个闪念`
+const title = `${pageInfo.heading} · 第 ${currentPage} 页 | 一个闪念`
 ---
 
 <BaseLayout {title} {description}>
@@ -33,6 +35,8 @@ const title = `偶得 · 第 ${currentPage} 页 | 一个闪念`
           client:visible
           thoughts={thoughtsWithContent}
           tags={tags}
+          heading={pageInfo.heading}
+          subtitle={pageInfo.subtitle}
           pagination={{ currentPage, pageSize: PAGE_SIZE, basePath: "/thoughts" }}
         />
       </section>

@@ -20,6 +20,7 @@ import (
 	"gosync/contentmodel"
 	"gosync/media"
 	"gosync/s3sync"
+	"gosync/sitepages"
 	"gosync/taxonomy"
 )
 
@@ -36,6 +37,9 @@ type Manager struct {
 }
 
 func NewManager(cfg *config.Config, syncer *s3sync.S3Syncer, generator *ai.Generator) (*Manager, error) {
+	if strings.TrimSpace(cfg.LocalThoughtsDir) == "" {
+		cfg.LocalThoughtsDir = filepath.Join(cfg.ProjectRootDir, "src", "content", "thoughts")
+	}
 	manager := &Manager{cfg: cfg, syncer: syncer, generator: generator, jobs: map[string]*Job{}}
 	if err := os.MkdirAll(manager.jobsDir(), 0755); err != nil {
 		return nil, err
@@ -56,9 +60,42 @@ func randomID() string {
 	return hex.EncodeToString(buffer)
 }
 
-func articleID(path string) string {
+func articleID(kind ContentKind, path string) string {
 	// The path is retained in the manifest; a compact deterministic ID is enough here.
-	return contentmodel.HashBytes([]byte(strings.ToLower(filepath.ToSlash(path))))[:16]
+	return contentmodel.HashBytes([]byte(string(kind) + ":" + strings.ToLower(filepath.ToSlash(path))))[:16]
+}
+
+func normalizedKind(kind ContentKind) ContentKind {
+	if kind == ContentThought {
+		return ContentThought
+	}
+	return ContentPost
+}
+
+func contentKey(kind ContentKind, filename string) string {
+	return string(normalizedKind(kind)) + ":" + strings.ToLower(filepath.Base(filename))
+}
+
+func detectContentKind(relativePath string, doc contentmodel.Document) ContentKind {
+	first := strings.ToLower(strings.Split(filepath.ToSlash(relativePath), "/")[0])
+	declared := strings.ToLower(strings.TrimSpace(doc.Metadata.ContentType))
+	if first == "thoughts" || first == "flashes" || first == "闪念" || declared == "thought" || declared == "flash" {
+		return ContentThought
+	}
+	return ContentPost
+}
+
+func ensureThoughtDefaults(doc *contentmodel.Document, modified time.Time) {
+	doc.Metadata.ContentType = "thought"
+	if strings.TrimSpace(string(doc.Metadata.Published)) == "" {
+		if modified.IsZero() {
+			modified = time.Now()
+		}
+		doc.Metadata.Published = contentmodel.DateString(modified.UTC().Format("2006-01-02T15:04:05.000Z"))
+	}
+	if doc.Metadata.Tags == nil {
+		doc.Metadata.Tags = []string{}
+	}
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
@@ -103,23 +140,6 @@ func (m *Manager) GetArticle(jobID, articleID string) (*ArticleDraft, bool) {
 }
 
 func (m *Manager) UpdateArticle(jobID, id string, request UpdateArticleRequest) (*ArticleDraft, error) {
-	values, err := taxonomy.Load(m.cfg)
-	if err != nil {
-		return nil, err
-	}
-	valid, unknown := values.ValidateTags(request.Metadata.Tags)
-	if len(unknown) > 0 {
-		return nil, fmt.Errorf("标签尚未批准: %s", strings.Join(unknown, ", "))
-	}
-	request.Metadata.Tags = valid
-	if strings.TrimSpace(request.Metadata.Category) != "" {
-		category, ok := values.ValidateCategory(request.Metadata.Category)
-		if !ok {
-			return nil, fmt.Errorf("分类尚未批准或已停用: %s", request.Metadata.Category)
-		}
-		request.Metadata.Category = category
-	}
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	job, ok := m.jobs[jobID]
@@ -132,6 +152,28 @@ func (m *Manager) UpdateArticle(jobID, id string, request UpdateArticleRequest) 
 		}
 		if article.Revision != request.Revision {
 			return nil, ErrConflict
+		}
+		if article.Kind != ContentThought {
+			values, loadErr := taxonomy.Load(m.cfg)
+			if loadErr != nil {
+				return nil, loadErr
+			}
+			valid, unknown := values.ValidateTags(request.Metadata.Tags)
+			if len(unknown) > 0 {
+				return nil, fmt.Errorf("标签尚未批准: %s", strings.Join(unknown, ", "))
+			}
+			request.Metadata.Tags = valid
+			if strings.TrimSpace(request.Metadata.Category) != "" {
+				category, categoryOK := values.ValidateCategory(request.Metadata.Category)
+				if !categoryOK {
+					return nil, fmt.Errorf("分类尚未批准或已停用: %s", request.Metadata.Category)
+				}
+				request.Metadata.Category = category
+			}
+		} else {
+			request.Metadata.ContentType = "thought"
+			request.Metadata.Category = ""
+			request.Metadata.Description = ""
 		}
 		article.Metadata = request.Metadata
 		article.Content = request.Content
@@ -156,10 +198,10 @@ func (m *Manager) UpdateArticle(jobID, id string, request UpdateArticleRequest) 
 func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) {
 	m.runMu.Lock()
 	defer m.runMu.Unlock()
-	m.setStatus(jobID, StatusSyncing, 5, "正在从 S3 获取文章")
+	m.setStatus(jobID, StatusSyncing, 5, "正在从 S3 获取文章与闪念")
 
 	sourceDir := filepath.Join(m.jobsDir(), jobID, "source")
-	if err := m.syncer.SyncArticlesTo(sourceDir, m.cfg.LocalPostsDir); err != nil {
+	if err := m.syncer.SyncContentTo(sourceDir, m.cfg.LocalPostsDir, m.cfg.LocalThoughtsDir); err != nil {
 		m.fail(jobID, err)
 		return
 	}
@@ -169,7 +211,7 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 		return
 	}
 	imageIndex := media.NewIndex(imageObjects)
-	m.setStatus(jobID, StatusAnalyzing, 30, "正在解析文章并生成 AI 建议")
+	m.setStatus(jobID, StatusAnalyzing, 30, "正在解析内容并生成 AI 建议")
 
 	values, err := taxonomy.Load(m.cfg)
 	if err != nil {
@@ -178,47 +220,59 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 	}
 	clientHashes := map[string]string{}
 	for _, file := range localManifest {
-		clientHashes[strings.ToLower(filepath.Base(file.Path))] = file.Hash
+		clientHashes[contentKey(file.Kind, file.Path)] = file.Hash
 	}
 
-	entries, err := os.ReadDir(sourceDir)
-	if err != nil {
+	eligible := []string{}
+	if err := filepath.WalkDir(sourceDir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		ext := filepath.Ext(entry.Name())
+		if strings.EqualFold(ext, ".md") || strings.EqualFold(ext, ".mdx") {
+			eligible = append(eligible, path)
+		}
+		return nil
+	}); err != nil {
 		m.fail(jobID, err)
 		return
 	}
 	articles := []*ArticleDraft{}
 	remoteNames := map[string]bool{}
-	eligible := []os.DirEntry{}
-	for _, entry := range entries {
-		if !entry.IsDir() && (strings.EqualFold(filepath.Ext(entry.Name()), ".md") || strings.EqualFold(filepath.Ext(entry.Name()), ".mdx")) {
-			eligible = append(eligible, entry)
-		}
-	}
-	for index, entry := range eligible {
-		filename := entry.Name()
-		remoteNames[strings.ToLower(filename)] = true
-		path := filepath.Join(sourceDir, filename)
+	for index, path := range eligible {
+		relativePath, _ := filepath.Rel(sourceDir, path)
+		filename := filepath.Base(path)
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			continue
 		}
 		doc, parseErr := contentmodel.Parse(string(data))
 		if parseErr != nil {
-			articles = append(articles, &ArticleDraft{ID: articleID(filename), Path: filename, Filename: filename, Status: ArticleConflict, Revision: 1, Error: parseErr.Error()})
+			kind := detectContentKind(relativePath, contentmodel.Document{})
+			articles = append(articles, &ArticleDraft{ID: articleID(kind, relativePath), Path: filepath.ToSlash(relativePath), Filename: filename, Kind: kind, Status: ArticleConflict, Revision: 1, Error: parseErr.Error()})
 			continue
 		}
-		info, _ := entry.Info()
+		kind := detectContentKind(relativePath, doc)
+		remoteNames[contentKey(kind, filename)] = true
+		info, _ := os.Stat(path)
 		modified := time.Now()
 		if info != nil {
 			modified = info.ModTime()
 		}
-		contentmodel.EnsureDefaults(&doc, filename, modified)
+		if kind == ContentThought {
+			ensureThoughtDefaults(&doc, modified)
+		} else {
+			contentmodel.EnsureDefaults(&doc, filename, modified)
+		}
 		sourceHash := contentmodel.HashBytes(data)
 		publishedDoc := doc
-		publishedContent, referencedAssets, imageErr := imageIndex.RewriteDocument(doc.Content, pathJoinS3(m.cfg.S3Prefix, filename))
+		publishedContent, referencedAssets, imageErr := imageIndex.RewriteDocument(doc.Content, pathJoinS3(m.cfg.S3Prefix, filepath.ToSlash(relativePath)))
 		publishedDoc.Content = publishedContent
 		if strings.TrimSpace(doc.Metadata.Image) != "" && !isPublishedImageURL(doc.Metadata.Image) {
-			cover, coverErr := imageIndex.Resolve(doc.Metadata.Image, pathJoinS3(m.cfg.S3Prefix, filename))
+			cover, coverErr := imageIndex.Resolve(doc.Metadata.Image, pathJoinS3(m.cfg.S3Prefix, filepath.ToSlash(relativePath)))
 			if coverErr != nil {
 				if imageErr == nil {
 					imageErr = fmt.Errorf("封面图片无效: %w", coverErr)
@@ -234,7 +288,11 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 		originalDoc := contentmodel.Document{Metadata: contentmodel.ArticleMetadata{Tags: []string{}}, Content: ""}
 		originalHash := ""
 		status := ArticleNew
-		if published, readPublishedErr := os.ReadFile(filepath.Join(m.cfg.LocalPostsDir, filename)); readPublishedErr == nil {
+		publishedDir := m.cfg.LocalPostsDir
+		if kind == ContentThought {
+			publishedDir = m.cfg.LocalThoughtsDir
+		}
+		if published, readPublishedErr := os.ReadFile(filepath.Join(publishedDir, filename)); readPublishedErr == nil {
 			originalHash = contentmodel.HashBytes(published)
 			status = ArticleModified
 			if parsed, parsedErr := contentmodel.Parse(string(published)); parsedErr == nil {
@@ -253,7 +311,7 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 		}
 		// Current Obsidian clients run AI locally so their provider key never reaches this service.
 		// Legacy clients retain the server-side generator until they are migrated.
-		needsAI := clientID != "obsidian" && (status == ArticleNew || strings.TrimSpace(doc.Metadata.Description) == "" || strings.TrimSpace(doc.Metadata.Category) == "" || len(doc.Metadata.Tags) == 0)
+		needsAI := kind == ContentPost && clientID != "obsidian" && (status == ArticleNew || strings.TrimSpace(doc.Metadata.Description) == "" || strings.TrimSpace(doc.Metadata.Category) == "" || len(doc.Metadata.Tags) == 0)
 		if needsAI {
 			suggestion, err = m.generator.SuggestMetadata(filename, doc.Content, values)
 			if err != nil {
@@ -274,7 +332,7 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 			}
 		}
 		currentHash, _ := contentmodel.HashDocument(doc)
-		article := &ArticleDraft{ID: articleID(filename), Path: filename, Filename: filename, Status: status, Metadata: doc.Metadata, Content: doc.Content, OriginalMetadata: originalDoc.Metadata, OriginalContent: originalDoc.Content, AISuggestion: suggestion, SourceHash: sourceHash, OriginalHash: originalHash, ClientHash: clientHashes[strings.ToLower(filename)], CurrentHash: currentHash, Revision: 1, Error: articleError, Assets: referencedAssets}
+		article := &ArticleDraft{ID: articleID(kind, relativePath), Path: filepath.ToSlash(relativePath), Filename: filename, Kind: kind, Status: status, Metadata: doc.Metadata, Content: doc.Content, OriginalMetadata: originalDoc.Metadata, OriginalContent: originalDoc.Content, AISuggestion: suggestion, SourceHash: sourceHash, OriginalHash: originalHash, ClientHash: clientHashes[contentKey(kind, filename)], CurrentHash: currentHash, Revision: 1, Error: articleError, Assets: referencedAssets}
 		articles = append(articles, article)
 		progress := 30
 		if len(eligible) > 0 {
@@ -284,23 +342,36 @@ func (m *Manager) run(jobID string, localManifest []LocalFile, clientID string) 
 	}
 
 	// Missing remote files become deletion proposals; they are never deleted here.
-	publishedEntries, _ := os.ReadDir(m.cfg.LocalPostsDir)
-	for _, entry := range publishedEntries {
-		if entry.IsDir() || (!strings.EqualFold(filepath.Ext(entry.Name()), ".md") && !strings.EqualFold(filepath.Ext(entry.Name()), ".mdx")) || remoteNames[strings.ToLower(entry.Name())] {
-			continue
+	for _, published := range []struct {
+		kind ContentKind
+		dir  string
+	}{{ContentPost, m.cfg.LocalPostsDir}, {ContentThought, m.cfg.LocalThoughtsDir}} {
+		publishedEntries, _ := os.ReadDir(published.dir)
+		for _, entry := range publishedEntries {
+			if entry.IsDir() || (!strings.EqualFold(filepath.Ext(entry.Name()), ".md") && !strings.EqualFold(filepath.Ext(entry.Name()), ".mdx")) {
+				continue
+			}
+			if remoteNames[contentKey(published.kind, entry.Name())] {
+				continue
+			}
+			data, readErr := os.ReadFile(filepath.Join(published.dir, entry.Name()))
+			if readErr != nil {
+				continue
+			}
+			doc, parseErr := contentmodel.Parse(string(data))
+			if parseErr != nil {
+				continue
+			}
+			hash := contentmodel.HashBytes(data)
+			articles = append(articles, &ArticleDraft{ID: articleID(published.kind, entry.Name()), Path: entry.Name(), Filename: entry.Name(), Kind: published.kind, Status: ArticleDeleted, Metadata: doc.Metadata, Content: doc.Content, OriginalMetadata: doc.Metadata, OriginalContent: doc.Content, SourceHash: "", OriginalHash: hash, ClientHash: clientHashes[contentKey(published.kind, entry.Name())], CurrentHash: hash, Revision: 1})
 		}
-		data, readErr := os.ReadFile(filepath.Join(m.cfg.LocalPostsDir, entry.Name()))
-		if readErr != nil {
-			continue
-		}
-		doc, parseErr := contentmodel.Parse(string(data))
-		if parseErr != nil {
-			continue
-		}
-		hash := contentmodel.HashBytes(data)
-		articles = append(articles, &ArticleDraft{ID: articleID(entry.Name()), Path: entry.Name(), Filename: entry.Name(), Status: ArticleDeleted, Metadata: doc.Metadata, Content: doc.Content, OriginalMetadata: doc.Metadata, OriginalContent: doc.Content, SourceHash: "", OriginalHash: hash, ClientHash: clientHashes[strings.ToLower(entry.Name())], CurrentHash: hash, Revision: 1})
 	}
-	sort.Slice(articles, func(i, j int) bool { return articles[i].Filename < articles[j].Filename })
+	sort.Slice(articles, func(i, j int) bool {
+		if articles[i].Kind != articles[j].Kind {
+			return articles[i].Kind < articles[j].Kind
+		}
+		return articles[i].Filename < articles[j].Filename
+	})
 
 	m.mu.Lock()
 	if job, ok := m.jobs[jobID]; ok {
@@ -346,40 +417,52 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 			m.mu.Unlock()
 			return nil, ErrConflict
 		}
+		kindLabel := "文章"
+		fileKey := article.Filename
+		if article.Kind == ContentThought {
+			kindLabel = "闪念"
+			fileKey = builder.ProjectFilePrefix + "src/content/thoughts/" + article.Filename
+		}
 		if article.Status == ArticleConflict {
 			m.mu.Unlock()
-			return nil, fmt.Errorf("文章 %s 存在未解决的图片或内容冲突: %s", article.Metadata.Title, article.Error)
+			return nil, fmt.Errorf("%s %s 存在未解决的图片或内容冲突: %s", kindLabel, article.Metadata.Title, article.Error)
 		}
 		if article.Status == ArticleDeleted {
-			files[article.Filename] = nil
-			expected[article.Filename] = article.OriginalHash
+			files[fileKey] = nil
+			expected[fileKey] = article.OriginalHash
 			publishedTitles = append(publishedTitles, "删除 "+article.Metadata.Title)
 			continue
 		}
-		valid, unknown := values.ValidateTags(article.Metadata.Tags)
-		if len(unknown) > 0 {
-			m.mu.Unlock()
-			return nil, fmt.Errorf("文章 %s 含未批准标签: %s", article.Metadata.Title, strings.Join(unknown, ", "))
-		}
-		article.Metadata.Tags = valid
-		category, categoryOK := values.ValidateCategory(article.Metadata.Category)
-		if !categoryOK {
-			m.mu.Unlock()
-			if strings.TrimSpace(article.Metadata.Category) == "" {
-				return nil, fmt.Errorf("文章 %s 尚未选择分类", article.Metadata.Title)
+		if article.Kind != ContentThought {
+			valid, unknown := values.ValidateTags(article.Metadata.Tags)
+			if len(unknown) > 0 {
+				m.mu.Unlock()
+				return nil, fmt.Errorf("文章 %s 含未批准标签: %s", article.Metadata.Title, strings.Join(unknown, ", "))
 			}
-			return nil, fmt.Errorf("文章 %s 的分类尚未批准或已停用: %s", article.Metadata.Title, article.Metadata.Category)
+			article.Metadata.Tags = valid
+			category, categoryOK := values.ValidateCategory(article.Metadata.Category)
+			if !categoryOK {
+				m.mu.Unlock()
+				if strings.TrimSpace(article.Metadata.Category) == "" {
+					return nil, fmt.Errorf("文章 %s 尚未选择分类", article.Metadata.Title)
+				}
+				return nil, fmt.Errorf("文章 %s 的分类尚未批准或已停用: %s", article.Metadata.Title, article.Metadata.Category)
+			}
+			article.Metadata.Category = category
+		} else {
+			article.Metadata.ContentType = "thought"
+			article.Metadata.Category = ""
+			article.Metadata.Description = ""
 		}
-		article.Metadata.Category = category
 		approvedAssets := media.NewIndex(assetObjects(article.Assets))
-		publishedContent, usedAssets, imageErr := approvedAssets.RewriteDocument(article.Content, pathJoinS3(m.cfg.S3Prefix, article.Filename))
+		publishedContent, usedAssets, imageErr := approvedAssets.RewriteDocument(article.Content, pathJoinS3(m.cfg.S3Prefix, article.Path))
 		if imageErr != nil {
 			m.mu.Unlock()
 			return nil, fmt.Errorf("文章 %s 的图片引用在审核后发生变化，请重新创建同步任务: %w", article.Metadata.Title, imageErr)
 		}
 		publishedMetadata := article.Metadata
 		if strings.TrimSpace(publishedMetadata.Image) != "" && !isPublishedImageURL(publishedMetadata.Image) {
-			cover, coverErr := approvedAssets.Resolve(publishedMetadata.Image, pathJoinS3(m.cfg.S3Prefix, article.Filename))
+			cover, coverErr := approvedAssets.Resolve(publishedMetadata.Image, pathJoinS3(m.cfg.S3Prefix, article.Path))
 			if coverErr != nil {
 				m.mu.Unlock()
 				return nil, fmt.Errorf("文章 %s 的封面图片无法发布，请重新创建同步任务: %w", article.Metadata.Title, coverErr)
@@ -396,13 +479,13 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 			m.mu.Unlock()
 			return nil, serializeErr
 		}
-		files[article.Filename] = &data
-		expected[article.Filename] = article.OriginalHash
+		files[fileKey] = &data
+		expected[fileKey] = article.OriginalHash
 		publishedTitles = append(publishedTitles, article.Metadata.Title)
 	}
 	if len(files) == 0 {
 		m.mu.Unlock()
-		return nil, fmt.Errorf("没有选择可发布的文章")
+		return nil, fmt.Errorf("没有选择可发布的内容")
 	}
 	if request.IncludeTaxonomy {
 		if err := validateFinalTaxonomyState(m.cfg.LocalPostsDir, values, job.Articles, selected); err != nil {
@@ -435,7 +518,7 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 		}
 		files[builder.ProjectFilePrefix+"src/data/content-taxonomy.json"] = &data
 	}
-	message := fmt.Sprintf("Publish %d approved posts from Obsidian", len(request.Articles))
+	message := fmt.Sprintf("Publish %d approved content items from Obsidian", len(request.Articles))
 	sha, publishErr := builder.PublishFiles(m.cfg, files, expected, message)
 	if publishErr != nil {
 		m.fail(jobID, publishErr)
@@ -456,6 +539,46 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 	_ = m.saveLocked(job)
 	m.mu.Unlock()
 	_ = publishedTitles
+	return &PublishResponse{CommitSHA: sha}, nil
+}
+
+func (m *Manager) GetSitePages() (*sitepages.Pages, error) {
+	return sitepages.Load(m.cfg)
+}
+
+func (m *Manager) SaveSitePages(value *sitepages.Pages) (*sitepages.Pages, error) {
+	if err := sitepages.SaveDraft(m.cfg, value); err != nil {
+		return nil, err
+	}
+	return sitepages.Load(m.cfg)
+}
+
+func (m *Manager) PublishSitePages() (*PublishResponse, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
+
+	value, err := sitepages.Load(m.cfg)
+	if err != nil {
+		return nil, err
+	}
+	data, err := sitepages.JSON(value)
+	if err != nil {
+		return nil, err
+	}
+	expectedHash, err := sitepages.PublishedHash(m.cfg)
+	if err != nil {
+		return nil, err
+	}
+	key := builder.ProjectFilePrefix + "src/data/site-pages.json"
+	sha, err := builder.PublishFiles(
+		m.cfg,
+		map[string]*[]byte{key: &data},
+		map[string]string{key: expectedHash},
+		"Update site page information from Obsidian",
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &PublishResponse{CommitSHA: sha}, nil
 }
 
@@ -514,6 +637,9 @@ func validateFinalTaxonomyState(postsDir string, values *taxonomy.Taxonomy, arti
 	}
 	for _, article := range articles {
 		if _, include := selected[article.ID]; !include {
+			continue
+		}
+		if article.Kind == ContentThought {
 			continue
 		}
 		if article.Status == ArticleDeleted {
@@ -600,6 +726,9 @@ func (m *Manager) loadExisting() error {
 		}
 		var job Job
 		if json.Unmarshal(data, &job) == nil {
+			for _, article := range job.Articles {
+				article.Kind = normalizedKind(article.Kind)
+			}
 			if job.Status == StatusSyncing || job.Status == StatusAnalyzing || job.Status == StatusPublishing {
 				job.Status = StatusFailed
 				job.Message = "服务重启中断了任务，请重新执行"

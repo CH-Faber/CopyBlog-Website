@@ -1,20 +1,22 @@
-# 一个闪念 · 内容管理 0.6
+# 一个闪念 · 内容管理 0.8
 
-Obsidian 内置的博客文章审核与发布管理器。
+Obsidian 内置的博客文章、闪念、分类标签与页面信息审核发布管理器。
 
 ## 安装
 
 1. 在本目录运行 `npm install` 和 `npm run build`。
 2. 将 `main.js`、`manifest.json`、`styles.css` 复制到 Vault 的 `.obsidian/plugins/flash-thought-content-manager/`。
-3. 在 Obsidian 中启用插件，并配置同步服务地址、Webhook Secret、本地文章目录和可选的本地 AI 服务。
+3. 在 Obsidian 中启用插件，并配置同步服务地址、Webhook Secret、本地文章/闪念目录和可选的本地 AI 服务。
 
 ## 工作流
 
 1. 打开“一个闪念 · 内容管理”。
-2. 点击“获取并处理文章”。服务器只拉取并暂存文章，不使用本地 AI 密钥，也不会自动发布。
+   需要新内容时，可以切换到“闪念”并点击“新建闪念”；插件会在本地闪念目录创建包含 `type: thought` 的 Markdown 草稿。
+2. 点击“获取并处理内容”。服务器拉取并暂存文章与闪念，不使用本地 AI 密钥，也不会自动发布。S3 根目录中的 Markdown 默认为文章；`thoughts/`、`flashes/`、`闪念/` 子目录或带 `type: thought` frontmatter 的 Markdown 会作为闪念。
 3. 插件使用 Obsidian 本地配置的模型生成摘要、分类和标签建议；也可以点击“AI 分析当前”重新分析。
 4. 编辑元数据和正文，审批 AI 提出的新分类和新标签，然后保存到本地。
-5. 勾选文章并点击“发布所选”，服务器将批准版本推送到 `deploy`。
+5. 勾选文章或闪念并点击“发布所选”，服务器将批准版本分别写入 `src/content/posts/`、`src/content/thoughts/` 并推送到 `deploy`。
+6. “页面信息”页签可独立维护各页面的标题、SEO 描述、主标题和副标题，并单独发布，无需创建内容任务。
 
 处理期间如果本地文件发生变化，插件会拒绝覆盖并要求重新创建任务。
 

@@ -11,6 +11,7 @@ import (
 
 	"gosync/config"
 	"gosync/jobs"
+	"gosync/sitepages"
 	"gosync/taxonomy"
 )
 
@@ -53,6 +54,19 @@ func (s *Server) authorized(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) handleV1(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/"), "/")
 	parts := strings.Split(path, "/")
+	if path == "site-pages" {
+		s.handleSitePages(w, r)
+		return
+	}
+	if path == "site-pages/publish" && r.Method == http.MethodPost {
+		response, err := s.manager.PublishSitePages()
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, response)
+		return
+	}
 	if path == "taxonomy/usage" && r.Method == http.MethodGet {
 		value, err := taxonomy.Load(s.cfg)
 		if err != nil {
@@ -165,6 +179,32 @@ func (s *Server) handleV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeError(w, http.StatusNotFound, "not found")
+}
+
+func (s *Server) handleSitePages(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		value, err := s.manager.GetSitePages()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, value)
+	case http.MethodPut:
+		var value sitepages.Pages
+		if err := decodeJSON(r, &value); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		saved, err := s.manager.SaveSitePages(&value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, saved)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
 }
 
 func (s *Server) handleTaxonomy(w http.ResponseWriter, r *http.Request) {

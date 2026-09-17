@@ -1,11 +1,12 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro"
 import BookshelfContent from "@/components/bookshelf-content.astro"
+import { getSitePage } from "@/lib/site-pages"
 
-const title = "书架 | 一个闪念"
-const description = "我的阅读清单与书评。"
+const pageInfo = getSitePage("bookshelf")
+const { title, description } = pageInfo
 ---
 
 <BaseLayout {title} {description}>
-  <BookshelfContent />
+  <BookshelfContent heading={pageInfo.heading} subtitle={pageInfo.subtitle} />
 </BaseLayout>

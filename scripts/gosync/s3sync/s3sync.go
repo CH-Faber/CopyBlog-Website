@@ -183,10 +183,12 @@ func (s *S3Syncer) SyncArticles() error {
 	return nil
 }
 
-// SyncArticlesTo downloads the current S3 article set into an isolated job directory.
-// When the remote article has no frontmatter, the published article's frontmatter is
-// preserved as a base. It never modifies or deletes files in the published posts directory.
-func (s *S3Syncer) SyncArticlesTo(destination, publishedPostsDir string) error {
+// SyncContentTo downloads Markdown into an isolated job directory while preserving
+// paths below S3Prefix. Root files and posts/* are articles; thoughts/* and
+// flashes/* are flashes. A flat file may also opt into the flash collection with
+// frontmatter `type: thought` or `type: flash` (handled later by the job manager).
+// Published frontmatter is used only as a fallback and published files are never modified.
+func (s *S3Syncer) SyncContentTo(destination, publishedPostsDir, publishedThoughtsDir string) error {
 	ctx := context.TODO()
 	if err := os.MkdirAll(destination, 0755); err != nil {
 		return err
@@ -207,8 +209,17 @@ func (s *S3Syncer) SyncArticlesTo(destination, publishedPostsDir string) error {
 			if !strings.HasSuffix(strings.ToLower(key), ".md") && !strings.HasSuffix(strings.ToLower(key), ".mdx") {
 				continue
 			}
-			filename := filepath.Base(key)
-			tempPath := filepath.Join(destination, filename+".download")
+			relativeKey := strings.TrimPrefix(strings.ReplaceAll(key, `\`, "/"), strings.TrimRight(strings.ReplaceAll(s.cfg.S3Prefix, `\`, "/"), "/")+"/")
+			relativeKey = strings.TrimLeft(relativeKey, "/")
+			cleanRelative := filepath.Clean(filepath.FromSlash(relativeKey))
+			if cleanRelative == "." || filepath.IsAbs(cleanRelative) || strings.HasPrefix(cleanRelative, ".."+string(filepath.Separator)) {
+				return fmt.Errorf("refusing unsafe S3 content path: %s", key)
+			}
+			destinationPath := filepath.Join(destination, cleanRelative)
+			if err := os.MkdirAll(filepath.Dir(destinationPath), 0755); err != nil {
+				return err
+			}
+			tempPath := destinationPath + ".download"
 			if err := s.downloadFileImpl(ctx, key, tempPath); err != nil {
 				return fmt.Errorf("download %s: %w", key, err)
 			}
@@ -220,7 +231,12 @@ func (s *S3Syncer) SyncArticlesTo(destination, publishedPostsDir string) error {
 			remoteFM, remoteBody := extractFrontmatter(string(remoteBytes))
 			finalContent := string(remoteBytes)
 			if remoteFM == "" {
-				publishedBytes, readErr := os.ReadFile(filepath.Join(publishedPostsDir, filename))
+				parts := strings.Split(filepath.ToSlash(cleanRelative), "/")
+				publishedDir := publishedPostsDir
+				if len(parts) > 1 && (strings.EqualFold(parts[0], "thoughts") || strings.EqualFold(parts[0], "flashes") || parts[0] == "闪念") {
+					publishedDir = publishedThoughtsDir
+				}
+				publishedBytes, readErr := os.ReadFile(filepath.Join(publishedDir, filepath.Base(cleanRelative)))
 				if readErr == nil {
 					publishedFM, _ := extractFrontmatter(string(publishedBytes))
 					if publishedFM != "" {
@@ -228,7 +244,6 @@ func (s *S3Syncer) SyncArticlesTo(destination, publishedPostsDir string) error {
 					}
 				}
 			}
-			destinationPath := filepath.Join(destination, filename)
 			if err := os.WriteFile(destinationPath, []byte(finalContent), 0644); err != nil {
 				return err
 			}
@@ -238,6 +253,11 @@ func (s *S3Syncer) SyncArticlesTo(destination, publishedPostsDir string) error {
 		}
 	}
 	return nil
+}
+
+// SyncArticlesTo is kept for older callers. It retains the historical article-only behavior.
+func (s *S3Syncer) SyncArticlesTo(destination, publishedPostsDir string) error {
+	return s.SyncContentTo(destination, publishedPostsDir, filepath.Join(filepath.Dir(publishedPostsDir), "thoughts"))
 }
 
 func extractFrontmatter(content string) (fm string, body string) {

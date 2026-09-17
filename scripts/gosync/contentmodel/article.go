@@ -27,6 +27,7 @@ func (d DateString) MarshalYAML() (interface{}, error) {
 }
 
 type ArticleMetadata struct {
+	ContentType string                 `yaml:"type,omitempty" json:"contentType,omitempty"`
 	Title       string                 `yaml:"title" json:"title"`
 	Published   DateString             `yaml:"published" json:"published"`
 	Updated     DateString             `yaml:"updated,omitempty" json:"updated,omitempty"`

@@ -2,11 +2,11 @@ import { ItemView, MarkdownRenderer, Notice, TFile, WorkspaceLeaf, normalizePath
 import type SyncPlugin from '../main';
 import { ApiError, describeApiError } from './api-client';
 import { analyzeArticleLocally } from './local-ai';
-import type { ArticleDraft, Category, LocalFile, ManagedTag, ProposedCategory, ProposedTag, SyncJob, Taxonomy } from './models';
+import type { ArticleDraft, Category, LocalFile, ManagedTag, ProposedCategory, ProposedTag, SitePages, SyncJob, Taxonomy } from './models';
 
 export const ARTICLE_MANAGER_VIEW = 'flash-thought-article-manager';
 
-type ManagementTab = 'articles' | 'taxonomy' | 'suggestions';
+type ManagementTab = 'articles' | 'taxonomy' | 'suggestions' | 'pages';
 type TaxonomyItem = ManagedTag | Category;
 type TaxonomyStatusFilter = 'all' | 'enabled' | 'disabled';
 type TaxonomyAIFilter = 'all' | 'allowed' | 'blocked';
@@ -34,6 +34,12 @@ export class ArticleManagerView extends ItemView {
 	private categoryUsage: Record<string, number> = {};
 	private taxonomyUsageLoaded = false;
 	private managementTab: ManagementTab = 'articles';
+	private contentFilter: 'post' | 'thought' = 'post';
+	private sitePages: SitePages | null = null;
+	private sitePagesState: 'loading' | 'loaded' | 'error' = 'loading';
+	private sitePagesError = '';
+	private sitePagesDirty = false;
+	private sitePagesBaseline = '';
 	private taxonomyTab: 'categories' | 'tags' = 'tags';
 	private taxonomySearch = '';
 	private taxonomyStatusFilter: TaxonomyStatusFilter = 'all';
@@ -66,6 +72,7 @@ export class ArticleManagerView extends ItemView {
 		this.render();
 		await Promise.all([
 			this.loadTaxonomy(),
+			this.loadSitePages(),
 			(async () => {
 				if (!this.plugin.settings.activeJobId) return;
 				try {
@@ -79,6 +86,24 @@ export class ArticleManagerView extends ItemView {
 		]);
 		this.render();
 		this.schedulePoll();
+	}
+
+	private async loadSitePages(showNotice = false) {
+		this.sitePagesState = 'loading';
+		this.sitePagesError = '';
+		try {
+			this.sitePages = await this.plugin.api.getSitePages();
+			this.sitePagesBaseline = JSON.stringify(this.sitePages);
+			this.sitePagesDirty = false;
+			this.sitePagesState = 'loaded';
+			if (showNotice) new Notice('页面信息加载成功。');
+		} catch (error) {
+			this.sitePages = null;
+			this.sitePagesState = 'error';
+			this.sitePagesError = describeApiError(error);
+			if (showNotice) new Notice(`页面信息加载失败：${this.sitePagesError}`);
+		}
+		this.render();
 	}
 
 	private async loadTaxonomy(showNotice = false) {
@@ -176,7 +201,8 @@ export class ArticleManagerView extends ItemView {
 		const navigation = root.createDiv({ cls: 'vermilion-management-tabs' });
 		const pendingSuggestions = this.collectProposals().length + this.collectCategoryProposals().length;
 		for (const [label, tab] of [
-			['文章管理', 'articles'],
+			['内容管理', 'articles'],
+			['页面信息', 'pages'],
 			['分类体系', 'taxonomy'],
 			[`AI 建议${pendingSuggestions ? ` (${pendingSuggestions})` : ''}`, 'suggestions'],
 		] as Array<[string, ManagementTab]>) {
@@ -188,18 +214,35 @@ export class ArticleManagerView extends ItemView {
 			this.renderTaxonomy(root);
 			return;
 		}
+		if (this.managementTab === 'pages') {
+			this.renderSitePages(root);
+			return;
+		}
 		if (this.managementTab === 'suggestions') {
 			this.renderAISuggestions(root);
 			return;
 		}
 
+		const contentTabs = root.createDiv({ cls: 'vermilion-content-tabs' });
+		for (const [label, kind] of [['文章', 'post'], ['闪念', 'thought']] as const) {
+			const count = this.job?.articles?.filter((item) => (item.kind || 'post') === kind).length ?? 0;
+			const button = contentTabs.createEl('button', { text: `${label} (${count})`, cls: this.contentFilter === kind ? 'mod-cta' : '' });
+			button.onclick = () => {
+				this.contentFilter = kind;
+				const first = this.job?.articles?.find((item) => (item.kind || 'post') === kind);
+				this.activeArticleId = first?.id ?? '';
+				this.render();
+			};
+		}
+
 		const toolbar = root.createDiv({ cls: 'vermilion-toolbar' });
-		toolbar.createEl('button', { text: '获取并处理文章', cls: 'mod-cta' }).onclick = () => void this.prepareSync();
+		toolbar.createEl('button', { text: '获取并处理内容', cls: 'mod-cta' }).onclick = () => void this.prepareSync();
+		if (this.contentFilter === 'thought') toolbar.createEl('button', { text: '新建闪念' }).onclick = () => void this.plugin.createThought();
 		const refreshButton = toolbar.createEl('button', { text: '刷新状态' });
 		refreshButton.title = '仅重新读取服务器任务状态，不会运行 AI 分析';
 		refreshButton.onclick = () => void this.refreshJob();
 		const aiButton = toolbar.createEl('button', { text: this.aiRunning ? 'AI 分析中…' : 'AI 分析待处理' });
-		aiButton.disabled = this.aiRunning || !this.job?.articles?.length;
+		aiButton.disabled = this.aiRunning || !this.job?.articles?.some((item) => (item.kind || 'post') === 'post');
 		aiButton.onclick = () => void this.analyzePendingArticles();
 		const publishButton = toolbar.createEl('button', { text: `发布所选 (${this.selected.size})`, cls: 'mod-cta' });
 		publishButton.disabled = this.selected.size === 0 || !this.job || this.job.status === 'publishing';
@@ -216,7 +259,7 @@ export class ArticleManagerView extends ItemView {
 		if (this.aiProgress) root.createDiv({ cls: 'vermilion-ai-progress', text: this.aiProgress });
 
 		if (!this.job) {
-			root.createDiv({ cls: 'vermilion-empty', text: '点击“获取并处理文章”创建一个待审核任务。' });
+			root.createDiv({ cls: 'vermilion-empty', text: '点击“获取并处理内容”创建一个待审核任务。' });
 			return;
 		}
 		if (!this.job.articles?.length) {
@@ -224,9 +267,14 @@ export class ArticleManagerView extends ItemView {
 			return;
 		}
 
+		const visible = this.job.articles.filter((article) => (article.kind || 'post') === this.contentFilter);
+		if (!visible.length) {
+			root.createDiv({ cls: 'vermilion-empty', text: this.contentFilter === 'thought' ? '当前任务中没有闪念。请确认 S3 中使用 thoughts/ 目录或 type: thought。' : '当前任务中没有文章。' });
+			return;
+		}
 		const layout = root.createDiv({ cls: 'vermilion-layout' });
 		this.renderArticleList(layout.createDiv({ cls: 'vermilion-list' }));
-		const active = this.job.articles.find((article) => article.id === this.activeArticleId) ?? this.job.articles[0];
+		const active = visible.find((article) => article.id === this.activeArticleId) ?? visible[0];
 		this.activeArticleId = active.id;
 		this.renderEditor(layout.createDiv({ cls: 'vermilion-editor' }), active);
 		void this.renderPreview(layout.createDiv({ cls: 'vermilion-preview' }), active);
@@ -238,14 +286,18 @@ export class ArticleManagerView extends ItemView {
 			new Notice('分类体系存在未保存修改，请先保存或放弃修改。');
 			return;
 		}
+		if (this.managementTab === 'pages' && this.sitePagesDirty) {
+			new Notice('页面信息存在未保存修改，请先保存或放弃修改。');
+			return;
+		}
 		this.managementTab = tab;
 		this.render();
 	}
 
 	private renderArticleList(container: HTMLElement) {
-		container.createEl('h3', { text: '文章' });
-		container.createEl('small', { text: '勾选文章表示加入本次发布；保存草稿不会自动勾选或发布。', cls: 'vermilion-list-hint' });
-		for (const article of this.job?.articles ?? []) {
+		container.createEl('h3', { text: this.contentFilter === 'thought' ? '闪念' : '文章' });
+		container.createEl('small', { text: '勾选内容表示加入本次发布；保存草稿不会自动勾选或发布。', cls: 'vermilion-list-hint' });
+		for (const article of (this.job?.articles ?? []).filter((item) => (item.kind || 'post') === this.contentFilter)) {
 			const row = container.createDiv({ cls: `vermilion-list-item ${article.id === this.activeArticleId ? 'is-active' : ''}` });
 			const checkbox = row.createEl('input', { type: 'checkbox' });
 			checkbox.title = '加入本次发布';
@@ -293,27 +345,34 @@ export class ArticleManagerView extends ItemView {
 	}
 
 	private renderEditor(container: HTMLElement, article: ArticleDraft) {
+		const isThought = (article.kind || 'post') === 'thought';
 		const heading = container.createDiv({ cls: 'vermilion-editor-heading' });
-		heading.createEl('h3', { text: '编辑' });
-		const analyzeButton = heading.createEl('button', { text: 'AI 分析当前' });
-		analyzeButton.disabled = this.aiRunning || article.status === 'deleted' || article.status === 'conflict';
-		analyzeButton.onclick = () => void this.analyzeArticle(article);
+		heading.createEl('h3', { text: isThought ? '编辑闪念' : '编辑文章' });
+		if (!isThought) {
+			const analyzeButton = heading.createEl('button', { text: 'AI 分析当前' });
+			analyzeButton.disabled = this.aiRunning || article.status === 'deleted' || article.status === 'conflict';
+			analyzeButton.onclick = () => void this.analyzeArticle(article);
+		}
 		if (article.error) container.createDiv({ cls: 'vermilion-error', text: article.error });
-		this.labeledInput(container, '标题', article.metadata.title ?? '', (value) => { article.metadata.title = value; this.dirtyArticles.add(article.id); });
-		this.labeledInput(container, '摘要', article.metadata.description ?? '', (value) => { article.metadata.description = value; this.dirtyArticles.add(article.id); }, true);
-		this.renderCategorySelect(container, article);
+		this.labeledInput(container, isThought ? '标题（可选）' : '标题', article.metadata.title ?? '', (value) => { article.metadata.title = value; this.dirtyArticles.add(article.id); });
+		if (!isThought) {
+			this.labeledInput(container, '摘要', article.metadata.description ?? '', (value) => { article.metadata.description = value; this.dirtyArticles.add(article.id); }, true);
+			this.renderCategorySelect(container, article);
+		}
 		this.labeledInput(container, '标签（逗号分隔）', (article.metadata.tags ?? []).join(', '), (value) => {
 			article.metadata.tags = value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean);
 			this.dirtyArticles.add(article.id);
 		});
 		this.labeledInput(container, '发布时间', article.metadata.published ?? '', (value) => { article.metadata.published = value; this.dirtyArticles.add(article.id); });
-		const flags = container.createDiv({ cls: 'vermilion-flags' });
-		for (const [label, key] of [['草稿', 'draft'], ['置顶', 'pinned']] as const) {
-			const wrapper = flags.createEl('label');
-			const checkbox = wrapper.createEl('input', { type: 'checkbox' });
-			checkbox.checked = Boolean(article.metadata[key]);
-			checkbox.onchange = () => { article.metadata[key] = checkbox.checked; this.dirtyArticles.add(article.id); };
-			wrapper.appendText(label);
+		if (!isThought) {
+			const flags = container.createDiv({ cls: 'vermilion-flags' });
+			for (const [label, key] of [['草稿', 'draft'], ['置顶', 'pinned']] as const) {
+				const wrapper = flags.createEl('label');
+				const checkbox = wrapper.createEl('input', { type: 'checkbox' });
+				checkbox.checked = Boolean(article.metadata[key]);
+				checkbox.onchange = () => { article.metadata[key] = checkbox.checked; this.dirtyArticles.add(article.id); };
+				wrapper.appendText(label);
+			}
 		}
 		const bodyField = container.createDiv({ cls: 'vermilion-field' });
 		bodyField.createEl('label', { text: '正文' });
@@ -321,7 +380,7 @@ export class ArticleManagerView extends ItemView {
 		body.value = article.content;
 		body.oninput = () => { article.content = body.value; this.dirtyArticles.add(article.id); };
 
-		if (article.aiSuggestion) {
+		if (!isThought && article.aiSuggestion) {
 			const aiBox = container.createDiv({ cls: 'vermilion-ai-box' });
 			aiBox.createEl('h4', { text: 'AI 建议' });
 			aiBox.createEl('p', { text: article.aiSuggestion.description || '没有摘要建议' });
@@ -357,10 +416,96 @@ export class ArticleManagerView extends ItemView {
 		container.createEl('h3', { text: '预览' });
 		const meta = container.createDiv({ cls: 'vermilion-preview-meta' });
 		meta.createEl('strong', { text: article.metadata.title });
-		meta.createEl('p', { text: article.metadata.description ?? '' });
-		meta.createEl('small', { text: `${article.metadata.category ?? '未分类'} · ${(article.metadata.tags ?? []).join('、')}` });
+		if ((article.kind || 'post') !== 'thought') meta.createEl('p', { text: article.metadata.description ?? '' });
+		meta.createEl('small', { text: (article.kind || 'post') === 'thought' ? (article.metadata.tags ?? []).join('、') : `${article.metadata.category ?? '未分类'} · ${(article.metadata.tags ?? []).join('、')}` });
 		const markdown = container.createDiv({ cls: 'markdown-preview-view' });
 		await MarkdownRenderer.render(this.app, article.content, markdown, this.localPath(article), this);
+	}
+
+	private renderSitePages(container: HTMLElement) {
+		const section = container.createDiv({ cls: 'vermilion-pages' });
+		const heading = section.createDiv({ cls: 'vermilion-section-heading' });
+		heading.createEl('h3', { text: '页面信息' });
+		heading.createEl('span', {
+			text: this.sitePagesDirty ? '● 有未保存修改' : '已与服务器同步',
+			cls: this.sitePagesDirty ? 'vermilion-dirty' : 'vermilion-synced',
+		});
+		section.createEl('p', {
+			text: '管理各页面的浏览器标题、SEO 描述、页面主标题和副标题。这里不会修改页面布局或书架、友链的结构化条目。',
+			cls: 'vermilion-taxonomy-summary',
+		});
+		if (this.sitePagesState === 'loading') {
+			section.createDiv({ cls: 'vermilion-state-card', text: '正在加载页面信息……' });
+			return;
+		}
+		if (this.sitePagesState === 'error' || !this.sitePages) {
+			const card = section.createDiv({ cls: 'vermilion-state-card is-error' });
+			card.createEl('strong', { text: '页面信息加载失败' });
+			card.createEl('p', { text: this.sitePagesError || '未知错误' });
+			card.createEl('button', { text: '重试' }).onclick = () => void this.loadSitePages(true);
+			return;
+		}
+		const grid = section.createDiv({ cls: 'vermilion-page-grid' });
+		for (const page of this.sitePages.pages) {
+			const card = grid.createDiv({ cls: 'vermilion-page-card' });
+			card.createEl('h4', { text: page.name });
+			card.createEl('small', { text: page.key });
+			this.labeledInput(card, '浏览器标题', page.title, (value) => { page.title = value; this.markSitePagesDirty(); });
+			this.labeledInput(card, 'SEO 描述', page.description, (value) => { page.description = value; this.markSitePagesDirty(); }, true);
+			this.labeledInput(card, '页面主标题', page.heading, (value) => { page.heading = value; this.markSitePagesDirty(); });
+			this.labeledInput(card, '页面副标题', page.subtitle, (value) => { page.subtitle = value; this.markSitePagesDirty(); });
+		}
+		const actions = section.createDiv({ cls: `vermilion-save-bar ${this.sitePagesDirty ? 'is-dirty' : ''}` });
+		actions.createSpan({ text: this.sitePagesDirty ? '修改尚未保存到服务器草稿。' : '可以单独发布页面信息，不需要创建文章任务。' });
+		const reload = actions.createEl('button', { text: '放弃并重新加载' });
+		reload.onclick = () => void this.loadSitePages();
+		const save = actions.createEl('button', { text: '保存草稿', cls: 'mod-cta' });
+		save.onclick = () => void this.saveSitePages();
+		const publish = actions.createEl('button', { text: '发布页面信息', cls: 'mod-cta' });
+		publish.onclick = () => void this.publishSitePages();
+	}
+
+	private markSitePagesDirty() {
+		this.sitePagesDirty = Boolean(this.sitePages && JSON.stringify(this.sitePages) !== this.sitePagesBaseline);
+		const status = this.contentEl.querySelector('.vermilion-pages .vermilion-section-heading span');
+		if (status instanceof HTMLElement) {
+			status.textContent = this.sitePagesDirty ? '● 有未保存修改' : '已与服务器同步';
+			status.classList.toggle('vermilion-dirty', this.sitePagesDirty);
+			status.classList.toggle('vermilion-synced', !this.sitePagesDirty);
+		}
+		const saveBar = this.contentEl.querySelector('.vermilion-pages .vermilion-save-bar');
+		if (saveBar instanceof HTMLElement) {
+			saveBar.classList.toggle('is-dirty', this.sitePagesDirty);
+			const message = saveBar.querySelector('span');
+			if (message) message.textContent = this.sitePagesDirty ? '修改尚未保存到服务器草稿。' : '可以单独发布页面信息，不需要创建文章任务。';
+		}
+	}
+
+	private async saveSitePages(notify = true) {
+		if (!this.sitePages) return false;
+		try {
+			this.sitePages = await this.plugin.api.saveSitePages(this.sitePages);
+			this.sitePagesBaseline = JSON.stringify(this.sitePages);
+			this.sitePagesDirty = false;
+			if (notify) new Notice('页面信息草稿已保存；网站尚未更新。');
+			this.render();
+			return true;
+		} catch (error) {
+			new Notice(`保存页面信息失败：${describeApiError(error)}`);
+			return false;
+		}
+	}
+
+	private async publishSitePages() {
+		if (this.sitePagesDirty && !(await this.saveSitePages(false))) return;
+		if (!window.confirm('确认把页面信息发布到 deploy 吗？')) return;
+		try {
+			const response = await this.plugin.api.publishSitePages();
+			new Notice(`页面信息发布成功：${response.commitSha.slice(0, 12)}`);
+			await this.loadSitePages();
+		} catch (error) {
+			new Notice(`页面信息发布失败：${describeApiError(error)}`);
+		}
 	}
 
 	private renderTaxonomy(container: HTMLElement) {
@@ -647,7 +792,7 @@ export class ArticleManagerView extends ItemView {
 	private renderAISuggestions(container: HTMLElement) {
 		const section = container.createDiv({ cls: 'vermilion-taxonomy vermilion-suggestions' });
 		section.createEl('h3', { text: 'AI 建议审批' });
-		section.createEl('p', { text: '这里只审批 AI 提出的新分类和新标签。运行 AI 分析仍需在文章管理中主动点击。' });
+		section.createEl('p', { text: '这里只审批 AI 提出的新分类和新标签。运行 AI 分析仍需在内容管理中主动点击。' });
 		const entries = this.suggestionEntries();
 		const tabs = section.createDiv({ cls: 'vermilion-taxonomy-tabs' });
 		for (const [label, value] of [['全部', 'all'], ['新标签', 'tags'], ['新分类', 'categories']] as const) {
@@ -868,7 +1013,7 @@ export class ArticleManagerView extends ItemView {
 	}
 
 	private needsLocalAI(article: ArticleDraft) {
-		return article.status !== 'deleted' && article.status !== 'conflict' && !article.aiSuggestion && (
+		return (article.kind || 'post') === 'post' && article.status !== 'deleted' && article.status !== 'conflict' && !article.aiSuggestion && (
 			article.status === 'new' ||
 			!article.metadata.description?.trim() ||
 			!article.metadata.category?.trim() ||
@@ -972,7 +1117,9 @@ export class ArticleManagerView extends ItemView {
 			return;
 		}
 		if (articles.some((article) => article.status === 'deleted') && !window.confirm('所选内容包含待删除文章，确认从网站删除吗？')) return;
-		if (!window.confirm(`确认直接发布 ${articles.length} 篇文章到 deploy 吗？`)) return;
+		const postCount = articles.filter((article) => (article.kind || 'post') === 'post').length;
+		const thoughtCount = articles.length - postCount;
+		if (!window.confirm(`确认直接发布 ${postCount} 篇文章、${thoughtCount} 条闪念到 deploy 吗？`)) return;
 		try {
 			if (!await this.saveTaxonomy(false)) return;
 			const response = await this.plugin.api.publish(this.job.id, articles);
@@ -985,19 +1132,36 @@ export class ArticleManagerView extends ItemView {
 	}
 
 	private localPath(article: ArticleDraft) {
-		return normalizePath([this.plugin.settings.localPostsFolder, article.filename].filter(Boolean).join('/'));
+		const folder = (article.kind || 'post') === 'thought'
+			? this.plugin.settings.localThoughtsFolder
+			: this.plugin.settings.localPostsFolder;
+		return normalizePath([folder, article.filename].filter(Boolean).join('/'));
 	}
 
 	private async collectLocalManifest(): Promise<LocalFile[]> {
-		const prefix = this.plugin.settings.localPostsFolder ? normalizePath(this.plugin.settings.localPostsFolder) + '/' : '';
-		const files = this.app.vault.getFiles().filter((file) => file.path.startsWith(prefix) && /\.mdx?$/i.test(file.path));
-		return Promise.all(files.map(async (file) => ({ path: file.path, hash: await sha256(await this.app.vault.read(file)) })));
+		const entries: Array<{ file: TFile; kind: 'post' | 'thought' }> = [];
+		const thoughtPrefix = this.plugin.settings.localThoughtsFolder ? normalizePath(this.plugin.settings.localThoughtsFolder) + '/' : '';
+		for (const [folder, kind] of [
+			[this.plugin.settings.localPostsFolder, 'post'],
+			[this.plugin.settings.localThoughtsFolder, 'thought'],
+		] as const) {
+			const normalized = folder ? normalizePath(folder) + '/' : '';
+			for (const file of this.app.vault.getFiles()) {
+				if (!file.path.startsWith(normalized) || !/\.mdx?$/i.test(file.path)) continue;
+				if (kind === 'post' && thoughtPrefix && file.path.startsWith(thoughtPrefix)) continue;
+				entries.push({ file, kind });
+			}
+		}
+		const unique = new Map(entries.map((entry) => [`${entry.kind}:${entry.file.path}`, entry]));
+		return Promise.all(Array.from(unique.values()).map(async ({ file, kind }) => ({ path: file.path, hash: await sha256(await this.app.vault.read(file)), kind })));
 	}
 
 	private composeMarkdown(article: ArticleDraft) {
 		const metadata: Record<string, unknown> = { ...(article.metadata.extra ?? {}) };
 		for (const [key, value] of Object.entries(article.metadata)) {
-			if (key !== 'extra' && value !== undefined && value !== '') metadata[key] = value;
+			if (key === 'contentType') {
+				if (value) metadata.type = value;
+			} else if (key !== 'extra' && value !== undefined && value !== '') metadata[key] = value;
 		}
 		return `---\n${stringifyYaml(metadata).trim()}\n---\n\n${article.content.trim()}\n`;
 	}

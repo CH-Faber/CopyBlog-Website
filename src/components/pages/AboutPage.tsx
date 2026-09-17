@@ -1,7 +1,13 @@
 import { MapPin, Github, MessageCircle, Music, Heart } from "lucide-react"
 import { profile } from "@/data/profile"
 
-export default function AboutPage() {
+export default function AboutPage({
+  heading = "关于我",
+  subtitle = profile.bio,
+}: {
+  heading?: string
+  subtitle?: string
+}) {
   return (
     <div className="min-h-screen bg-background dark:bg-muted/30">
       <main className="pt-32 pb-8">
@@ -27,9 +33,9 @@ export default function AboutPage() {
               <div className="flex-1">
                 <h1 className="text-4xl font-bold text-foreground mb-2 flex items-center gap-3">
                   <span className="w-1 h-8 bg-primary rounded-full" />
-                  关于我
+                  {heading}
                 </h1>
-                <p className="text-xl text-muted-foreground mb-4">{profile.bio}</p>
+                <p className="text-xl text-muted-foreground mb-4">{subtitle}</p>
 
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-6">
                   <span className="flex items-center gap-1.5">

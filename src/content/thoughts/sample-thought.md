@@ -1,4 +1,5 @@
 ---
+type: thought
 published: 2025-01-01T12:00:00.000Z
 tags: ["update", "life"]
 ---

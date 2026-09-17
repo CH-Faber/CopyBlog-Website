@@ -47,6 +47,7 @@ const thoughts = defineCollection({
     title: z.string().optional(),
     published: z.date(),
     tags: z.array(z.string()).optional().default([]),
+    type: z.enum(["thought", "flash"]).optional(),
   }),
 })
 

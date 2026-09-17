@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "pages": [
+    {
+      "key": "home",
+      "name": "首页",
+      "title": "Faber的Blog",
+      "description": "在无数迷茫中寻找自己人生的定位",
+      "heading": "近期文章",
+      "subtitle": "全部文章"
+    },
+    {
+      "key": "timeline",
+      "name": "时间线",
+      "title": "时间线 | 一个闪念",
+      "description": "全部文章时间线",
+      "heading": "文章时间线",
+      "subtitle": "按时间浏览全部文章"
+    },
+    {
+      "key": "thoughts",
+      "name": "闪念",
+      "title": "闪念 | 一个闪念",
+      "description": "零散的想法与灵感",
+      "heading": "闪念",
+      "subtitle": "灵感拾遗"
+    },
+    {
+      "key": "bookshelf",
+      "name": "书架",
+      "title": "书架 | 一个闪念",
+      "description": "我的阅读清单与书评。",
+      "heading": "书架",
+      "subtitle": "博学而笃志，切问而近思"
+    },
+    {
+      "key": "friends",
+      "name": "友链",
+      "title": "友链 | 一个闪念",
+      "description": "友情链接与推荐博客。",
+      "heading": "友情链接",
+      "subtitle": "这些是我欣赏的创作者们，他们在各自的领域持续输出优质内容。"
+    },
+    {
+      "key": "about",
+      "name": "关于",
+      "title": "关于 | 一个闪念",
+      "description": "了解更多关于博客作者的信息。",
+      "heading": "关于我",
+      "subtitle": "在无数迷茫中寻找自己人生的定位"
+    }
+  ]
+}
