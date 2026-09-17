@@ -11,7 +11,7 @@ const DEFAULT_SETTINGS: SyncSettings = {
 	syncEndpoint: 'http://localhost:3001/api/sync',
 	webhookSecret: '',
 	localPostsFolder: '',
-	localThoughtsFolder: '闪念',
+	localThoughtsFolder: 'websites/thoughts',
 	activeJobId: '',
 	aiBaseUrl: 'https://api.openai.com/v1',
 	aiApiKey: '',
@@ -126,7 +126,7 @@ export default class SyncPlugin extends Plugin {
 	}
 
 	async createThought() {
-		const folder = normalizePath(this.settings.localThoughtsFolder || '闪念');
+		const folder = normalizePath(this.settings.localThoughtsFolder || 'websites/thoughts');
 		let current = '';
 		for (const part of folder.split('/').filter(Boolean)) {
 			current = current ? `${current}/${part}` : part;
@@ -224,8 +224,8 @@ class SyncSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('本地闪念目录')
-			.setDesc('Obsidian Vault 内保存闪念的目录，例如 闪念 或 Blog/闪念。同步到 S3 后，thoughts/、flashes/、闪念/ 目录会被识别；也可用 frontmatter 的 type: thought 标记。')
-			.addText((text) => text.setPlaceholder('Blog/闪念').setValue(this.plugin.settings.localThoughtsFolder).onChange(async (value) => {
+			.setDesc('Obsidian Vault 内保存闪念的目录。当前 S3 文章前缀为 websites/，请使用 websites/thoughts；同步后会以闪念处理，也可用 frontmatter 的 type: thought 标记。')
+			.addText((text) => text.setPlaceholder('websites/thoughts').setValue(this.plugin.settings.localThoughtsFolder).onChange(async (value) => {
 				this.plugin.settings.localThoughtsFolder = value.replace(/^\/+|\/+$/g, '');
 				await this.plugin.saveSettings();
 			}));

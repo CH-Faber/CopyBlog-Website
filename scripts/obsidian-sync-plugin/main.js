@@ -561,7 +561,7 @@ var ArticleManagerView = class extends import_obsidian3.ItemView {
     }
     const visible = this.job.articles.filter((article) => (article.kind || "post") === this.contentFilter);
     if (!visible.length) {
-      root.createDiv({ cls: "vermilion-empty", text: this.contentFilter === "thought" ? "\u5F53\u524D\u4EFB\u52A1\u4E2D\u6CA1\u6709\u95EA\u5FF5\u3002\u8BF7\u786E\u8BA4 S3 \u4E2D\u4F7F\u7528 thoughts/ \u76EE\u5F55\u6216 type: thought\u3002" : "\u5F53\u524D\u4EFB\u52A1\u4E2D\u6CA1\u6709\u6587\u7AE0\u3002" });
+      root.createDiv({ cls: "vermilion-empty", text: this.contentFilter === "thought" ? "\u5F53\u524D\u4EFB\u52A1\u4E2D\u6CA1\u6709\u95EA\u5FF5\u3002\u8BF7\u786E\u8BA4 S3 \u4E2D\u4F7F\u7528 websites/thoughts/ \u76EE\u5F55\u6216 type: thought\u3002" : "\u5F53\u524D\u4EFB\u52A1\u4E2D\u6CA1\u6709\u6587\u7AE0\u3002" });
       return;
     }
     const layout = root.createDiv({ cls: "vermilion-layout" });
@@ -1665,7 +1665,7 @@ var DEFAULT_SETTINGS = {
   syncEndpoint: "http://localhost:3001/api/sync",
   webhookSecret: "",
   localPostsFolder: "",
-  localThoughtsFolder: "\u95EA\u5FF5",
+  localThoughtsFolder: "websites/thoughts",
   activeJobId: "",
   aiBaseUrl: "https://api.openai.com/v1",
   aiApiKey: "",
@@ -1775,7 +1775,7 @@ var SyncPlugin = class extends import_obsidian4.Plugin {
     this.app.workspace.revealLeaf(leaf);
   }
   async createThought() {
-    const folder = (0, import_obsidian4.normalizePath)(this.settings.localThoughtsFolder || "\u95EA\u5FF5");
+    const folder = (0, import_obsidian4.normalizePath)(this.settings.localThoughtsFolder || "websites/thoughts");
     let current = "";
     for (const part of folder.split("/").filter(Boolean)) {
       current = current ? `${current}/${part}` : part;
@@ -1848,7 +1848,7 @@ var SyncSettingTab = class extends import_obsidian4.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian4.Setting(containerEl).setName("\u672C\u5730\u95EA\u5FF5\u76EE\u5F55").setDesc("Obsidian Vault \u5185\u4FDD\u5B58\u95EA\u5FF5\u7684\u76EE\u5F55\uFF0C\u4F8B\u5982 \u95EA\u5FF5 \u6216 Blog/\u95EA\u5FF5\u3002\u540C\u6B65\u5230 S3 \u540E\uFF0Cthoughts/\u3001flashes/\u3001\u95EA\u5FF5/ \u76EE\u5F55\u4F1A\u88AB\u8BC6\u522B\uFF1B\u4E5F\u53EF\u7528 frontmatter \u7684 type: thought \u6807\u8BB0\u3002").addText((text2) => text2.setPlaceholder("Blog/\u95EA\u5FF5").setValue(this.plugin.settings.localThoughtsFolder).onChange(async (value) => {
+    new import_obsidian4.Setting(containerEl).setName("\u672C\u5730\u95EA\u5FF5\u76EE\u5F55").setDesc("Obsidian Vault \u5185\u4FDD\u5B58\u95EA\u5FF5\u7684\u76EE\u5F55\u3002\u5F53\u524D S3 \u6587\u7AE0\u524D\u7F00\u4E3A websites/\uFF0C\u8BF7\u4F7F\u7528 websites/thoughts\uFF1B\u540C\u6B65\u540E\u4F1A\u4EE5\u95EA\u5FF5\u5904\u7406\uFF0C\u4E5F\u53EF\u7528 frontmatter \u7684 type: thought \u6807\u8BB0\u3002").addText((text2) => text2.setPlaceholder("websites/thoughts").setValue(this.plugin.settings.localThoughtsFolder).onChange(async (value) => {
       this.plugin.settings.localThoughtsFolder = value.replace(/^\/+|\/+$/g, "");
       await this.plugin.saveSettings();
     }));

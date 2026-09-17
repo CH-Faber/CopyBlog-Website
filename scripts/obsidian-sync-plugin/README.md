@@ -1,4 +1,4 @@
-# 一个闪念 · 内容管理 0.8
+# 一个闪念 · 内容管理 0.8.1
 
 Obsidian 内置的博客文章、闪念、分类标签与页面信息审核发布管理器。
 
@@ -11,8 +11,8 @@ Obsidian 内置的博客文章、闪念、分类标签与页面信息审核发�
 ## 工作流
 
 1. 打开“一个闪念 · 内容管理”。
-   需要新内容时，可以切换到“闪念”并点击“新建闪念”；插件会在本地闪念目录创建包含 `type: thought` 的 Markdown 草稿。
-2. 点击“获取并处理内容”。服务器拉取并暂存文章与闪念，不使用本地 AI 密钥，也不会自动发布。S3 根目录中的 Markdown 默认为文章；`thoughts/`、`flashes/`、`闪念/` 子目录或带 `type: thought` frontmatter 的 Markdown 会作为闪念。
+   需要新内容时，可以切换到“闪念”并点击“新建闪念”；插件默认在 `websites/thoughts/` 创建包含 `type: thought` 的 Markdown 草稿。
+2. 点击“获取并处理内容”。服务器拉取并暂存文章与闪念，不使用本地 AI 密钥，也不会自动发布。生产服务读取 `websites/` S3 前缀；其中 `thoughts/`、`flashes/`、`闪念/` 子目录或带 `type: thought` frontmatter 的 Markdown 会作为闪念。
 3. 插件使用 Obsidian 本地配置的模型生成摘要、分类和标签建议；也可以点击“AI 分析当前”重新分析。
 4. 编辑元数据和正文，审批 AI 提出的新分类和新标签，然后保存到本地。
 5. 勾选文章或闪念并点击“发布所选”，服务器将批准版本分别写入 `src/content/posts/`、`src/content/thoughts/` 并推送到 `deploy`。

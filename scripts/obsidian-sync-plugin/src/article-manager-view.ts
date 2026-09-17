@@ -269,7 +269,7 @@ export class ArticleManagerView extends ItemView {
 
 		const visible = this.job.articles.filter((article) => (article.kind || 'post') === this.contentFilter);
 		if (!visible.length) {
-			root.createDiv({ cls: 'vermilion-empty', text: this.contentFilter === 'thought' ? '当前任务中没有闪念。请确认 S3 中使用 thoughts/ 目录或 type: thought。' : '当前任务中没有文章。' });
+			root.createDiv({ cls: 'vermilion-empty', text: this.contentFilter === 'thought' ? '当前任务中没有闪念。请确认 S3 中使用 websites/thoughts/ 目录或 type: thought。' : '当前任务中没有文章。' });
 			return;
 		}
 		const layout = root.createDiv({ cls: 'vermilion-layout' });
