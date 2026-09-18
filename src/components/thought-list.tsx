@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { MouseEvent } from "react"
+import { createPortal } from "react-dom"
 import {
   Check,
   ChevronDown,
@@ -150,6 +151,44 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
     }
   }, [lightboxIndex])
 
+  const activeImage = lightboxIndex === null ? null : thought.images[lightboxIndex]
+  const lightbox = activeImage && typeof document !== "undefined"
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="图片预览"
+          onClick={() => setLightboxIndex(null)}
+        >
+          <img
+            src={activeImage.src}
+            alt={activeImage.alt || "闪念配图"}
+            className="max-h-[88dvh] max-w-[94vw] object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+          <button
+            type="button"
+            className="fixed right-4 top-4 z-[101] inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/20 bg-black/70 px-4 py-2 text-sm font-medium text-white shadow-xl transition-colors hover:bg-black/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            style={{ top: "max(1rem, env(safe-area-inset-top))", right: "max(1rem, env(safe-area-inset-right))" }}
+            onClick={(event) => {
+              event.stopPropagation()
+              setLightboxIndex(null)
+            }}
+            aria-label="关闭图片预览"
+            autoFocus
+          >
+            <X className="h-5 w-5" />
+            <span>关闭</span>
+          </button>
+          <span className="pointer-events-none fixed bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1.5 text-xs text-white/75">
+            点击空白处关闭
+          </span>
+        </div>,
+        document.body,
+      )
+    : null
+
   return (
     <article id={`thought-${thought.slug}`} className="scroll-mt-28 border-b border-border/60 py-8 first:pt-2 last:border-b-0 onload-animation" style={{ animationDelay: `calc(var(--content-delay) + ${index * 50}ms)` }}>
       <div className="flex items-start gap-3">
@@ -181,7 +220,7 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
         </div>
       </div>
 
-      {lightboxIndex !== null && thought.images[lightboxIndex] ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label="图片预览" onClick={(event) => { if (event.target === event.currentTarget) setLightboxIndex(null) }}><div className="relative flex max-h-[92vh] max-w-[94vw] items-center justify-center" onClick={(event) => event.stopPropagation()}><img src={thought.images[lightboxIndex].src} alt={thought.images[lightboxIndex].alt || "闪念配图"} className="max-h-[88vh] max-w-[94vw] object-contain" /><button type="button" className="absolute -right-3 -top-3 z-10 rounded-full bg-black/60 p-2 text-white/85 shadow-lg transition-colors hover:bg-black/80 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white" onClick={() => setLightboxIndex(null)} aria-label="关闭图片预览"><X className="h-5 w-5" /></button></div></div> : null}
+      {lightbox}
     </article>
   )
 }
