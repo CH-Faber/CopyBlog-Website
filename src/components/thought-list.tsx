@@ -1,7 +1,20 @@
 "use client"
 
-import { useMemo, useState, useEffect, useRef, useCallback } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import type { MouseEvent } from "react"
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  X,
+} from "lucide-react"
+import { profile } from "@/data/profile"
 import {
   Pagination,
   PaginationContent,
@@ -9,15 +22,16 @@ import {
   PaginationItem,
   PaginationLink,
 } from "@/components/ui/pagination"
-import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export type ThoughtMeta = {
   slug: string
   title?: string
   content: string
+  plainText: string
   date: string
   tags: string[]
+  images: { src: string; alt: string }[]
 }
 
 type PaginationMeta = {
@@ -27,8 +41,7 @@ type PaginationMeta = {
 }
 
 const HIDDEN = -1
-const ADJACENT_DISTANCE = 2
-const VISIBLE_PAGES = ADJACENT_DISTANCE * 2 + 1
+const VISIBLE_PAGES = 5
 
 const normalizeBasePath = (basePath: string) => {
   if (!basePath.startsWith("/")) return `/${basePath}`.replace(/\/+$/, "")
@@ -43,245 +56,176 @@ const getPageHref = (pageNumber: number, basePath: string) => {
 
 const buildPageRange = (currentPage: number, totalPages: number) => {
   if (totalPages <= 1) return []
-
-  let count = 1
-  let left = currentPage
-  let right = currentPage
-
-  while (left - 1 > 0 && right + 1 <= totalPages && count + 2 <= VISIBLE_PAGES) {
-    count += 2
-    left -= 1
-    right += 1
-  }
-
-  while (left - 1 > 0 && count < VISIBLE_PAGES) {
-    count += 1
-    left -= 1
-  }
-
-  while (right + 1 <= totalPages && count < VISIBLE_PAGES) {
-    count += 1
-    right += 1
-  }
-
   const pages: number[] = []
-  if (left > 1) pages.push(1)
-  if (left === 3) pages.push(2)
-  if (left > 3) pages.push(HIDDEN)
-  for (let page = left; page <= right; page += 1) pages.push(page)
-  if (right < totalPages - 2) pages.push(HIDDEN)
-  if (right === totalPages - 2) pages.push(totalPages - 1)
-  if (right < totalPages) pages.push(totalPages)
-
+  const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4))
+  const end = Math.min(totalPages, start + VISIBLE_PAGES - 1)
+  if (start > 1) pages.push(1, ...(start > 2 ? [HIDDEN] : []))
+  for (let page = start; page <= end; page += 1) pages.push(page)
+  if (end < totalPages) pages.push(...(end < totalPages - 1 ? [HIDDEN] : []), totalPages)
   return pages
 }
 
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${year}.${month}.${day}`
+const dateKey = (dateString: string) => {
+  const date = new Date(dateString)
+  return Number.isNaN(date.getTime()) ? dateString : date.toLocaleDateString("zh-CN")
 }
 
-function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }) {
+const dateHeading = (dateString: string) => {
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return dateString
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const days = Math.round((today - target) / 86400000)
+  if (days === 0) return "今天"
+  if (days === 1) return "昨天"
+  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日`
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+const timeLabel = (dateString: string) => {
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return dateString
+  return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+}
+
+const fullDateLabel = (dateString: string) => {
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return dateString
+  return date.toLocaleString("zh-CN", { dateStyle: "long", timeStyle: "short" })
+}
+
+function ThoughtMedia({ images, onOpen }: { images: ThoughtMeta["images"]; onOpen: (index: number) => void }) {
+  if (!images.length) return null
+  const visibleImages = images.slice(0, 9)
+  const layout = images.length === 1 ? "max-w-md" : "grid grid-cols-2 gap-2 sm:grid-cols-3 max-w-lg"
+
   return (
-    <div
-      id={`thought-${thought.slug}`}
-      className="relative pl-8 pb-8 last:pb-0 onload-animation scroll-mt-24"
-      style={{ animationDelay: `calc(var(--content-delay) + ${index * 50}ms)` }}
-    >
-      {/* Timeline line */}
-      <div className="absolute left-[7px] top-3 bottom-0 w-px bg-border/50 last:hidden" />
-
-      {/* Timeline dot */}
-      <div className="absolute left-0 top-1.5 w-[15px] h-[15px] rounded-full border-2 border-primary bg-background" />
-
-      {/* Date */}
-      <div className="text-xs text-muted-foreground mb-2 font-medium tracking-wide">
-        {formatDate(thought.date)}
-      </div>
-
-      {/* Content card */}
-      <div className="bg-card border border-border/50 rounded-xl p-5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300">
-        {thought.title && (
-          <h3 className="font-serif text-xl font-semibold text-foreground mb-3">
-            {thought.title}
-          </h3>
-        )}
-        <div
-          className="prose prose-neutral dark:prose-invert max-w-none
-          prose-p:text-base prose-p:leading-8 prose-p:my-4 prose-p:first:mt-0 prose-p:text-foreground/90
-          prose-a:text-primary prose-a:no-underline prose-a:hover:underline
-          prose-strong:text-foreground prose-strong:font-semibold
-          prose-code:text-primary prose-code:bg-secondary prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
-          prose-blockquote:border-l-primary prose-blockquote:border-l-2 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-foreground/70 prose-blockquote:font-normal
-          prose-ol:text-foreground/90 prose-ul:text-foreground/90 prose-ol:my-4 prose-ul:my-4
-          prose-li:marker:text-primary prose-li:my-1.5"
-          dangerouslySetInnerHTML={{ __html: thought.content }}
-        />
-        {thought.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border/50">
-            {thought.tags.map((tag) => (
-              <span
-                key={tag}
-                className="px-2 py-0.5 rounded-md text-xs bg-secondary text-muted-foreground"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className={cn("mt-4", layout)}>
+      {visibleImages.map((image, index) => {
+        const remaining = images.length - 9
+        return (
+          <button key={`${image.src}-${index}`} type="button" className={cn("group relative block overflow-hidden rounded-xl bg-muted/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary", images.length === 1 ? "w-full" : "aspect-square")} onClick={() => onOpen(index)} aria-label={`查看第 ${index + 1} 张图片`}>
+            <img src={image.src} alt={image.alt || "闪念配图"} loading="lazy" decoding="async" className={cn("h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]", images.length === 1 && "max-h-[28rem] object-contain")} />
+            {index === 8 && remaining > 0 ? <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-2xl font-semibold text-white">+{remaining}</span> : null}
+          </button>
+        )
+      })}
     </div>
   )
 }
 
-function ThoughtSidebar({
-  tags,
-  activeTag,
-  onTagChange,
-}: {
-  tags: string[]
-  activeTag: string | null
-  onTagChange: (tag: string | null) => void
-}) {
+function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const hasMore = thought.plainText.length > 280 || (thought.content.match(/<p\b/gi)?.length ?? 0) > 4
+  const href = `/thoughts/#thought-${thought.slug}`
+
+  const copyLink = async () => {
+    if (typeof window === "undefined") return
+    const url = `${window.location.origin}${href}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      window.prompt("复制这条闪念的链接：", url)
+    }
+  }
+
+  useEffect(() => {
+    if (lightboxIndex === null) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLightboxIndex(null)
+    }
+    document.addEventListener("keydown", closeOnEscape)
+    return () => document.removeEventListener("keydown", closeOnEscape)
+  }, [lightboxIndex])
+
   return (
-    <aside className="w-full lg:w-64 shrink-0">
-      <div className="bg-card border border-border/50 rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-1 h-4 bg-primary rounded-full" />
-          <h4 className="font-medium text-foreground">标签</h4>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => onTagChange(activeTag === tag ? null : tag)}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs transition-colors",
-                activeTag === tag
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {tag}
-            </button>
-          ))}
+    <article id={`thought-${thought.slug}`} className="scroll-mt-28 border-b border-border/60 py-8 first:pt-2 last:border-b-0 onload-animation" style={{ animationDelay: `calc(var(--content-delay) + ${index * 50}ms)` }}>
+      <div className="flex items-start gap-3">
+        <img src={profile.avatar} alt={profile.name} width={44} height={44} className="mt-0.5 h-11 w-11 shrink-0 rounded-full border border-border/70 bg-muted object-cover" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-[15px] font-semibold leading-5 text-foreground">{profile.name}</h3>
+              <time dateTime={thought.date} title={fullDateLabel(thought.date)} className="mt-0.5 block text-xs text-muted-foreground">{dateHeading(thought.date)} · {timeLabel(thought.date)}</time>
+            </div>
+            <a href={href} className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" aria-label="打开闪念链接" title="打开闪念链接"><ExternalLink className="h-4 w-4" /></a>
+          </div>
+
+          <div className="mt-3">
+            {thought.title ? <h4 className="mb-2 text-[15px] font-semibold text-foreground">{thought.title}</h4> : null}
+            <div className={cn("relative overflow-hidden text-[15px] leading-7 text-foreground/90 transition-[max-height] duration-300 [&_a]:text-primary [&_a]:underline-offset-2 [&_a:hover]:underline [&_blockquote]:border-l-primary [&_blockquote]:text-foreground/70 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:text-[13px] [&_li]:my-1 [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0", hasMore && !expanded ? "max-h-[11.5rem]" : "max-h-[5000px]")} dangerouslySetInnerHTML={{ __html: thought.content }} />
+            {hasMore && !expanded ? <div className="relative -mt-10 flex h-10 items-end bg-gradient-to-t from-background via-background/95 to-transparent pt-5"><button type="button" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" onClick={() => setExpanded(true)}>全文 <ChevronDown className="h-4 w-4" /></button></div> : null}
+            {hasMore && expanded ? <button type="button" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" onClick={() => setExpanded(false)}>收起 <ChevronUp className="h-4 w-4" /></button> : null}
+          </div>
+
+          <ThoughtMedia images={thought.images} onOpen={setLightboxIndex} />
+          {thought.tags.length ? <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5">{thought.tags.map((tag) => <a key={tag} href={`/thoughts/?tag=${encodeURIComponent(tag)}#thoughts-main`} className="text-sm text-primary hover:underline">#{tag}</a>)}</div> : null}
+
+          <div className="mt-5 flex items-center gap-1 border-t border-border/50 pt-3 text-xs text-muted-foreground">
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted hover:text-foreground" onClick={() => void copyLink()}>{copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "已复制" : "复制链接"}</button>
+            <a href={href} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted hover:text-foreground"><LinkIcon className="h-3.5 w-3.5" /> 查看原文</a>
+            {thought.images.length ? <span className="ml-auto inline-flex items-center gap-1.5 px-2 py-1.5"><ImageIcon className="h-3.5 w-3.5" /> {thought.images.length} 张图片</span> : null}
+          </div>
         </div>
       </div>
-    </aside>
+
+      {lightboxIndex !== null && thought.images[lightboxIndex] ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" onClick={() => setLightboxIndex(null)}><button type="button" className="absolute right-4 top-4 rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white" onClick={() => setLightboxIndex(null)} aria-label="关闭图片预览"><X className="h-6 w-6" /></button><img src={thought.images[lightboxIndex].src} alt={thought.images[lightboxIndex].alt || "闪念配图"} className="max-h-[90vh] max-w-[92vw] object-contain" onClick={(event) => event.stopPropagation()} /></div> : null}
+    </article>
   )
 }
 
-export function ThoughtList({
-  thoughts,
-  tags: sidebarTags,
-  pagination,
-  heading = "闪念",
-  subtitle = "灵感拾遗",
-}: {
-  thoughts: ThoughtMeta[]
-  tags: string[]
-  pagination?: PaginationMeta
-  heading?: string
-  subtitle?: string
-}) {
-  const sectionRef = useRef<HTMLElement | null>(null)
+export function ThoughtList({ thoughts, tags: sidebarTags, pagination, heading = "闪念", subtitle = "灵感拾遗" }: { thoughts: ThoughtMeta[]; tags: string[]; pagination?: PaginationMeta; heading?: string; subtitle?: string }) {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(pagination?.currentPage ?? 1)
   const basePath = pagination?.basePath ?? "/thoughts"
-
-  const tags = sidebarTags
 
   const syncFromLocation = useCallback(() => {
     if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
     const queryTag = params.get("tag")?.trim()
-
-    let nextTag: string | null = null
-    if (queryTag && tags.includes(queryTag)) {
-      nextTag = queryTag
-    }
-
+    const nextTag = queryTag && sidebarTags.includes(queryTag) ? queryTag : null
     setActiveTag(nextTag)
     setCurrentPage(nextTag ? 1 : pagination?.currentPage ?? 1)
-
-    if (document.documentElement.hasAttribute("data-prefilter")) {
-      requestAnimationFrame(() => {
-        document.documentElement.removeAttribute("data-prefilter")
-      })
-    }
-  }, [tags, pagination?.currentPage])
+  }, [sidebarTags, pagination?.currentPage])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
     syncFromLocation()
-
-    const handleLocationChange = () => syncFromLocation()
-
-    window.addEventListener("popstate", handleLocationChange)
-    document.addEventListener("astro:page-load", handleLocationChange)
-    document.addEventListener("astro:after-swap", handleLocationChange)
+    window.addEventListener("popstate", syncFromLocation)
+    document.addEventListener("astro:page-load", syncFromLocation)
     return () => {
-      window.removeEventListener("popstate", handleLocationChange)
-      document.removeEventListener("astro:page-load", handleLocationChange)
-      document.removeEventListener("astro:after-swap", handleLocationChange)
+      window.removeEventListener("popstate", syncFromLocation)
+      document.removeEventListener("astro:page-load", syncFromLocation)
     }
   }, [syncFromLocation])
 
-  const filteredThoughts = useMemo(() => {
-    return thoughts.filter((thought) => {
-      return !activeTag || thought.tags.includes(activeTag)
-    })
-  }, [thoughts, activeTag])
-
-  const isFiltering = Boolean(activeTag)
+  const filteredThoughts = useMemo(() => thoughts.filter((thought) => !activeTag || thought.tags.includes(activeTag)), [thoughts, activeTag])
   const pageSize = pagination?.pageSize ?? Math.max(1, thoughts.length)
   const totalPages = pagination ? Math.max(1, Math.ceil(filteredThoughts.length / pageSize)) : 1
+  const pagedThoughts = pagination ? filteredThoughts.slice((currentPage - 1) * pageSize, currentPage * pageSize) : filteredThoughts
+  const pageRange = useMemo(() => (pagination ? buildPageRange(currentPage, totalPages) : []), [pagination, currentPage, totalPages])
 
-  useEffect(() => {
-    if (!pagination) return
-    if (currentPage > totalPages) {
-      setCurrentPage(1)
+  const groups = useMemo(() => {
+    const result: { key: string; label: string; thoughts: ThoughtMeta[] }[] = []
+    for (const thought of pagedThoughts) {
+      const key = dateKey(thought.date)
+      const existing = result.find((group) => group.key === key)
+      if (existing) existing.thoughts.push(thought)
+      else result.push({ key, label: dateHeading(thought.date), thoughts: [thought] })
     }
-  }, [pagination, currentPage, totalPages])
-
-  const pagedThoughts = pagination
-    ? filteredThoughts.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-    : filteredThoughts
-
-  const pageRange = useMemo(() => {
-    if (!pagination) return []
-    return buildPageRange(currentPage, totalPages)
-  }, [pagination, currentPage, totalPages])
-
-  const withHash = (href?: string, pageNumber?: number) => {
-    if (!href) return undefined
-    if (pageNumber === 1) return `${href}#thoughts-main`
-    return href
-  }
-
-  const previousUrl = pagination && currentPage > 1 ? getPageHref(currentPage - 1, basePath) : undefined
-  const nextUrl = pagination && currentPage < totalPages ? getPageHref(currentPage + 1, basePath) : undefined
-
-  const scrollToListTop = () => {
-    const target = document.getElementById("thoughts-main") ?? sectionRef.current
-    if (!target) return
-    target.scrollIntoView({ behavior: "smooth", block: "start" })
-  }
+    return result
+  }, [pagedThoughts])
 
   const updateSearchParams = (nextTag: string | null) => {
     if (typeof window === "undefined") return
     const url = new URL(window.location.href)
     const targetPath = pagination ? getPageHref(1, basePath) : url.pathname
-
-    if (nextTag) {
-      url.searchParams.set("tag", nextTag)
-    } else {
-      url.searchParams.delete("tag")
-    }
-
+    if (nextTag) url.searchParams.set("tag", nextTag)
+    else url.searchParams.delete("tag")
     const search = url.searchParams.toString()
     window.history.replaceState({}, "", `${targetPath}${search ? `?${search}` : ""}#thoughts-main`)
   }
@@ -290,123 +234,33 @@ export function ThoughtList({
     setActiveTag(tag)
     setCurrentPage(1)
     updateSearchParams(tag)
-    requestAnimationFrame(scrollToListTop)
+    document.getElementById("thoughts-main")?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
 
   const handlePageClick = (page: number) => (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!pagination || !isFiltering) return
+    if (!pagination || !activeTag) return
     event.preventDefault()
     setCurrentPage(page)
   }
 
   return (
-    <section ref={sectionRef} className="thought-list-root px-6 py-16">
-      <div className="max-w-5xl mx-auto">
-        {/* Section header */}
-        <div className="mb-10 onload-animation" style={{ animationDelay: "50ms" }}>
-          <span className="text-primary text-sm font-medium tracking-wide uppercase mb-2 block">
-            {subtitle}
-          </span>
-          <h2 className="font-serif text-3xl sm:text-4xl font-medium text-foreground">{heading}</h2>
-        </div>
-
-        {/* Main layout: Tags + Timeline */}
-        <div className="flex flex-col gap-8">
-          {tags.length > 0 && (
-            <div className="onload-animation" style={{ animationDelay: "100ms" }}>
-              <div className="bg-card border border-border/50 rounded-xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-1 h-4 bg-primary rounded-full" />
-                  <h4 className="font-medium text-foreground">标签</h4>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => handleTagChange(activeTag === tag ? null : tag)}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs transition-colors",
-                        activeTag === tag
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Timeline */}
-          <div>
-            {pagedThoughts.length > 0 ? (
-              <div className="relative">
-                {pagedThoughts.map((thought, index) => (
-                  <ThoughtCard key={thought.slug} thought={thought} index={index} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">暂无闪念</div>
-            )}
-
-            {/* Pagination */}
-            {pagination && totalPages > 1 && (
-              <div className="pt-8">
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationLink
-                        href={withHash(previousUrl, currentPage - 1)}
-                        size="default"
-                        aria-disabled={!previousUrl}
-                        tabIndex={previousUrl ? undefined : -1}
-                        className={cn("gap-1 px-2.5", !previousUrl && "pointer-events-none opacity-50")}
-                        rel={previousUrl ? "prev" : undefined}
-                        onClick={previousUrl ? handlePageClick(currentPage - 1) : undefined}
-                      >
-                        <ChevronLeft className="size-4" />
-                        <span className="hidden sm:block">上一页</span>
-                      </PaginationLink>
-                    </PaginationItem>
-
-                    {pageRange.map((page, index) => (
-                      <PaginationItem key={`${page}-${index}`}>
-                        {page === HIDDEN ? (
-                          <PaginationEllipsis />
-                        ) : (
-                          <PaginationLink
-                            href={withHash(getPageHref(page, basePath), page)}
-                            isActive={currentPage === page}
-                            onClick={handlePageClick(page)}
-                          >
-                            {page}
-                          </PaginationLink>
-                        )}
-                      </PaginationItem>
-                    ))}
-
-                    <PaginationItem>
-                      <PaginationLink
-                        href={withHash(nextUrl, currentPage + 1)}
-                        size="default"
-                        aria-disabled={!nextUrl}
-                        tabIndex={nextUrl ? undefined : -1}
-                        className={cn("gap-1 px-2.5", !nextUrl && "pointer-events-none opacity-50")}
-                        rel={nextUrl ? "next" : undefined}
-                        onClick={nextUrl ? handlePageClick(currentPage + 1) : undefined}
-                      >
-                        <span className="hidden sm:block">下一页</span>
-                        <ChevronRight className="size-4" />
-                      </PaginationLink>
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              </div>
-            )}
+    <section id="thoughts-feed" className="thought-list-root px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-8 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm onload-animation">
+          <div className="relative h-36 overflow-hidden bg-[radial-gradient(circle_at_20%_20%,hsl(var(--primary)/0.24),transparent_35%),linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--muted)),hsl(var(--background)))] sm:h-44"><div className="absolute -right-10 -top-20 h-56 w-56 rounded-full border border-primary/10 bg-primary/5 blur-2xl" /><div className="absolute bottom-0 left-0 h-20 w-full bg-gradient-to-t from-card/60 to-transparent" /></div>
+          <div className="relative px-5 pb-5 sm:px-7 sm:pb-6">
+            <img src={profile.avatar} alt={profile.name} width={76} height={76} className="-mt-10 h-[76px] w-[76px] rounded-full border-4 border-card bg-muted object-cover shadow-md" />
+            <div className="mt-3 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-semibold tracking-tight text-foreground">{profile.name}</h1><p className="mt-1 text-sm text-muted-foreground">{profile.bio}</p></div><div className="text-right text-xs text-muted-foreground"><div className="text-base font-semibold text-foreground">{thoughts.length}</div>条闪念</div></div>
           </div>
         </div>
+
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><span className="block text-sm font-medium tracking-wide text-primary">{subtitle}</span><h2 className="mt-1 text-2xl font-semibold text-foreground sm:text-3xl">{heading}</h2></div>{activeTag ? <button type="button" onClick={() => handleTagChange(null)} className="text-sm text-muted-foreground hover:text-primary">清除 #{activeTag}</button> : null}</div>
+
+        {sidebarTags.length ? <div className="mb-3 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><button type="button" onClick={() => handleTagChange(null)} className={cn("shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors", !activeTag ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground")}>全部</button>{sidebarTags.map((tag) => <button key={tag} type="button" onClick={() => handleTagChange(activeTag === tag ? null : tag)} className={cn("shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors", activeTag === tag ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground")}>#{tag}</button>)}</div> : null}
+
+        <div className="border-t border-border/60">{groups.length ? groups.map((group) => <section key={group.key} aria-label={group.label}><div className="flex items-center gap-3 py-4 text-xs font-medium text-muted-foreground"><span className="h-px flex-1 bg-border/60" /><span>{group.label}</span><span className="h-px flex-1 bg-border/60" /></div>{group.thoughts.map((thought, index) => <ThoughtCard key={thought.slug} thought={thought} index={index} />)}</section>) : <div className="py-16 text-center text-sm text-muted-foreground">暂无闪念</div>}</div>
+
+        {pagination && totalPages > 1 ? <div className="pt-8"><Pagination><PaginationContent><PaginationItem><PaginationLink href={currentPage > 1 ? `${getPageHref(currentPage - 1, basePath)}#thoughts-main` : undefined} aria-disabled={currentPage <= 1} tabIndex={currentPage > 1 ? undefined : -1} className={cn("gap-1 px-2.5", currentPage <= 1 && "pointer-events-none opacity-50")} onClick={currentPage > 1 ? handlePageClick(currentPage - 1) : undefined}><ChevronLeft className="size-4" /><span className="hidden sm:block">上一页</span></PaginationLink></PaginationItem>{pageRange.map((page, index) => <PaginationItem key={`${page}-${index}`}>{page === HIDDEN ? <PaginationEllipsis /> : <PaginationLink href={`${getPageHref(page, basePath)}#thoughts-main`} isActive={currentPage === page} onClick={handlePageClick(page)}>{page}</PaginationLink>}</PaginationItem>)}<PaginationItem><PaginationLink href={currentPage < totalPages ? `${getPageHref(currentPage + 1, basePath)}#thoughts-main` : undefined} aria-disabled={currentPage >= totalPages} tabIndex={currentPage < totalPages ? undefined : -1} className={cn("gap-1 px-2.5", currentPage >= totalPages && "pointer-events-none opacity-50")} onClick={currentPage < totalPages ? handlePageClick(currentPage + 1) : undefined}><span className="hidden sm:block">下一页</span><ChevronRight className="size-4" /></PaginationLink></PaginationItem></PaginationContent></Pagination></div> : null}
       </div>
     </section>
   )

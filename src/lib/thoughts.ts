@@ -5,11 +5,6 @@ export type ThoughtEntry = CollectionEntry<"thoughts">
 
 const md = new MarkdownIt()
 
-const formatDate = (date?: Date) => {
-  if (!date) return ""
-  return date.toISOString().slice(0, 10)
-}
-
 const stripHtml = (html: string) => {
   const withBreaks = html
     .replace(/<\s*br\s*\/?>/gi, "\n")
@@ -23,6 +18,25 @@ const truncateText = (text: string, maxLength: number) => {
   if (text.length <= maxLength) return text
   const slice = text.slice(0, Math.max(0, maxLength)).replace(/\s+$/g, "")
   return `${slice}...`
+}
+
+const extractImages = (html: string) => {
+  const images: { src: string; alt: string }[] = []
+  const imagePattern = /<img\b[^>]*>/gi
+  const srcPattern = /\bsrc=["']([^"']+)["']/i
+  const altPattern = /\balt=["']([^"']*)["']/i
+
+  for (const match of html.matchAll(imagePattern)) {
+    const element = match[0]
+    const src = element.match(srcPattern)?.[1]
+    if (!src) continue
+    images.push({ src, alt: element.match(altPattern)?.[1] ?? "" })
+  }
+
+  return {
+    images,
+    content: html.replace(imagePattern, ""),
+  }
 }
 
 export async function getSortedThoughts(): Promise<ThoughtEntry[]> {
@@ -40,27 +54,30 @@ export async function getSortedThoughts(): Promise<ThoughtEntry[]> {
 export const toThoughtMeta = (thought: ThoughtEntry) => {
   const tags = thought.data.tags?.length ? thought.data.tags : []
   const body = typeof thought.body === "string" ? thought.body : ""
-  const content = md.render(body)
+  const rendered = extractImages(md.render(body))
 
   return {
     slug: thought.slug,
     title: thought.data.title,
-    content,
-    date: formatDate(thought.data.published),
+    content: rendered.content,
+    plainText: stripHtml(rendered.content),
+    images: rendered.images,
+    date: thought.data.published.toISOString(),
     tags,
   }
 }
 
 export const toThoughtPreview = (thought: ThoughtEntry, maxLength = 96) => {
   const body = typeof thought.body === "string" ? thought.body : ""
-  const content = md.render(body)
-  const text = stripHtml(content)
+  const rendered = extractImages(md.render(body))
+  const text = stripHtml(rendered.content)
 
   return {
     slug: thought.slug,
     title: thought.data.title,
-    date: formatDate(thought.data.published),
+    date: thought.data.published.toISOString(),
     excerpt: truncateText(text, maxLength),
+    image: rendered.images[0]?.src,
   }
 }
 
