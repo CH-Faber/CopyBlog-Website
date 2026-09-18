@@ -98,15 +98,17 @@ const fullDateLabel = (dateString: string) => {
 function ThoughtMedia({ images, onOpen }: { images: ThoughtMeta["images"]; onOpen: (index: number) => void }) {
   if (!images.length) return null
   const visibleImages = images.slice(0, 9)
-  const layout = images.length === 1 ? "max-w-md" : "grid grid-cols-2 gap-2 sm:grid-cols-3 max-w-lg"
+  const isSingle = images.length === 1
+  const columns = images.length === 2 || images.length === 4 ? "grid-cols-2" : "grid-cols-3"
+  const layout = isSingle ? "max-w-md" : cn("grid max-w-[20rem] grid-flow-row gap-1.5", columns)
 
   return (
     <div className={cn("mt-4", layout)}>
       {visibleImages.map((image, index) => {
         const remaining = images.length - 9
         return (
-          <button key={`${image.src}-${index}`} type="button" className={cn("group relative block overflow-hidden rounded-xl bg-muted/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary", images.length === 1 ? "w-full" : "aspect-square")} onClick={() => onOpen(index)} aria-label={`查看第 ${index + 1} 张图片`}>
-            <img src={image.src} alt={image.alt || "闪念配图"} loading="lazy" decoding="async" className={cn("h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]", images.length === 1 && "max-h-[28rem] object-contain")} />
+          <button key={`${image.src}-${index}`} type="button" className={cn("group relative block overflow-hidden bg-muted/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary", isSingle ? "w-full rounded-xl" : "aspect-square rounded-md")} onClick={() => onOpen(index)} aria-label={`查看第 ${index + 1} 张图片`}>
+            <img src={image.src} alt={image.alt || "闪念配图"} loading="lazy" decoding="async" className={cn("h-full w-full transition-transform duration-300 group-hover:scale-[1.02]", isSingle ? "max-h-[28rem] object-contain" : "object-cover")} />
             {index === 8 && remaining > 0 ? <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-2xl font-semibold text-white">+{remaining}</span> : null}
           </button>
         )
@@ -136,11 +138,16 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
 
   useEffect(() => {
     if (lightboxIndex === null) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setLightboxIndex(null)
     }
     document.addEventListener("keydown", closeOnEscape)
-    return () => document.removeEventListener("keydown", closeOnEscape)
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape)
+      document.body.style.overflow = previousOverflow
+    }
   }, [lightboxIndex])
 
   return (
@@ -174,7 +181,7 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
         </div>
       </div>
 
-      {lightboxIndex !== null && thought.images[lightboxIndex] ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" onClick={() => setLightboxIndex(null)}><button type="button" className="absolute right-4 top-4 rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white" onClick={() => setLightboxIndex(null)} aria-label="关闭图片预览"><X className="h-6 w-6" /></button><img src={thought.images[lightboxIndex].src} alt={thought.images[lightboxIndex].alt || "闪念配图"} className="max-h-[90vh] max-w-[92vw] object-contain" onClick={(event) => event.stopPropagation()} /></div> : null}
+      {lightboxIndex !== null && thought.images[lightboxIndex] ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label="图片预览" onClick={(event) => { if (event.target === event.currentTarget) setLightboxIndex(null) }}><div className="relative flex max-h-[92vh] max-w-[94vw] items-center justify-center" onClick={(event) => event.stopPropagation()}><img src={thought.images[lightboxIndex].src} alt={thought.images[lightboxIndex].alt || "闪念配图"} className="max-h-[88vh] max-w-[94vw] object-contain" /><button type="button" className="absolute -right-3 -top-3 z-10 rounded-full bg-black/60 p-2 text-white/85 shadow-lg transition-colors hover:bg-black/80 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white" onClick={() => setLightboxIndex(null)} aria-label="关闭图片预览"><X className="h-5 w-5" /></button></div></div> : null}
     </article>
   )
 }
