@@ -103,7 +103,7 @@ function ThoughtMedia({ images, onOpen }: { images: ThoughtMeta["images"]; onOpe
   const layout = isSingle ? "w-fit max-w-full" : cn("grid max-w-[17.5rem] grid-flow-row gap-1 sm:max-w-[20rem]", columns)
 
   return (
-    <div className={cn("mx-auto mt-4", layout)}>
+    <div className={cn("mt-4", layout)}>
       {visibleImages.map((image, index) => {
         const remaining = images.length - 9
         return (
@@ -195,7 +195,7 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
         <h3 className="pt-0.5 text-[15px] font-semibold leading-5 text-foreground">{profile.name}</h3>
       </div>
 
-      <div className="mx-auto mt-3 w-full max-w-2xl">
+      <div className="mx-auto mt-3 w-[94%] max-w-2xl sm:w-full">
         <div>
           {thought.title ? <h4 className="mb-1.5 text-[15px] font-medium leading-6 text-foreground">{thought.title}</h4> : null}
           <div className={cn("relative overflow-hidden text-left text-[15px] leading-[1.65] text-foreground/90 transition-[max-height] duration-300 [&_a]:text-primary [&_a]:underline-offset-2 [&_a:hover]:underline [&_blockquote]:border-l-primary [&_blockquote]:text-foreground/70 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:text-[13px] [&_li]:my-1 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0", hasMore && !expanded ? "max-h-[11.5rem]" : "max-h-[5000px]")} dangerouslySetInnerHTML={{ __html: thought.content }} />
