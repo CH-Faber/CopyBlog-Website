@@ -103,7 +103,7 @@ function ThoughtMedia({ images, onOpen }: { images: ThoughtMeta["images"]; onOpe
   const layout = isSingle ? "w-fit max-w-full" : cn("grid max-w-[17.5rem] grid-flow-row gap-1 sm:max-w-[20rem]", columns)
 
   return (
-    <div className={cn("mt-4", layout)}>
+    <div className={cn("mx-auto mt-4", layout)}>
       {visibleImages.map((image, index) => {
         const remaining = images.length - 9
         return (
@@ -192,29 +192,25 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
     <article id={`thought-${thought.slug}`} className="scroll-mt-28 border-b border-border/60 py-6 first:pt-2 last:border-b-0 sm:py-8 onload-animation" style={{ animationDelay: `calc(var(--content-delay) + ${index * 50}ms)` }}>
       <div className="flex items-start gap-3">
         <img src={profile.avatar} alt={profile.name} width={40} height={40} className="mt-0.5 h-10 w-10 shrink-0 rounded-full border border-border/70 bg-muted object-cover" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-[15px] font-semibold leading-5 text-foreground">{profile.name}</h3>
-            </div>
-          </div>
+        <h3 className="pt-0.5 text-[15px] font-semibold leading-5 text-foreground">{profile.name}</h3>
+      </div>
 
-          <div className="mt-2.5">
-            {thought.title ? <h4 className="mb-1.5 text-[15px] font-medium leading-6 text-foreground">{thought.title}</h4> : null}
-            <div className={cn("relative overflow-hidden text-[15px] leading-[1.65] text-foreground/90 transition-[max-height] duration-300 [&_a]:text-primary [&_a]:underline-offset-2 [&_a:hover]:underline [&_blockquote]:border-l-primary [&_blockquote]:text-foreground/70 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:text-[13px] [&_li]:my-1 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0", hasMore && !expanded ? "max-h-[11.5rem]" : "max-h-[5000px]")} dangerouslySetInnerHTML={{ __html: thought.content }} />
-            {hasMore && !expanded ? <div className="relative -mt-10 flex h-10 items-end bg-gradient-to-t from-background via-background/95 to-transparent pt-5"><button type="button" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" onClick={() => setExpanded(true)}>全文 <ChevronDown className="h-4 w-4" /></button></div> : null}
-            {hasMore && expanded ? <button type="button" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" onClick={() => setExpanded(false)}>收起 <ChevronUp className="h-4 w-4" /></button> : null}
-          </div>
+      <div className="mx-auto mt-3 w-full max-w-2xl">
+        <div>
+          {thought.title ? <h4 className="mb-1.5 text-[15px] font-medium leading-6 text-foreground">{thought.title}</h4> : null}
+          <div className={cn("relative overflow-hidden text-left text-[15px] leading-[1.65] text-foreground/90 transition-[max-height] duration-300 [&_a]:text-primary [&_a]:underline-offset-2 [&_a:hover]:underline [&_blockquote]:border-l-primary [&_blockquote]:text-foreground/70 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:text-[13px] [&_li]:my-1 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0", hasMore && !expanded ? "max-h-[11.5rem]" : "max-h-[5000px]")} dangerouslySetInnerHTML={{ __html: thought.content }} />
+          {hasMore && !expanded ? <div className="relative -mt-10 flex h-10 items-end bg-gradient-to-t from-background via-background/95 to-transparent pt-5"><button type="button" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" onClick={() => setExpanded(true)}>全文 <ChevronDown className="h-4 w-4" /></button></div> : null}
+          {hasMore && expanded ? <button type="button" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" onClick={() => setExpanded(false)}>收起 <ChevronUp className="h-4 w-4" /></button> : null}
+        </div>
 
-          <ThoughtMedia images={thought.images} onOpen={setLightboxIndex} />
-          {thought.tags.length ? <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5">{thought.tags.map((tag) => <a key={tag} href={`/thoughts/?tag=${encodeURIComponent(tag)}#thoughts-main`} className="text-sm text-primary hover:underline">#{tag}</a>)}</div> : null}
+        <ThoughtMedia images={thought.images} onOpen={setLightboxIndex} />
+        {thought.tags.length ? <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5">{thought.tags.map((tag) => <a key={tag} href={`/thoughts/?tag=${encodeURIComponent(tag)}#thoughts-main`} className="text-sm text-primary hover:underline">#{tag}</a>)}</div> : null}
 
-          <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2.5 text-xs text-muted-foreground">
-            <time dateTime={thought.date} title={fullDateLabel(thought.date)} className="mr-auto px-2 py-1.5">{dateHeading(thought.date)} · {timeLabel(thought.date)}</time>
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted hover:text-foreground" onClick={() => void copyLink()}>{copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "已复制" : "复制链接"}</button>
-            <a href={href} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted hover:text-foreground"><LinkIcon className="h-3.5 w-3.5" /> 查看原文</a>
-            {thought.images.length ? <span className="ml-auto inline-flex items-center gap-1.5 px-2 py-1.5"><ImageIcon className="h-3.5 w-3.5" /> {thought.images.length} 张图片</span> : null}
-          </div>
+        <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2.5 text-xs text-muted-foreground">
+          <time dateTime={thought.date} title={fullDateLabel(thought.date)} className="mr-auto px-2 py-1.5">{dateHeading(thought.date)} · {timeLabel(thought.date)}</time>
+          <button type="button" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted hover:text-foreground" onClick={() => void copyLink()}>{copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "已复制" : "复制链接"}</button>
+          <a href={href} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted hover:text-foreground"><LinkIcon className="h-3.5 w-3.5" /> 查看原文</a>
+          {thought.images.length ? <span className="ml-auto inline-flex items-center gap-1.5 px-2 py-1.5"><ImageIcon className="h-3.5 w-3.5" /> {thought.images.length} 张图片</span> : null}
         </div>
       </div>
 
