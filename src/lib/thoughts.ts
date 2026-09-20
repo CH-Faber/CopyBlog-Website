@@ -35,7 +35,9 @@ const extractImages = (html: string) => {
 
   return {
     images,
-    content: html.replace(imagePattern, ""),
+    content: html
+      .replace(imagePattern, "")
+      .replace(/<p>\s*<\/p>/gi, ""),
   }
 }
 

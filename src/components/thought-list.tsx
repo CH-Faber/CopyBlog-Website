@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import type { MouseEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { MouseEvent, TouchEvent } from "react"
 import { createPortal } from "react-dom"
 import {
   Check,
@@ -121,8 +121,42 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const hasMore = thought.plainText.length > 280 || (thought.content.match(/<p\b/gi)?.length ?? 0) > 4
+  const lightboxTouchStart = useRef<{ x: number; y: number } | null>(null)
+  const textLineCount = thought.plainText.split("\n").filter((line) => line.trim()).length
+  const hasMore = thought.plainText.length > 280 || textLineCount > 8
   const href = `/thoughts/#thought-${thought.slug}`
+
+  const showPreviousImage = useCallback(() => {
+    setLightboxIndex((current) => {
+      if (current === null || thought.images.length < 2) return current
+      return (current - 1 + thought.images.length) % thought.images.length
+    })
+  }, [thought.images.length])
+
+  const showNextImage = useCallback(() => {
+    setLightboxIndex((current) => {
+      if (current === null || thought.images.length < 2) return current
+      return (current + 1) % thought.images.length
+    })
+  }, [thought.images.length])
+
+  const handleLightboxTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    const touch = event.changedTouches[0]
+    if (touch) lightboxTouchStart.current = { x: touch.clientX, y: touch.clientY }
+  }
+
+  const handleLightboxTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    const start = lightboxTouchStart.current
+    const touch = event.changedTouches[0]
+    lightboxTouchStart.current = null
+    if (!start || !touch || thought.images.length < 2) return
+
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return
+    if (deltaX < 0) showNextImage()
+    else showPreviousImage()
+  }
 
   const copyLink = async () => {
     if (typeof window === "undefined") return
@@ -140,32 +174,43 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
     if (lightboxIndex === null) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
-    const closeOnEscape = (event: KeyboardEvent) => {
+    const handleLightboxKeyboard = (event: KeyboardEvent) => {
       if (event.key === "Escape") setLightboxIndex(null)
+      else if (event.key === "ArrowLeft") showPreviousImage()
+      else if (event.key === "ArrowRight") showNextImage()
     }
-    document.addEventListener("keydown", closeOnEscape)
+    document.addEventListener("keydown", handleLightboxKeyboard)
     return () => {
-      document.removeEventListener("keydown", closeOnEscape)
+      document.removeEventListener("keydown", handleLightboxKeyboard)
       document.body.style.overflow = previousOverflow
     }
-  }, [lightboxIndex])
+  }, [lightboxIndex, showNextImage, showPreviousImage])
 
   const activeImage = lightboxIndex === null ? null : thought.images[lightboxIndex]
   const lightbox = activeImage && typeof document !== "undefined"
     ? createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex touch-pan-y select-none items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-label="图片预览"
-          onClick={() => setLightboxIndex(null)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setLightboxIndex(null)
+          }}
+          onTouchStart={handleLightboxTouchStart}
+          onTouchEnd={handleLightboxTouchEnd}
         >
           <img
             src={activeImage.src}
             alt={activeImage.alt || "闪念配图"}
             className="max-h-[88dvh] max-w-[94vw] object-contain"
+            draggable={false}
             onClick={(event) => event.stopPropagation()}
           />
+          {thought.images.length > 1 ? <>
+            <button type="button" className="fixed left-4 top-1/2 z-[101] hidden -translate-y-1/2 rounded-full border border-white/20 bg-black/55 p-3 text-white/85 shadow-lg transition-colors hover:bg-black/80 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:inline-flex" onClick={(event) => { event.stopPropagation(); showPreviousImage() }} aria-label="上一张图片"><ChevronLeft className="h-6 w-6" /></button>
+            <button type="button" className="fixed right-4 top-1/2 z-[101] hidden -translate-y-1/2 rounded-full border border-white/20 bg-black/55 p-3 text-white/85 shadow-lg transition-colors hover:bg-black/80 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:inline-flex" onClick={(event) => { event.stopPropagation(); showNextImage() }} aria-label="下一张图片"><ChevronRight className="h-6 w-6" /></button>
+          </> : null}
           <button
             type="button"
             className="fixed right-4 top-4 z-[101] inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/20 bg-black/70 px-4 py-2 text-sm font-medium text-white shadow-xl transition-colors hover:bg-black/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
@@ -180,8 +225,8 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
             <X className="h-5 w-5" />
             <span>关闭</span>
           </button>
-          <span className="pointer-events-none fixed bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1.5 text-xs text-white/75">
-            点击空白处关闭
+          <span className="pointer-events-none fixed bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/55 px-3 py-1.5 text-xs text-white/75">
+            {thought.images.length > 1 ? `${lightboxIndex! + 1} / ${thought.images.length} · 左右滑动切换` : "点击空白处关闭"}
           </span>
         </div>,
         document.body,
