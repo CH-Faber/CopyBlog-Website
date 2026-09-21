@@ -26,16 +26,30 @@ func newAIClient(cfg Config) *AIClient {
 	return &AIClient{baseURL: cfg.AIBaseURL, apiKey: cfg.AIAPIKey, model: cfg.AIModel, zone: cfg.Timezone, client: &http.Client{Timeout: 60 * time.Second}}
 }
 
+func fallbackParse(capture Capture, zone, reason string) ParseResult {
+	title := strings.TrimSpace(capture.RawText)
+	if newline := strings.IndexByte(title, '\n'); newline >= 0 {
+		title = strings.TrimSpace(title[:newline])
+	}
+	runes := []rune(title)
+	if len(runes) > 200 {
+		title = string(runes[:200]) + "…"
+	}
+	if title == "" {
+		title = "查看截图并整理事项"
+	}
+	return ParseResult{Items: []Candidate{{
+		Type: "task", Title: title, Timezone: zone, Confidence: 0.2,
+		Ambiguities: []string{reason},
+	}}}
+}
+
 func (a *AIClient) Parse(ctx context.Context, capture Capture) (ParseResult, error) {
 	if strings.TrimSpace(capture.RawText) == "" && capture.AttachmentPath == "" {
 		return ParseResult{}, errors.New("capture has no text or attachment")
 	}
 	if a.apiKey == "" {
-		title := strings.TrimSpace(capture.RawText)
-		if title == "" {
-			title = "查看截图并整理事项"
-		}
-		return ParseResult{Items: []Candidate{{Type: "task", Title: title, Timezone: a.zone, Confidence: 0.2, Ambiguities: []string{"AI 尚未配置，请手动检查"}}}}, nil
+		return fallbackParse(capture, a.zone, "AI 尚未配置，请手动检查标题、日期和提醒时间"), nil
 	}
 
 	location, _ := time.LoadLocation(a.zone)
@@ -74,7 +88,7 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture) (ParseResult, err
 		content, _, err = a.request(ctx, payload)
 	}
 	if err != nil {
-		return ParseResult{}, err
+		return fallbackParse(capture, a.zone, "AI 服务暂时不可用，已保留原文；请手动检查标题、日期和提醒时间"), nil
 	}
 	content = strings.TrimSpace(content)
 	content = strings.TrimPrefix(content, "```json")
@@ -82,15 +96,15 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture) (ParseResult, err
 	content = strings.TrimSuffix(content, "```")
 	var result ParseResult
 	if err := json.Unmarshal([]byte(strings.TrimSpace(content)), &result); err != nil {
-		return ParseResult{}, fmt.Errorf("decode AI result: %w", err)
+		return fallbackParse(capture, a.zone, "AI 返回格式异常，已保留原文；请手动检查标题、日期和提醒时间"), nil
 	}
 	if len(result.Items) == 0 {
-		return ParseResult{}, errors.New("AI returned no items")
+		return fallbackParse(capture, a.zone, "AI 没有识别出事项，已保留原文；请手动检查标题、日期和提醒时间"), nil
 	}
 	for index := range result.Items {
 		result.Items[index] = normalizeCandidate(result.Items[index], a.zone)
 		if result.Items[index].Title == "" {
-			return ParseResult{}, errors.New("AI returned an item without title")
+			return fallbackParse(capture, a.zone, "AI 返回内容不完整，已保留原文；请手动检查标题、日期和提醒时间"), nil
 		}
 	}
 	return result, nil
