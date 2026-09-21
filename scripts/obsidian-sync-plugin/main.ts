@@ -1,6 +1,8 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, normalizePath, requestUrl } from 'obsidian';
+import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, normalizePath, requestUrl } from 'obsidian';
 import { ApiClient, describeApiError } from './src/api-client';
 import { ArticleManagerView, ARTICLE_MANAGER_VIEW } from './src/article-manager-view';
+import { OrganizerApiClient, describeOrganizerError } from './src/organizer-api-client';
+import { OrganizerView, ORGANIZER_VIEW } from './src/organizer-view';
 import type { SyncSettings } from './src/models';
 
 const DEFAULT_AI_SYSTEM_PROMPT = '你是“一个闪念”的文章编辑助手。请准确、克制地整理文章信息，不要虚构文章中不存在的事实。';
@@ -10,6 +12,8 @@ const DEFAULT_AI_TAG_RULES = '优先选择已有标签。只有现有标签确�
 const DEFAULT_SETTINGS: SyncSettings = {
 	syncEndpoint: 'http://localhost:3001/api/sync',
 	webhookSecret: '',
+	organizerEndpoint: 'https://faberhu.top',
+	organizerToken: '',
 	localPostsFolder: '',
 	localThoughtsFolder: 'websites/thoughts',
 	activeJobId: '',
@@ -27,14 +31,20 @@ const DEFAULT_SETTINGS: SyncSettings = {
 export default class SyncPlugin extends Plugin {
 	settings!: SyncSettings;
 	api!: ApiClient;
+	organizerApi!: OrganizerApiClient;
 
 	async onload() {
 		await this.loadSettings();
 		this.api = new ApiClient(this.settings);
+		this.organizerApi = new OrganizerApiClient(this.settings);
 		this.registerView(ARTICLE_MANAGER_VIEW, (leaf) => new ArticleManagerView(leaf, this));
+		this.registerView(ORGANIZER_VIEW, (leaf) => new OrganizerView(leaf, this));
 
 		this.addRibbonIcon('layout-dashboard', '一个闪念：内容管理', () => {
 			void this.activateManagerView();
+		});
+		this.addRibbonIcon('calendar-check', '一个闪念：今日事项', () => {
+			void this.activateOrganizerView();
 		});
 		this.addCommand({
 			id: 'open-flash-thought-content-manager',
@@ -55,11 +65,32 @@ export default class SyncPlugin extends Plugin {
 			name: '新建闪念',
 			callback: () => void this.createThought(),
 		});
+		this.addCommand({
+			id: 'open-faber-organizer',
+			name: '打开今日事项',
+			callback: () => void this.activateOrganizerView(),
+		});
+		this.addCommand({
+			id: 'send-selection-to-faber-organizer',
+			name: '把选中文字发送到事项收件箱',
+			editorCallback: (editor: Editor) => void this.captureOrganizerText(editor.getSelection()),
+		});
+		this.addCommand({
+			id: 'send-current-note-to-faber-organizer',
+			name: '把当前笔记发送到事项收件箱',
+			checkCallback: (checking: boolean) => {
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!view?.file) return false;
+				if (!checking) void this.captureCurrentNote(view);
+				return true;
+			},
+		});
 		this.addSettingTab(new SyncSettingTab(this.app, this));
 	}
 
 	async onunload() {
 		this.app.workspace.detachLeavesOfType(ARTICLE_MANAGER_VIEW);
+		this.app.workspace.detachLeavesOfType(ORGANIZER_VIEW);
 	}
 
 	async loadSettings() {
@@ -69,6 +100,7 @@ export default class SyncPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 		this.api = new ApiClient(this.settings);
+		this.organizerApi = new OrganizerApiClient(this.settings);
 	}
 
 	async testServerConnection() {
@@ -123,6 +155,39 @@ export default class SyncPlugin extends Plugin {
 			await leaf.setViewState({ type: ARTICLE_MANAGER_VIEW, active: true });
 		}
 		this.app.workspace.revealLeaf(leaf);
+	}
+
+	async activateOrganizerView() {
+		let leaf: WorkspaceLeaf | undefined = this.app.workspace.getLeavesOfType(ORGANIZER_VIEW)[0];
+		if (!leaf) {
+			leaf = this.app.workspace.getLeaf(true);
+			await leaf.setViewState({ type: ORGANIZER_VIEW, active: true });
+		}
+		this.app.workspace.revealLeaf(leaf);
+	}
+
+	async captureOrganizerText(value: string) {
+		const text = value.trim();
+		if (!text) {
+			new Notice('请先选择要发送的文字。');
+			return;
+		}
+		try {
+			const capture = await this.organizerApi.createCapture(text);
+			await this.organizerApi.parseCapture(capture.id);
+			new Notice('已发送到事项收件箱，等待你确认。');
+			await this.activateOrganizerView();
+			const view = this.app.workspace.getLeavesOfType(ORGANIZER_VIEW)[0]?.view;
+			if (view instanceof OrganizerView) await view.refresh();
+		} catch (error) {
+			new Notice(describeOrganizerError(error));
+		}
+	}
+
+	async captureCurrentNote(view: MarkdownView) {
+		if (!view.file) return;
+		const content = await this.app.vault.read(view.file);
+		await this.captureOrganizerText(`${view.file.basename}\n\n${content}`);
 	}
 
 	async createThought() {
@@ -195,6 +260,46 @@ class SyncSettingTab extends PluginSettingTab {
 			.addText((text) => text.setPlaceholder('Blog/Posts').setValue(this.plugin.settings.localPostsFolder).onChange(async (value) => {
 				this.plugin.settings.localPostsFolder = value.replace(/^\/+|\/+$/g, '');
 				await this.plugin.saveSettings();
+			}));
+
+		containerEl.createEl('h3', { text: '个人事项服务' });
+		containerEl.createEl('p', {
+			text: '事项服务使用独立设备令牌，不会复用文章发布所需的 Webhook Secret。设备令牌请在网站 /agenda/ 的设置中生成。',
+			cls: 'setting-item-description',
+		});
+
+		new Setting(containerEl)
+			.setName('事项服务地址')
+			.setDesc('填写网站根地址或完整的 /api/organizer/v1 地址。')
+			.addText((text) => text.setPlaceholder('https://faberhu.top').setValue(this.plugin.settings.organizerEndpoint).onChange(async (value) => {
+				this.plugin.settings.organizerEndpoint = value.trim();
+				await this.plugin.saveSettings();
+			}));
+
+		new Setting(containerEl)
+			.setName('事项设备令牌')
+			.setDesc('仅用于读取和更新个人事项，保存在本机 Obsidian 插件配置中。')
+			.addText((text) => {
+				text.inputEl.type = 'password';
+				text.setPlaceholder('粘贴只显示一次的设备令牌').setValue(this.plugin.settings.organizerToken).onChange(async (value) => {
+					this.plugin.settings.organizerToken = value.trim();
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName('事项连接测试')
+			.setDesc('验证事项服务地址与设备令牌。')
+			.addButton((button) => button.setButtonText('测试事项服务').setCta().onClick(async () => {
+				button.setDisabled(true).setButtonText('测试中…');
+				try {
+					const session = await this.plugin.organizerApi.testConnection();
+					new Notice(`事项服务连接成功，时区：${session.timezone}`);
+				} catch (error) {
+					new Notice(describeOrganizerError(error));
+				} finally {
+					button.setDisabled(false).setButtonText('测试事项服务');
+				}
 			}));
 
 		containerEl.createEl('h3', { text: '本地 AI 配置' });

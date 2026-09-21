@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => SyncPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/api-client.ts
 var import_obsidian = require("obsidian");
@@ -1657,6 +1657,232 @@ ${article.content.trim()}
   }
 };
 
+// src/organizer-api-client.ts
+var import_obsidian4 = require("obsidian");
+var OrganizerApiError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+    this.name = "OrganizerApiError";
+  }
+};
+function describeOrganizerError(error) {
+  if (error instanceof OrganizerApiError) {
+    if (error.status === 401)
+      return "\u8BA4\u8BC1\u5931\u8D25\uFF08401\uFF09\uFF1A\u8BF7\u68C0\u67E5\u4E8B\u9879\u670D\u52A1\u8BBE\u5907\u4EE4\u724C\u3002";
+    if (error.status === 404)
+      return "\u4E8B\u9879\u63A5\u53E3\u4E0D\u5B58\u5728\uFF08404\uFF09\uFF1A\u8BF7\u68C0\u67E5\u670D\u52A1\u5730\u5740\u3002";
+    if (error.status === 409)
+      return "\u4E8B\u9879\u5DF2\u5728\u5176\u4ED6\u8BBE\u5907\u4FEE\u6539\uFF0C\u8BF7\u5237\u65B0\u540E\u91CD\u8BD5\u3002";
+    return `\u4E8B\u9879\u670D\u52A1\u8FD4\u56DE ${error.status}\uFF1A${error.message}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+function normalizeEndpoint(endpoint) {
+  const raw = endpoint.trim().replace(/\/+$/, "");
+  if (!raw)
+    return "";
+  if (/\/api\/organizer\/v1$/i.test(raw))
+    return raw;
+  return `${raw}/api/organizer/v1`;
+}
+var OrganizerApiClient = class {
+  constructor(settings) {
+    this.base = normalizeEndpoint(settings.organizerEndpoint);
+    this.token = settings.organizerToken.trim();
+  }
+  async request(path, method = "GET", body) {
+    if (!this.base)
+      throw new Error("\u8BF7\u5148\u586B\u5199\u4E8B\u9879\u670D\u52A1\u5730\u5740\u3002");
+    if (!this.token)
+      throw new Error("\u8BF7\u5148\u586B\u5199\u4E8B\u9879\u670D\u52A1\u8BBE\u5907\u4EE4\u724C\u3002");
+    let response;
+    try {
+      response = await (0, import_obsidian4.requestUrl)({
+        url: `${this.base}${path}`,
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.token}`
+        },
+        body: body === void 0 ? void 0 : JSON.stringify(body),
+        throw: false
+      });
+    } catch (error) {
+      throw new Error(`\u65E0\u6CD5\u8FDE\u63A5\u4E8B\u9879\u670D\u52A1\uFF1A${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (response.status < 200 || response.status >= 300) {
+      let message = response.text || `HTTP ${response.status}`;
+      try {
+        message = JSON.parse(response.text).message || message;
+      } catch (e) {
+      }
+      throw new OrganizerApiError(response.status, message);
+    }
+    return response.json;
+  }
+  testConnection() {
+    return this.request("/session");
+  }
+  listItems() {
+    return this.request("/items?limit=1000");
+  }
+  listCaptures() {
+    return this.request("/captures?limit=100");
+  }
+  createCapture(rawText) {
+    return this.request("/captures", "POST", { rawText, sourceType: "obsidian" });
+  }
+  parseCapture(id) {
+    return this.request(`/captures/${encodeURIComponent(id)}/parse`, "POST", {});
+  }
+  completeItem(id) {
+    return this.request(`/items/${encodeURIComponent(id)}/complete`, "POST", {});
+  }
+  snoozeItem(id, minutes = 10) {
+    return this.request(`/items/${encodeURIComponent(id)}/snooze`, "POST", { minutes });
+  }
+};
+
+// src/organizer-view.ts
+var import_obsidian5 = require("obsidian");
+var ORGANIZER_VIEW = "faber-organizer-view";
+function itemTime(item) {
+  return item.startAt || item.dueAt || item.reminderAt || "";
+}
+function localDay(date = /* @__PURE__ */ new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+function groupItems(items) {
+  const today = localDay();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const afterTomorrow = new Date(tomorrow);
+  afterTomorrow.setDate(afterTomorrow.getDate() + 1);
+  const active = items.filter((item) => item.status !== "done" && item.status !== "cancelled");
+  const overdue = [];
+  const current = [];
+  const next = [];
+  const unscheduled = [];
+  for (const item of active) {
+    const value = itemTime(item);
+    if (!value)
+      unscheduled.push(item);
+    else {
+      const date = new Date(value);
+      if (date < today)
+        overdue.push(item);
+      else if (date < tomorrow)
+        current.push(item);
+      else if (date < afterTomorrow)
+        next.push(item);
+    }
+  }
+  return [
+    { title: "\u4ECA\u5929", items: current },
+    { title: "\u5DF2\u903E\u671F", items: overdue, className: "is-overdue" },
+    { title: "\u660E\u5929", items: next },
+    { title: "\u672A\u5B89\u6392", items: unscheduled }
+  ];
+}
+var OrganizerView = class extends import_obsidian5.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.items = [];
+    this.captures = [];
+    this.loading = false;
+    this.plugin = plugin;
+  }
+  getViewType() {
+    return ORGANIZER_VIEW;
+  }
+  getDisplayText() {
+    return "\u4E00\u4E2A\u95EA\u5FF5 \xB7 \u4ECA\u65E5\u4E8B\u9879";
+  }
+  getIcon() {
+    return "calendar-check";
+  }
+  async onOpen() {
+    await this.refresh();
+  }
+  async refresh() {
+    if (this.loading)
+      return;
+    this.loading = true;
+    this.render();
+    try {
+      const [itemResponse, captureResponse] = await Promise.all([
+        this.plugin.organizerApi.listItems(),
+        this.plugin.organizerApi.listCaptures()
+      ]);
+      this.items = itemResponse.items;
+      this.captures = captureResponse.captures;
+    } catch (error) {
+      new import_obsidian5.Notice(describeOrganizerError(error));
+    } finally {
+      this.loading = false;
+      this.render();
+    }
+  }
+  render() {
+    const container = this.containerEl.children[1];
+    container.empty();
+    container.addClass("faber-organizer");
+    const header = container.createDiv({ cls: "faber-organizer-header" });
+    header.createEl("h2", { text: "\u4E00\u4E2A\u95EA\u5FF5 \xB7 \u4ECA\u65E5\u4E8B\u9879" });
+    const refresh = header.createEl("button", { text: this.loading ? "\u5237\u65B0\u4E2D\u2026" : "\u5237\u65B0" });
+    refresh.disabled = this.loading;
+    refresh.addEventListener("click", () => void this.refresh());
+    if (this.loading && !this.items.length) {
+      container.createDiv({ text: "\u6B63\u5728\u8BFB\u53D6\u4E8B\u9879\u2026", cls: "faber-organizer-empty" });
+      return;
+    }
+    for (const group of groupItems(this.items)) {
+      if (!group.items.length)
+        continue;
+      const section = container.createEl("section", { cls: `faber-organizer-section ${group.className || ""}` });
+      section.createEl("h3", { text: `${group.title} \xB7 ${group.items.length}` });
+      for (const item of group.items)
+        this.renderItem(section, item);
+    }
+    const pending = this.captures.filter((capture) => capture.status !== "confirmed");
+    const inbox = container.createEl("section", { cls: "faber-organizer-section" });
+    inbox.createEl("h3", { text: `\u5F85\u786E\u8BA4\u6536\u4EF6\u7BB1 \xB7 ${pending.length}` });
+    if (!pending.length)
+      inbox.createDiv({ text: "\u6CA1\u6709\u5F85\u786E\u8BA4\u5185\u5BB9\u3002", cls: "faber-organizer-empty compact" });
+    for (const capture of pending) {
+      const card = inbox.createDiv({ cls: "faber-organizer-capture" });
+      card.createDiv({ text: capture.rawText || "\u56FE\u7247\u4E8B\u9879" });
+      card.createEl("small", { text: capture.error ? `${capture.status} \xB7 ${capture.error}` : capture.status });
+    }
+    if (!this.items.length && !pending.length)
+      container.createDiv({ text: "\u8FD8\u6CA1\u6709\u4E8B\u9879\u3002\u53EF\u4ECE\u547D\u4EE4\u9762\u677F\u53D1\u9001\u9009\u4E2D\u6587\u5B57\u6216\u5F53\u524D\u7B14\u8BB0\u3002", cls: "faber-organizer-empty" });
+  }
+  renderItem(parent, item) {
+    const row = parent.createDiv({ cls: "faber-organizer-item" });
+    const body = row.createDiv({ cls: "faber-organizer-item-body" });
+    body.createEl("strong", { text: item.title });
+    const value = itemTime(item);
+    if (value)
+      body.createEl("small", { text: new Date(value).toLocaleString("zh-CN") });
+    if (item.description)
+      body.createDiv({ text: item.description, cls: "faber-organizer-description" });
+    const actions = row.createDiv({ cls: "faber-organizer-actions" });
+    const done = actions.createEl("button", { text: "\u5B8C\u6210" });
+    done.addEventListener("click", () => void this.runItemAction(() => this.plugin.organizerApi.completeItem(item.id)));
+    const snooze = actions.createEl("button", { text: "\u7A0D\u540E 10 \u5206\u949F" });
+    snooze.addEventListener("click", () => void this.runItemAction(() => this.plugin.organizerApi.snoozeItem(item.id, 10)));
+  }
+  async runItemAction(action) {
+    try {
+      await action();
+      await this.refresh();
+    } catch (error) {
+      new import_obsidian5.Notice(describeOrganizerError(error));
+    }
+  }
+};
+
 // main.ts
 var DEFAULT_AI_SYSTEM_PROMPT = "\u4F60\u662F\u201C\u4E00\u4E2A\u95EA\u5FF5\u201D\u7684\u6587\u7AE0\u7F16\u8F91\u52A9\u624B\u3002\u8BF7\u51C6\u786E\u3001\u514B\u5236\u5730\u6574\u7406\u6587\u7AE0\u4FE1\u606F\uFF0C\u4E0D\u8981\u865A\u6784\u6587\u7AE0\u4E2D\u4E0D\u5B58\u5728\u7684\u4E8B\u5B9E\u3002";
 var DEFAULT_AI_METADATA_PROMPT = "\u6839\u636E\u6587\u7AE0\u6B63\u6587\u751F\u6210\u7B80\u6D01\u6458\u8981\uFF0C\u5E76\u4ECE\u5DF2\u6709\u5206\u7C7B\u548C\u6807\u7B7E\u4E2D\u9009\u62E9\u6700\u5408\u9002\u7684\u9879\u76EE\u3002\u8F93\u51FA\u5FC5\u987B\u7B26\u5408\u63D2\u4EF6\u8981\u6C42\u7684 JSON \u683C\u5F0F\u3002";
@@ -1664,6 +1890,8 @@ var DEFAULT_AI_TAG_RULES = "\u4F18\u5148\u9009\u62E9\u5DF2\u6709\u6807\u7B7E\u30
 var DEFAULT_SETTINGS = {
   syncEndpoint: "http://localhost:3001/api/sync",
   webhookSecret: "",
+  organizerEndpoint: "https://faberhu.top",
+  organizerToken: "",
   localPostsFolder: "",
   localThoughtsFolder: "websites/thoughts",
   activeJobId: "",
@@ -1677,13 +1905,18 @@ var DEFAULT_SETTINGS = {
   aiSuggestionJobId: "",
   aiSuggestions: {}
 };
-var SyncPlugin = class extends import_obsidian4.Plugin {
+var SyncPlugin = class extends import_obsidian6.Plugin {
   async onload() {
     await this.loadSettings();
     this.api = new ApiClient(this.settings);
+    this.organizerApi = new OrganizerApiClient(this.settings);
     this.registerView(ARTICLE_MANAGER_VIEW, (leaf) => new ArticleManagerView(leaf, this));
+    this.registerView(ORGANIZER_VIEW, (leaf) => new OrganizerView(leaf, this));
     this.addRibbonIcon("layout-dashboard", "\u4E00\u4E2A\u95EA\u5FF5\uFF1A\u5185\u5BB9\u7BA1\u7406", () => {
       void this.activateManagerView();
+    });
+    this.addRibbonIcon("calendar-check", "\u4E00\u4E2A\u95EA\u5FF5\uFF1A\u4ECA\u65E5\u4E8B\u9879", () => {
+      void this.activateOrganizerView();
     });
     this.addCommand({
       id: "open-flash-thought-content-manager",
@@ -1706,10 +1939,33 @@ var SyncPlugin = class extends import_obsidian4.Plugin {
       name: "\u65B0\u5EFA\u95EA\u5FF5",
       callback: () => void this.createThought()
     });
+    this.addCommand({
+      id: "open-faber-organizer",
+      name: "\u6253\u5F00\u4ECA\u65E5\u4E8B\u9879",
+      callback: () => void this.activateOrganizerView()
+    });
+    this.addCommand({
+      id: "send-selection-to-faber-organizer",
+      name: "\u628A\u9009\u4E2D\u6587\u5B57\u53D1\u9001\u5230\u4E8B\u9879\u6536\u4EF6\u7BB1",
+      editorCallback: (editor) => void this.captureOrganizerText(editor.getSelection())
+    });
+    this.addCommand({
+      id: "send-current-note-to-faber-organizer",
+      name: "\u628A\u5F53\u524D\u7B14\u8BB0\u53D1\u9001\u5230\u4E8B\u9879\u6536\u4EF6\u7BB1",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
+        if (!(view == null ? void 0 : view.file))
+          return false;
+        if (!checking)
+          void this.captureCurrentNote(view);
+        return true;
+      }
+    });
     this.addSettingTab(new SyncSettingTab(this.app, this));
   }
   async onunload() {
     this.app.workspace.detachLeavesOfType(ARTICLE_MANAGER_VIEW);
+    this.app.workspace.detachLeavesOfType(ORGANIZER_VIEW);
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -1717,6 +1973,7 @@ var SyncPlugin = class extends import_obsidian4.Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
     this.api = new ApiClient(this.settings);
+    this.organizerApi = new OrganizerApiClient(this.settings);
   }
   async testServerConnection() {
     if (!this.settings.syncEndpoint.trim())
@@ -1738,7 +1995,7 @@ var SyncPlugin = class extends import_obsidian4.Plugin {
     if (!model)
       throw new Error("\u8BF7\u5148\u586B\u5199\u6A21\u578B\u540D\u79F0\u3002");
     const endpoint = /\/chat\/completions$/i.test(baseUrl) ? baseUrl : `${baseUrl}/chat/completions`;
-    const response = await (0, import_obsidian4.requestUrl)({
+    const response = await (0, import_obsidian6.requestUrl)({
       url: endpoint,
       method: "POST",
       headers: {
@@ -1774,8 +2031,43 @@ var SyncPlugin = class extends import_obsidian4.Plugin {
     }
     this.app.workspace.revealLeaf(leaf);
   }
+  async activateOrganizerView() {
+    let leaf = this.app.workspace.getLeavesOfType(ORGANIZER_VIEW)[0];
+    if (!leaf) {
+      leaf = this.app.workspace.getLeaf(true);
+      await leaf.setViewState({ type: ORGANIZER_VIEW, active: true });
+    }
+    this.app.workspace.revealLeaf(leaf);
+  }
+  async captureOrganizerText(value) {
+    var _a;
+    const text2 = value.trim();
+    if (!text2) {
+      new import_obsidian6.Notice("\u8BF7\u5148\u9009\u62E9\u8981\u53D1\u9001\u7684\u6587\u5B57\u3002");
+      return;
+    }
+    try {
+      const capture = await this.organizerApi.createCapture(text2);
+      await this.organizerApi.parseCapture(capture.id);
+      new import_obsidian6.Notice("\u5DF2\u53D1\u9001\u5230\u4E8B\u9879\u6536\u4EF6\u7BB1\uFF0C\u7B49\u5F85\u4F60\u786E\u8BA4\u3002");
+      await this.activateOrganizerView();
+      const view = (_a = this.app.workspace.getLeavesOfType(ORGANIZER_VIEW)[0]) == null ? void 0 : _a.view;
+      if (view instanceof OrganizerView)
+        await view.refresh();
+    } catch (error) {
+      new import_obsidian6.Notice(describeOrganizerError(error));
+    }
+  }
+  async captureCurrentNote(view) {
+    if (!view.file)
+      return;
+    const content = await this.app.vault.read(view.file);
+    await this.captureOrganizerText(`${view.file.basename}
+
+${content}`);
+  }
   async createThought() {
-    const folder = (0, import_obsidian4.normalizePath)(this.settings.localThoughtsFolder || "websites/thoughts");
+    const folder = (0, import_obsidian6.normalizePath)(this.settings.localThoughtsFolder || "websites/thoughts");
     let current = "";
     for (const part of folder.split("/").filter(Boolean)) {
       current = current ? `${current}/${part}` : part;
@@ -1784,7 +2076,7 @@ var SyncPlugin = class extends import_obsidian4.Plugin {
     }
     const now = /* @__PURE__ */ new Date();
     const filename = now.toISOString().replace(/[:.]/g, "-").replace("T", "-").replace(/Z$/, "") + ".md";
-    const path = (0, import_obsidian4.normalizePath)(`${folder}/${filename}`);
+    const path = (0, import_obsidian6.normalizePath)(`${folder}/${filename}`);
     const content = `---
 type: thought
 published: ${now.toISOString()}
@@ -1794,10 +2086,10 @@ tags: []
 `;
     const file = await this.app.vault.create(path, content);
     await this.app.workspace.getLeaf(true).openFile(file);
-    new import_obsidian4.Notice("\u95EA\u5FF5\u8349\u7A3F\u5DF2\u521B\u5EFA\uFF1B\u5199\u5B8C\u540E\u6309\u73B0\u6709 S3 \u6D41\u7A0B\u540C\u6B65\uFF0C\u518D\u5230\u5185\u5BB9\u7BA1\u7406\u4E2D\u5BA1\u6838\u53D1\u5E03\u3002");
+    new import_obsidian6.Notice("\u95EA\u5FF5\u8349\u7A3F\u5DF2\u521B\u5EFA\uFF1B\u5199\u5B8C\u540E\u6309\u73B0\u6709 S3 \u6D41\u7A0B\u540C\u6B65\uFF0C\u518D\u5230\u5185\u5BB9\u7BA1\u7406\u4E2D\u5BA1\u6838\u53D1\u5E03\u3002");
   }
 };
-var SyncSettingTab = class extends import_obsidian4.PluginSettingTab {
+var SyncSettingTab = class extends import_obsidian6.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1807,59 +2099,86 @@ var SyncSettingTab = class extends import_obsidian4.PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "\u4E00\u4E2A\u95EA\u5FF5 \xB7 \u5185\u5BB9\u7BA1\u7406" });
     containerEl.createEl("h3", { text: "\u670D\u52A1\u5668\u8FDE\u63A5" });
-    new import_obsidian4.Setting(containerEl).setName("\u540C\u6B65\u670D\u52A1\u5730\u5740").setDesc("\u53EF\u4EE5\u586B\u5199\u670D\u52A1\u5668\u6839\u5730\u5740\u3001/api/sync \u6216 /api/v1\u3002").addText((text2) => text2.setPlaceholder("https://example.com/api/sync").setValue(this.plugin.settings.syncEndpoint).onChange(async (value) => {
+    new import_obsidian6.Setting(containerEl).setName("\u540C\u6B65\u670D\u52A1\u5730\u5740").setDesc("\u53EF\u4EE5\u586B\u5199\u670D\u52A1\u5668\u6839\u5730\u5740\u3001/api/sync \u6216 /api/v1\u3002").addText((text2) => text2.setPlaceholder("https://example.com/api/sync").setValue(this.plugin.settings.syncEndpoint).onChange(async (value) => {
       this.plugin.settings.syncEndpoint = value.trim();
       await this.plugin.saveSettings();
     }));
-    new import_obsidian4.Setting(containerEl).setName("Webhook Secret").setDesc("\u670D\u52A1\u5668 WEBHOOK_SECRET\uFF0C\u7528\u4E8E\u9A8C\u8BC1\u7BA1\u7406\u548C\u53D1\u5E03\u8BF7\u6C42\uFF1B\u5B83\u4E0E AI Key \u76F8\u4E92\u72EC\u7ACB\u3002").addText((text2) => {
+    new import_obsidian6.Setting(containerEl).setName("Webhook Secret").setDesc("\u670D\u52A1\u5668 WEBHOOK_SECRET\uFF0C\u7528\u4E8E\u9A8C\u8BC1\u7BA1\u7406\u548C\u53D1\u5E03\u8BF7\u6C42\uFF1B\u5B83\u4E0E AI Key \u76F8\u4E92\u72EC\u7ACB\u3002").addText((text2) => {
       text2.inputEl.type = "password";
       text2.setPlaceholder("\u8F93\u5165\u670D\u52A1\u5668\u5BC6\u94A5").setValue(this.plugin.settings.webhookSecret).onChange(async (value) => {
         this.plugin.settings.webhookSecret = value.trim();
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian4.Setting(containerEl).setName("\u8FDE\u63A5\u6D4B\u8BD5").setDesc("\u9A8C\u8BC1\u670D\u52A1\u5730\u5740\u548C Webhook Secret\uFF0C\u5E76\u8BFB\u53D6\u6807\u7B7E\u5E93\u3002").addButton((button) => button.setButtonText("\u6D4B\u8BD5\u670D\u52A1\u5668\u8FDE\u63A5").setCta().onClick(async () => {
+    new import_obsidian6.Setting(containerEl).setName("\u8FDE\u63A5\u6D4B\u8BD5").setDesc("\u9A8C\u8BC1\u670D\u52A1\u5730\u5740\u548C Webhook Secret\uFF0C\u5E76\u8BFB\u53D6\u6807\u7B7E\u5E93\u3002").addButton((button) => button.setButtonText("\u6D4B\u8BD5\u670D\u52A1\u5668\u8FDE\u63A5").setCta().onClick(async () => {
       button.setDisabled(true).setButtonText("\u6D4B\u8BD5\u4E2D\u2026");
       try {
-        new import_obsidian4.Notice(await this.plugin.testServerConnection());
+        new import_obsidian6.Notice(await this.plugin.testServerConnection());
       } catch (error) {
-        new import_obsidian4.Notice(`\u670D\u52A1\u5668\u8FDE\u63A5\u5931\u8D25\uFF1A${describeApiError(error)}`);
+        new import_obsidian6.Notice(`\u670D\u52A1\u5668\u8FDE\u63A5\u5931\u8D25\uFF1A${describeApiError(error)}`);
       } finally {
         button.setDisabled(false).setButtonText("\u6D4B\u8BD5\u670D\u52A1\u5668\u8FDE\u63A5");
       }
     }));
-    new import_obsidian4.Setting(containerEl).setName("\u672C\u5730\u6587\u7AE0\u76EE\u5F55").setDesc("Obsidian Vault \u5185\u4FDD\u5B58\u535A\u5BA2\u6587\u7AE0\u7684\u76EE\u5F55\uFF0C\u4F8B\u5982 Blog/Posts\u3002\u7559\u7A7A\u8868\u793A Vault \u6839\u76EE\u5F55\u3002").addText((text2) => text2.setPlaceholder("Blog/Posts").setValue(this.plugin.settings.localPostsFolder).onChange(async (value) => {
+    new import_obsidian6.Setting(containerEl).setName("\u672C\u5730\u6587\u7AE0\u76EE\u5F55").setDesc("Obsidian Vault \u5185\u4FDD\u5B58\u535A\u5BA2\u6587\u7AE0\u7684\u76EE\u5F55\uFF0C\u4F8B\u5982 Blog/Posts\u3002\u7559\u7A7A\u8868\u793A Vault \u6839\u76EE\u5F55\u3002").addText((text2) => text2.setPlaceholder("Blog/Posts").setValue(this.plugin.settings.localPostsFolder).onChange(async (value) => {
       this.plugin.settings.localPostsFolder = value.replace(/^\/+|\/+$/g, "");
       await this.plugin.saveSettings();
+    }));
+    containerEl.createEl("h3", { text: "\u4E2A\u4EBA\u4E8B\u9879\u670D\u52A1" });
+    containerEl.createEl("p", {
+      text: "\u4E8B\u9879\u670D\u52A1\u4F7F\u7528\u72EC\u7ACB\u8BBE\u5907\u4EE4\u724C\uFF0C\u4E0D\u4F1A\u590D\u7528\u6587\u7AE0\u53D1\u5E03\u6240\u9700\u7684 Webhook Secret\u3002\u8BBE\u5907\u4EE4\u724C\u8BF7\u5728\u7F51\u7AD9 /agenda/ \u7684\u8BBE\u7F6E\u4E2D\u751F\u6210\u3002",
+      cls: "setting-item-description"
+    });
+    new import_obsidian6.Setting(containerEl).setName("\u4E8B\u9879\u670D\u52A1\u5730\u5740").setDesc("\u586B\u5199\u7F51\u7AD9\u6839\u5730\u5740\u6216\u5B8C\u6574\u7684 /api/organizer/v1 \u5730\u5740\u3002").addText((text2) => text2.setPlaceholder("https://faberhu.top").setValue(this.plugin.settings.organizerEndpoint).onChange(async (value) => {
+      this.plugin.settings.organizerEndpoint = value.trim();
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian6.Setting(containerEl).setName("\u4E8B\u9879\u8BBE\u5907\u4EE4\u724C").setDesc("\u4EC5\u7528\u4E8E\u8BFB\u53D6\u548C\u66F4\u65B0\u4E2A\u4EBA\u4E8B\u9879\uFF0C\u4FDD\u5B58\u5728\u672C\u673A Obsidian \u63D2\u4EF6\u914D\u7F6E\u4E2D\u3002").addText((text2) => {
+      text2.inputEl.type = "password";
+      text2.setPlaceholder("\u7C98\u8D34\u53EA\u663E\u793A\u4E00\u6B21\u7684\u8BBE\u5907\u4EE4\u724C").setValue(this.plugin.settings.organizerToken).onChange(async (value) => {
+        this.plugin.settings.organizerToken = value.trim();
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian6.Setting(containerEl).setName("\u4E8B\u9879\u8FDE\u63A5\u6D4B\u8BD5").setDesc("\u9A8C\u8BC1\u4E8B\u9879\u670D\u52A1\u5730\u5740\u4E0E\u8BBE\u5907\u4EE4\u724C\u3002").addButton((button) => button.setButtonText("\u6D4B\u8BD5\u4E8B\u9879\u670D\u52A1").setCta().onClick(async () => {
+      button.setDisabled(true).setButtonText("\u6D4B\u8BD5\u4E2D\u2026");
+      try {
+        const session = await this.plugin.organizerApi.testConnection();
+        new import_obsidian6.Notice(`\u4E8B\u9879\u670D\u52A1\u8FDE\u63A5\u6210\u529F\uFF0C\u65F6\u533A\uFF1A${session.timezone}`);
+      } catch (error) {
+        new import_obsidian6.Notice(describeOrganizerError(error));
+      } finally {
+        button.setDisabled(false).setButtonText("\u6D4B\u8BD5\u4E8B\u9879\u670D\u52A1");
+      }
     }));
     containerEl.createEl("h3", { text: "\u672C\u5730 AI \u914D\u7F6E" });
     containerEl.createEl("p", {
       text: "AI \u8BF7\u6C42\u5C06\u7531 Obsidian \u76F4\u63A5\u53D1\u9001\u3002API Key \u53EA\u4FDD\u5B58\u5728\u672C\u673A\u63D2\u4EF6 data.json \u4E2D\uFF0C\u4E0D\u4F1A\u4E0A\u4F20\u5230\u670D\u52A1\u5668\u6216 Git\uFF1B\u8BE5\u6587\u4EF6\u4E0D\u662F\u52A0\u5BC6\u4FDD\u9669\u5E93\uFF0C\u8BF7\u786E\u4FDD\u8BBE\u5907\u548C Vault \u53EF\u4FE1\u3002",
       cls: "setting-item-description"
     });
-    new import_obsidian4.Setting(containerEl).setName("AI API \u5730\u5740").setDesc("OpenAI \u517C\u5BB9\u63A5\u53E3\u7684 Base URL\uFF0C\u4F8B\u5982 https://api.openai.com/v1\u3002").addText((text2) => text2.setPlaceholder("https://api.openai.com/v1").setValue(this.plugin.settings.aiBaseUrl).onChange(async (value) => {
+    new import_obsidian6.Setting(containerEl).setName("AI API \u5730\u5740").setDesc("OpenAI \u517C\u5BB9\u63A5\u53E3\u7684 Base URL\uFF0C\u4F8B\u5982 https://api.openai.com/v1\u3002").addText((text2) => text2.setPlaceholder("https://api.openai.com/v1").setValue(this.plugin.settings.aiBaseUrl).onChange(async (value) => {
       this.plugin.settings.aiBaseUrl = value.trim();
       await this.plugin.saveSettings();
     }));
-    new import_obsidian4.Setting(containerEl).setName("AI API Key").setDesc("\u4EC5\u4FDD\u5B58\u5728 Obsidian \u63D2\u4EF6\u7684\u672C\u5730\u914D\u7F6E\u4E2D\u3002").addText((text2) => {
+    new import_obsidian6.Setting(containerEl).setName("AI API Key").setDesc("\u4EC5\u4FDD\u5B58\u5728 Obsidian \u63D2\u4EF6\u7684\u672C\u5730\u914D\u7F6E\u4E2D\u3002").addText((text2) => {
       text2.inputEl.type = "password";
       text2.setPlaceholder("\u8F93\u5165 AI API Key").setValue(this.plugin.settings.aiApiKey).onChange(async (value) => {
         this.plugin.settings.aiApiKey = value.trim();
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian4.Setting(containerEl).setName("\u672C\u5730\u95EA\u5FF5\u76EE\u5F55").setDesc("Obsidian Vault \u5185\u4FDD\u5B58\u95EA\u5FF5\u7684\u76EE\u5F55\u3002\u5F53\u524D S3 \u6587\u7AE0\u524D\u7F00\u4E3A websites/\uFF0C\u8BF7\u4F7F\u7528 websites/thoughts\uFF1B\u540C\u6B65\u540E\u4F1A\u4EE5\u95EA\u5FF5\u5904\u7406\uFF0C\u4E5F\u53EF\u7528 frontmatter \u7684 type: thought \u6807\u8BB0\u3002").addText((text2) => text2.setPlaceholder("websites/thoughts").setValue(this.plugin.settings.localThoughtsFolder).onChange(async (value) => {
+    new import_obsidian6.Setting(containerEl).setName("\u672C\u5730\u95EA\u5FF5\u76EE\u5F55").setDesc("Obsidian Vault \u5185\u4FDD\u5B58\u95EA\u5FF5\u7684\u76EE\u5F55\u3002\u5F53\u524D S3 \u6587\u7AE0\u524D\u7F00\u4E3A websites/\uFF0C\u8BF7\u4F7F\u7528 websites/thoughts\uFF1B\u540C\u6B65\u540E\u4F1A\u4EE5\u95EA\u5FF5\u5904\u7406\uFF0C\u4E5F\u53EF\u7528 frontmatter \u7684 type: thought \u6807\u8BB0\u3002").addText((text2) => text2.setPlaceholder("websites/thoughts").setValue(this.plugin.settings.localThoughtsFolder).onChange(async (value) => {
       this.plugin.settings.localThoughtsFolder = value.replace(/^\/+|\/+$/g, "");
       await this.plugin.saveSettings();
     }));
-    new import_obsidian4.Setting(containerEl).setName("\u6A21\u578B").setDesc("\u586B\u5199\u670D\u52A1\u5546\u652F\u6301\u7684\u6A21\u578B ID\u3002").addText((text2) => text2.setPlaceholder("gpt-4o-mini").setValue(this.plugin.settings.aiModel).onChange(async (value) => {
+    new import_obsidian6.Setting(containerEl).setName("\u6A21\u578B").setDesc("\u586B\u5199\u670D\u52A1\u5546\u652F\u6301\u7684\u6A21\u578B ID\u3002").addText((text2) => text2.setPlaceholder("gpt-4o-mini").setValue(this.plugin.settings.aiModel).onChange(async (value) => {
       this.plugin.settings.aiModel = value.trim();
       await this.plugin.saveSettings();
     }));
     this.addPromptSetting(containerEl, "\u7CFB\u7EDF\u63D0\u793A\u8BCD", "\u89C4\u5B9A AI \u7684\u8EAB\u4EFD\u3001\u8BED\u6C14\u548C\u57FA\u672C\u8FB9\u754C\u3002", "aiSystemPrompt");
     this.addPromptSetting(containerEl, "\u6587\u7AE0\u4FE1\u606F\u63D0\u793A\u8BCD", "\u89C4\u5B9A\u6807\u9898\u3001\u6458\u8981\u548C\u5206\u7C7B\u7B49\u4FE1\u606F\u5982\u4F55\u751F\u6210\u3002", "aiMetadataPrompt");
     this.addPromptSetting(containerEl, "\u6807\u7B7E\u89C4\u5219", "\u9650\u5236 AI \u5982\u4F55\u9009\u62E9\u5DF2\u6709\u6807\u7B7E\u53CA\u63D0\u51FA\u65B0\u6807\u7B7E\u3002", "aiTagRules");
-    new import_obsidian4.Setting(containerEl).setName("\u6700\u591A\u63D0\u51FA\u7684\u65B0\u6807\u7B7E\u6570").setDesc("\u9650\u5236\u5355\u7BC7\u6587\u7AE0\u4E2D AI \u53EF\u63D0\u51FA\u7684\u65B0\u6807\u7B7E\u6570\u91CF\uFF0C\u8303\u56F4 0\u201310\u3002").addText((text2) => {
+    new import_obsidian6.Setting(containerEl).setName("\u6700\u591A\u63D0\u51FA\u7684\u65B0\u6807\u7B7E\u6570").setDesc("\u9650\u5236\u5355\u7BC7\u6587\u7AE0\u4E2D AI \u53EF\u63D0\u51FA\u7684\u65B0\u6807\u7B7E\u6570\u91CF\uFF0C\u8303\u56F4 0\u201310\u3002").addText((text2) => {
       text2.inputEl.type = "number";
       text2.inputEl.min = "0";
       text2.inputEl.max = "10";
@@ -1871,12 +2190,12 @@ var SyncSettingTab = class extends import_obsidian4.PluginSettingTab {
         }
       });
     });
-    new import_obsidian4.Setting(containerEl).setName("AI \u914D\u7F6E\u64CD\u4F5C").setDesc("\u8FDE\u63A5\u6D4B\u8BD5\u4F1A\u53D1\u9001\u4E00\u6761\u6781\u77ED\u7684\u6D4B\u8BD5\u6D88\u606F\uFF1B\u6062\u590D\u9ED8\u8BA4\u503C\u4E0D\u4F1A\u6E05\u9664 API Key\u3002").addButton((button) => button.setButtonText("\u6D4B\u8BD5 AI \u8FDE\u63A5").setCta().onClick(async () => {
+    new import_obsidian6.Setting(containerEl).setName("AI \u914D\u7F6E\u64CD\u4F5C").setDesc("\u8FDE\u63A5\u6D4B\u8BD5\u4F1A\u53D1\u9001\u4E00\u6761\u6781\u77ED\u7684\u6D4B\u8BD5\u6D88\u606F\uFF1B\u6062\u590D\u9ED8\u8BA4\u503C\u4E0D\u4F1A\u6E05\u9664 API Key\u3002").addButton((button) => button.setButtonText("\u6D4B\u8BD5 AI \u8FDE\u63A5").setCta().onClick(async () => {
       button.setDisabled(true).setButtonText("\u6D4B\u8BD5\u4E2D\u2026");
       try {
-        new import_obsidian4.Notice(await this.plugin.testAIConnection());
+        new import_obsidian6.Notice(await this.plugin.testAIConnection());
       } catch (error) {
-        new import_obsidian4.Notice(`AI \u8FDE\u63A5\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+        new import_obsidian6.Notice(`AI \u8FDE\u63A5\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
       } finally {
         button.setDisabled(false).setButtonText("\u6D4B\u8BD5 AI \u8FDE\u63A5");
       }
@@ -1889,11 +2208,11 @@ var SyncSettingTab = class extends import_obsidian4.PluginSettingTab {
       this.plugin.settings.aiMaxProposedTags = DEFAULT_SETTINGS.aiMaxProposedTags;
       await this.plugin.saveSettings();
       this.display();
-      new import_obsidian4.Notice("\u5DF2\u6062\u590D\u9ED8\u8BA4\u63D0\u793A\u8BCD\u3002");
+      new import_obsidian6.Notice("\u5DF2\u6062\u590D\u9ED8\u8BA4\u63D0\u793A\u8BCD\u3002");
     }));
   }
   addPromptSetting(containerEl, name, description, key) {
-    new import_obsidian4.Setting(containerEl).setName(name).setDesc(description).addTextArea((text2) => {
+    new import_obsidian6.Setting(containerEl).setName(name).setDesc(description).addTextArea((text2) => {
       text2.inputEl.rows = 5;
       text2.setValue(this.plugin.settings[key]).onChange(async (value) => {
         this.plugin.settings[key] = value;

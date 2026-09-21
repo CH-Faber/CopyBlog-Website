@@ -1,6 +1,8 @@
 export interface SyncSettings {
 	syncEndpoint: string;
 	webhookSecret: string;
+	organizerEndpoint: string;
+	organizerToken: string;
 	localPostsFolder: string;
 	localThoughtsFolder: string;
 	activeJobId: string;
