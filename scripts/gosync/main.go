@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 
 	"gosync/ai"
@@ -68,9 +69,11 @@ func main() {
 		})
 	})
 
+	host := config.GetEnvOrDefault("GOSYNC_HOST", "127.0.0.1")
 	port := config.GetEnvOrDefault("PORT", "3001")
-	log.Printf("Sync API server is listening on port %s...\n", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	address := net.JoinHostPort(host, port)
+	log.Printf("Sync API server is listening on %s...\n", address)
+	if err := http.ListenAndServe(address, mux); err != nil {
 		log.Fatal(err)
 	}
 }

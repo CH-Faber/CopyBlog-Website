@@ -82,7 +82,7 @@ func LoadConfig() *Config {
 		S3AccessKey:      os.Getenv("S3_ACCESS_KEY"),
 		S3SecretKey:      os.Getenv("S3_SECRET_KEY"),
 		S3BucketName:     os.Getenv("S3_BUCKET_NAME"),
-		S3Prefix:         GetEnvOrDefault("S3_PREFIX", "website/"),
+		S3Prefix:         GetEnvOrDefault("S3_PREFIX", "websites/"),
 		AIApiKey:         CleanEnvString(os.Getenv("AI_API_KEY")),
 		AIBaseURL:        NormalizeAIBaseURL(envCleanOrDefault("AI_BASE_URL", defaultAIBaseURL)),
 		AIModel:          envCleanOrDefault("AI_MODEL", "gpt-4o-mini"),

@@ -19,6 +19,8 @@ WorkingDirectory=/home/web/CopyBlog-Website
 # 与 dotenv 不同：systemd 的 EnvironmentFile 对行尾 # 注释支持差，易把整段吃进变量。
 # gosync 会用 godotenv 再读同一文件并覆盖 AI_* 等键；仍建议 AI_BASE_URL 等行不要写行尾注释。
 EnvironmentFile=-/home/web/CopyBlog-Website/.env
+# 即使 .env 未设置，也应只监听本机并经 Nginx 对外提供 API。
+Environment=GOSYNC_HOST=127.0.0.1
 ExecStart=/usr/local/bin/gosync
 Restart=on-failure
 RestartSec=5
