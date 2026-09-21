@@ -72,12 +72,12 @@ export default class SyncPlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'send-selection-to-faber-organizer',
-			name: '把选中文字发送到事项收件箱',
+			name: '把选中文字发送到 Agenda',
 			editorCallback: (editor: Editor) => void this.captureOrganizerText(editor.getSelection()),
 		});
 		this.addCommand({
 			id: 'send-current-note-to-faber-organizer',
-			name: '把当前笔记发送到事项收件箱',
+			name: '把当前笔记发送到 Agenda',
 			checkCallback: (checking: boolean) => {
 				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 				if (!view?.file) return false;
@@ -175,7 +175,7 @@ export default class SyncPlugin extends Plugin {
 		try {
 			const capture = await this.organizerApi.createCapture(text);
 			await this.organizerApi.parseCapture(capture.id);
-			new Notice('已发送到事项收件箱，等待你确认。');
+			new Notice('已发送到 Agenda，等待你整理。');
 			await this.activateOrganizerView();
 			const view = this.app.workspace.getLeavesOfType(ORGANIZER_VIEW)[0]?.view;
 			if (view instanceof OrganizerView) await view.refresh();

@@ -38,3 +38,15 @@ func TestFallbackTitleIsBounded(t *testing.T) {
 		t.Fatalf("fallback title too long: %d", length)
 	}
 }
+
+func TestReminderInvariantAndFuzzyTimeDefault(t *testing.T) {
+	result := ParseResult{Items: []Candidate{{Type: "reminder", Title: "报名四级", StartAt: "2026-09-24T00:00:00+08:00"}}}
+	applyCaptureInvariants(Capture{RawText: "提醒我大后天早上报名四级"}, &result, "Asia/Shanghai")
+	item := result.Items[0]
+	if item.StartAt != "2026-09-24T01:00:00Z" {
+		t.Fatalf("fuzzy morning was not resolved: %s", item.StartAt)
+	}
+	if item.ReminderAt != item.StartAt {
+		t.Fatalf("reminder intent did not create a reminder: %#v", item)
+	}
+}

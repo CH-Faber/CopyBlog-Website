@@ -104,8 +104,8 @@ export class OrganizerView extends ItemView {
 
 		const pending = this.captures.filter((capture) => capture.status !== 'confirmed');
 		const inbox = container.createEl('section', { cls: 'faber-organizer-section' });
-		inbox.createEl('h3', { text: `待确认收件箱 · ${pending.length}` });
-		if (!pending.length) inbox.createDiv({ text: '没有待确认内容。', cls: 'faber-organizer-empty compact' });
+		inbox.createEl('h3', { text: `待整理 · ${pending.length}` });
+		if (!pending.length) inbox.createDiv({ text: '没有等待整理的内容。', cls: 'faber-organizer-empty compact' });
 		for (const capture of pending) {
 			const card = inbox.createDiv({ cls: 'faber-organizer-capture' });
 			card.createDiv({ text: capture.rawText || '图片事项' });

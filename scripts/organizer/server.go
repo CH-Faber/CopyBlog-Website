@@ -47,7 +47,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/organizer/v1/items/{id}", s.authorized(s.handleGetItem))
 	mux.HandleFunc("PUT /api/organizer/v1/items/{id}", s.authorized(s.handleUpdateItem))
 	mux.HandleFunc("POST /api/organizer/v1/items/{id}/complete", s.authorized(s.handleCompleteItem))
+	mux.HandleFunc("POST /api/organizer/v1/items/{id}/cancel", s.authorized(s.handleCancelItem))
+	mux.HandleFunc("POST /api/organizer/v1/items/{id}/reopen", s.authorized(s.handleReopenItem))
+	mux.HandleFunc("POST /api/organizer/v1/items/{id}/archive", s.authorized(s.handleArchiveItem))
+	mux.HandleFunc("GET /api/organizer/v1/items/{id}/events", s.authorized(s.handleListItemEvents))
 	mux.HandleFunc("POST /api/organizer/v1/items/{id}/snooze", s.authorized(s.handleSnoozeItem))
+	mux.HandleFunc("GET /api/organizer/v1/projects", s.authorized(s.handleListProjects))
+	mux.HandleFunc("POST /api/organizer/v1/projects", s.authorized(s.handleCreateProject))
+	mux.HandleFunc("GET /api/organizer/v1/projects/{id}", s.authorized(s.handleGetProject))
+	mux.HandleFunc("PUT /api/organizer/v1/projects/{id}", s.authorized(s.handleUpdateProject))
+	mux.HandleFunc("GET /api/organizer/v1/events", s.authorized(s.handleListEvents))
+	mux.HandleFunc("GET /api/organizer/v1/memories", s.authorized(s.handleListMemories))
+	mux.HandleFunc("POST /api/organizer/v1/memories", s.authorized(s.handleCreateMemory))
+	mux.HandleFunc("PUT /api/organizer/v1/memories/{id}", s.authorized(s.handleUpdateMemory))
 	mux.HandleFunc("GET /api/organizer/v1/push/vapid-key", s.authorized(s.handleVAPIDKey))
 	mux.HandleFunc("POST /api/organizer/v1/push/subscriptions", s.authorized(s.handlePushSubscription))
 	mux.HandleFunc("GET /api/organizer/v1/export", s.authorized(s.handleExport))
@@ -337,7 +349,12 @@ func (s *Server) handleParseCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.setCaptureParsing(id)
-	result, err := s.ai.Parse(r.Context(), capture)
+	memoryPrompt, err := s.store.activeMemoryPrompt()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "load assistant memory")
+		return
+	}
+	result, err := s.ai.Parse(r.Context(), capture, memoryPrompt)
 	if err != nil {
 		_ = s.store.setCaptureError(id, err)
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -377,8 +394,13 @@ func (s *Server) handleConfirmCapture(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	applyCaptureInvariants(capture, &request, s.cfg.Timezone)
 	if err := validateCandidates(request.Items, s.cfg.Timezone); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.store.recordCaptureCorrections(capture, request, s.cfg.Timezone); err != nil {
+		writeError(w, http.StatusInternalServerError, "save corrections")
 		return
 	}
 	items, err := s.store.createItems(id, request.Items, s.cfg.Timezone)
@@ -464,6 +486,146 @@ func (s *Server) handleCompleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) handleCancelItem(w http.ResponseWriter, r *http.Request) {
+	s.handleItemTransition(w, r, s.store.cancelItem, "cancel item")
+}
+
+func (s *Server) handleReopenItem(w http.ResponseWriter, r *http.Request) {
+	s.handleItemTransition(w, r, s.store.reopenItem, "reopen item")
+}
+
+func (s *Server) handleArchiveItem(w http.ResponseWriter, r *http.Request) {
+	s.handleItemTransition(w, r, s.store.archiveItem, "archive item")
+}
+
+func (s *Server) handleItemTransition(w http.ResponseWriter, r *http.Request, action func(string) (Item, error), message string) {
+	item, err := action(r.PathValue("id"))
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "item not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, message)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) handleListItemEvents(w http.ResponseWriter, r *http.Request) {
+	values, err := s.store.listItemEvents(r.PathValue("id"), queryLimit(r, 100, 500))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list item events")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": values})
+}
+
+func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
+	values, err := s.store.listItemEvents("", queryLimit(r, 250, 1000))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list events")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": values})
+}
+
+func (s *Server) handleListProjects(w http.ResponseWriter, _ *http.Request) {
+	values, err := s.store.listProjects()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list projects")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"projects": values})
+}
+
+func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
+	var project Project
+	if err := decodeJSON(r, &project, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	created, err := s.store.createProject(project)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
+	project, err := s.store.getProject(r.PathValue("id"))
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "get project")
+		return
+	}
+	writeJSON(w, http.StatusOK, project)
+}
+
+func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
+	var project Project
+	if err := decodeJSON(r, &project, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	project.ID = r.PathValue("id")
+	updated, err := s.store.updateProject(project)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
+	values, err := s.store.listMemories(strings.TrimSpace(r.URL.Query().Get("status")))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list memories")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"memories": values})
+}
+
+func (s *Server) handleCreateMemory(w http.ResponseWriter, r *http.Request) {
+	var memory Memory
+	if err := decodeJSON(r, &memory, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	created, err := s.store.createMemory(memory)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleUpdateMemory(w http.ResponseWriter, r *http.Request) {
+	var memory Memory
+	if err := decodeJSON(r, &memory, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	memory.ID = r.PathValue("id")
+	updated, err := s.store.updateMemory(memory)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "memory not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) handleSnoozeItem(w http.ResponseWriter, r *http.Request) {
@@ -561,7 +723,7 @@ func validateCandidates(values []Candidate, defaultTimezone string) error {
 		if _, err := time.LoadLocation(value.Timezone); err != nil {
 			return fmt.Errorf("item %d has invalid timezone", index+1)
 		}
-		for _, pair := range []struct{ name, value string }{{"startAt", value.StartAt}, {"endAt", value.EndAt}, {"dueAt", value.DueAt}, {"reminderAt", value.ReminderAt}} {
+		for _, pair := range []struct{ name, value string }{{"startAt", value.StartAt}, {"endAt", value.EndAt}, {"dueAt", value.DueAt}, {"reminderAt", value.ReminderAt}, {"availableFrom", value.AvailableFrom}, {"availableUntil", value.AvailableUntil}} {
 			if pair.value != "" {
 				if _, err := time.Parse(time.RFC3339, pair.value); err != nil {
 					return fmt.Errorf("item %d %s must be RFC3339", index+1, pair.name)
@@ -576,10 +738,10 @@ func validateItem(item Item) error {
 	if item.Version < 1 {
 		return errors.New("version is required")
 	}
-	if item.Status != "inbox" && item.Status != "todo" && item.Status != "doing" && item.Status != "done" && item.Status != "cancelled" {
+	if item.Status != "inbox" && item.Status != "todo" && item.Status != "doing" && item.Status != "done" && item.Status != "cancelled" && item.Status != "archived" {
 		return errors.New("invalid status")
 	}
-	return validateCandidates([]Candidate{{Type: item.Type, Title: item.Title, Description: item.Description, StartAt: item.StartAt, EndAt: item.EndAt, DueAt: item.DueAt, ReminderAt: item.ReminderAt, Timezone: item.Timezone, AllDay: item.AllDay, RecurrenceRule: item.RecurrenceRule, Priority: item.Priority, Project: item.Project, Tags: item.Tags, Location: item.Location, People: item.People}}, item.Timezone)
+	return validateCandidates([]Candidate{{Type: item.Type, Title: item.Title, Description: item.Description, StartAt: item.StartAt, EndAt: item.EndAt, DueAt: item.DueAt, ReminderAt: item.ReminderAt, Timezone: item.Timezone, AllDay: item.AllDay, RecurrenceRule: item.RecurrenceRule, Priority: item.Priority, Certainty: item.Certainty, DurationMinutes: item.DurationMinutes, AvailableFrom: item.AvailableFrom, AvailableUntil: item.AvailableUntil, Project: item.Project, Tags: item.Tags, Location: item.Location, People: item.People}}, item.Timezone)
 }
 
 func decodeJSON(r *http.Request, target any, limit int64) error {

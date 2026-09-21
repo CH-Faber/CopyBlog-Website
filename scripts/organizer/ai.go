@@ -52,7 +52,7 @@ func fallbackParse(capture Capture, zone, reason string) ParseResult {
 	}}}
 }
 
-func (a *AIClient) Parse(ctx context.Context, capture Capture) (ParseResult, error) {
+func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...string) (ParseResult, error) {
 	if strings.TrimSpace(capture.RawText) == "" && capture.AttachmentPath == "" {
 		return ParseResult{}, errors.New("capture has no text or attachment")
 	}
@@ -62,7 +62,14 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture) (ParseResult, err
 
 	location, _ := time.LoadLocation(a.zone)
 	now := time.Now().In(location).Format(time.RFC3339)
-	systemPrompt := `你是 Faber 的个人事项整理助手。把用户输入或截图转换为结构化事项。只输出 JSON 对象，格式为 {"items":[...]}。每个事项字段：type(task|event|reminder)、title、description、startAt、endAt、dueAt、reminderAt、timezone、allDay、recurrenceRule、priority(0-3)、project、tags、location、people、confidence(0-1)、ambiguities。时间使用 RFC3339 并带时区。不要凭空确定模糊时间；如必须暂定，在 ambiguities 中明确说明。没有日期时保留为空。一个输入可以拆成多个事项。默认时区为 ` + a.zone + `。当前时间为 ` + now + `。`
+	systemPrompt := `你是 Faber 的个人日程与项目整理助手。把用户输入或截图转换为结构化事项。只输出 JSON 对象，格式为 {"items":[...]}。每个事项字段：type(task|event|reminder|note)、title、description、startAt、endAt、dueAt、reminderAt、timezone、allDay、recurrenceRule、priority(0-3)、certainty(confirmed|tentative)、durationMinutes、availableFrom、availableUntil、project、tags、location、people、confidence(0-1)、ambiguities。时间使用 RFC3339 并带时区。startAt 表示实际开始或发生时间，dueAt 表示最晚完成时间，reminderAt 表示发送通知的时间；三者不可混淆。用户说“提醒我”时必须给出 reminderAt，优先使用明确的提醒时间，否则使用 startAt 或 dueAt。没有日期时保留为空。模糊日期存在多种解释时写入 ambiguities，不要伪造。明确是临时、可能、暂定的安排使用 certainty=tentative。一个输入可以拆成多个事项。默认时区为 ` + a.zone + `。当前时间为 ` + now + `。`
+	memories := ""
+	if len(memoryContext) > 0 {
+		memories = memoryContext[0]
+	}
+	if strings.TrimSpace(memories) != "" {
+		systemPrompt += "以下是用户已明确批准的个人规则，只在与当前输入相关时使用；不得自行修改：\n" + memories
+	}
 
 	var userContent any = "请整理以下内容：\n" + capture.RawText
 	if capture.AttachmentPath != "" {
@@ -115,7 +122,42 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture) (ParseResult, err
 			return fallbackParse(capture, a.zone, "AI 返回内容不完整，已保留原文；请手动检查标题、日期和提醒时间"), nil
 		}
 	}
+	applyCaptureInvariants(capture, &result, a.zone)
 	return result, nil
+}
+
+func applyCaptureInvariants(capture Capture, result *ParseResult, zone string) {
+	text := capture.RawText
+	periodDefaults := map[string]int{"早上": 9, "上午": 9, "中午": 12, "下午": 15, "傍晚": 18, "晚上": 20, "下班后": 18}
+	defaultHour := -1
+	for period, hour := range periodDefaults {
+		if strings.Contains(text, period) {
+			defaultHour = hour
+			break
+		}
+	}
+	location, _ := time.LoadLocation(zone)
+	for index := range result.Items {
+		item := &result.Items[index]
+		if defaultHour >= 0 && item.StartAt != "" && location != nil {
+			if parsed, err := time.Parse(time.RFC3339, item.StartAt); err == nil {
+				local := parsed.In(location)
+				if local.Hour() == 0 && local.Minute() == 0 {
+					item.StartAt = time.Date(local.Year(), local.Month(), local.Day(), defaultHour, 0, 0, 0, location).UTC().Format(time.RFC3339)
+					item.Ambiguities = append(item.Ambiguities, "使用系统模糊时间默认值，请确认具体时间")
+				}
+			}
+		}
+		if strings.Contains(text, "提醒") && item.ReminderAt == "" {
+			if item.StartAt != "" {
+				item.ReminderAt = item.StartAt
+			} else if item.DueAt != "" {
+				item.ReminderAt = item.DueAt
+			} else {
+				item.Ambiguities = append(item.Ambiguities, "用户要求提醒，但尚未提供可用的提醒日期")
+			}
+		}
+	}
 }
 
 func (a *AIClient) request(ctx context.Context, payload map[string]any) (string, int, error) {

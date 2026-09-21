@@ -1,5 +1,5 @@
 export type Candidate = {
-  type: "task" | "event" | "reminder"
+  type: "task" | "event" | "reminder" | "note"
   title: string
   description?: string
   startAt?: string
@@ -10,6 +10,11 @@ export type Candidate = {
   allDay?: boolean
   recurrenceRule?: string
   priority?: number
+  certainty?: "confirmed" | "tentative"
+  durationMinutes?: number
+  availableFrom?: string
+  availableUntil?: string
+  projectId?: string
   project?: string
   tags?: string[]
   location?: string
@@ -36,8 +41,49 @@ export type OrganizerItem = Candidate & {
   id: string
   captureId?: string
   timezone: string
-  status: "inbox" | "todo" | "doing" | "done" | "cancelled"
+  status: "inbox" | "todo" | "doing" | "done" | "cancelled" | "archived"
+  certainty: "confirmed" | "tentative"
   version: number
+  completedAt?: string
+  cancelledAt?: string
+  archivedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type Project = {
+  id: string
+  name: string
+  description?: string
+  status: "active" | "waiting" | "blocked" | "completed" | "archived"
+  priority: number
+  color?: string
+  goal?: string
+  deadline?: string
+  reviewAt?: string
+  itemCount: number
+  openCount: number
+  doneCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type ItemEvent = {
+  id: string
+  itemId: string
+  eventType: "created" | "updated" | "completed" | "cancelled" | "reopened" | "archived" | "snoozed" | "status_changed"
+  data?: unknown
+  createdAt: string
+}
+
+export type Memory = {
+  id: string
+  kind: "preference" | "procedure" | "example"
+  key?: string
+  content: string
+  scope: string
+  status: "proposed" | "active" | "dismissed" | "forgotten"
+  evidenceCount: number
   createdAt: string
   updatedAt: string
 }
@@ -100,10 +146,22 @@ export const organizerApi = {
   confirmCapture: (id: string, items: Candidate[]) =>
     request<{ items: OrganizerItem[] }>(`/captures/${encodeURIComponent(id)}/confirm`, { method: "POST", body: JSON.stringify({ items }) }),
   listItems: () => request<{ items: OrganizerItem[] }>("/items?limit=1000"),
+  createItem: (item: Candidate) => request<OrganizerItem>("/items", { method: "POST", body: JSON.stringify(item) }),
   updateItem: (item: OrganizerItem) => request<OrganizerItem>(`/items/${encodeURIComponent(item.id)}`, { method: "PUT", body: JSON.stringify(item) }),
   completeItem: (id: string) => request<OrganizerItem>(`/items/${encodeURIComponent(id)}/complete`, { method: "POST", body: "{}" }),
+  cancelItem: (id: string) => request<OrganizerItem>(`/items/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }),
+  reopenItem: (id: string) => request<OrganizerItem>(`/items/${encodeURIComponent(id)}/reopen`, { method: "POST", body: "{}" }),
+  archiveItem: (id: string) => request<OrganizerItem>(`/items/${encodeURIComponent(id)}/archive`, { method: "POST", body: "{}" }),
+  listItemEvents: (id: string) => request<{ events: ItemEvent[] }>(`/items/${encodeURIComponent(id)}/events?limit=200`),
+  listEvents: () => request<{ events: ItemEvent[] }>("/events?limit=1000"),
   snoozeItem: (id: string, minutes = 10) =>
     request<OrganizerItem>(`/items/${encodeURIComponent(id)}/snooze`, { method: "POST", body: JSON.stringify({ minutes }) }),
+  listProjects: () => request<{ projects: Project[] }>("/projects"),
+  createProject: (project: Pick<Project, "name"> & Partial<Project>) => request<Project>("/projects", { method: "POST", body: JSON.stringify(project) }),
+  updateProject: (project: Project) => request<Project>(`/projects/${encodeURIComponent(project.id)}`, { method: "PUT", body: JSON.stringify(project) }),
+  listMemories: () => request<{ memories: Memory[] }>("/memories"),
+  createMemory: (memory: Pick<Memory, "content"> & Partial<Memory>) => request<Memory>("/memories", { method: "POST", body: JSON.stringify(memory) }),
+  updateMemory: (memory: Memory) => request<Memory>(`/memories/${encodeURIComponent(memory.id)}`, { method: "PUT", body: JSON.stringify(memory) }),
   vapidKey: () => request<{ enabled: boolean; publicKey: string }>("/push/vapid-key"),
   subscribe: (subscription: PushSubscriptionJSON) =>
     request("/push/subscriptions", { method: "POST", body: JSON.stringify(subscription) }),

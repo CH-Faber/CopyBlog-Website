@@ -1847,9 +1847,9 @@ var OrganizerView = class extends import_obsidian5.ItemView {
     }
     const pending = this.captures.filter((capture) => capture.status !== "confirmed");
     const inbox = container.createEl("section", { cls: "faber-organizer-section" });
-    inbox.createEl("h3", { text: `\u5F85\u786E\u8BA4\u6536\u4EF6\u7BB1 \xB7 ${pending.length}` });
+    inbox.createEl("h3", { text: `\u5F85\u6574\u7406 \xB7 ${pending.length}` });
     if (!pending.length)
-      inbox.createDiv({ text: "\u6CA1\u6709\u5F85\u786E\u8BA4\u5185\u5BB9\u3002", cls: "faber-organizer-empty compact" });
+      inbox.createDiv({ text: "\u6CA1\u6709\u7B49\u5F85\u6574\u7406\u7684\u5185\u5BB9\u3002", cls: "faber-organizer-empty compact" });
     for (const capture of pending) {
       const card = inbox.createDiv({ cls: "faber-organizer-capture" });
       card.createDiv({ text: capture.rawText || "\u56FE\u7247\u4E8B\u9879" });
@@ -1946,12 +1946,12 @@ var SyncPlugin = class extends import_obsidian6.Plugin {
     });
     this.addCommand({
       id: "send-selection-to-faber-organizer",
-      name: "\u628A\u9009\u4E2D\u6587\u5B57\u53D1\u9001\u5230\u4E8B\u9879\u6536\u4EF6\u7BB1",
+      name: "\u628A\u9009\u4E2D\u6587\u5B57\u53D1\u9001\u5230 Agenda",
       editorCallback: (editor) => void this.captureOrganizerText(editor.getSelection())
     });
     this.addCommand({
       id: "send-current-note-to-faber-organizer",
-      name: "\u628A\u5F53\u524D\u7B14\u8BB0\u53D1\u9001\u5230\u4E8B\u9879\u6536\u4EF6\u7BB1",
+      name: "\u628A\u5F53\u524D\u7B14\u8BB0\u53D1\u9001\u5230 Agenda",
       checkCallback: (checking) => {
         const view = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
         if (!(view == null ? void 0 : view.file))
@@ -2049,7 +2049,7 @@ var SyncPlugin = class extends import_obsidian6.Plugin {
     try {
       const capture = await this.organizerApi.createCapture(text2);
       await this.organizerApi.parseCapture(capture.id);
-      new import_obsidian6.Notice("\u5DF2\u53D1\u9001\u5230\u4E8B\u9879\u6536\u4EF6\u7BB1\uFF0C\u7B49\u5F85\u4F60\u786E\u8BA4\u3002");
+      new import_obsidian6.Notice("\u5DF2\u53D1\u9001\u5230 Agenda\uFF0C\u7B49\u5F85\u4F60\u6574\u7406\u3002");
       await this.activateOrganizerView();
       const view = (_a = this.app.workspace.getLeavesOfType(ORGANIZER_VIEW)[0]) == null ? void 0 : _a.view;
       if (view instanceof OrganizerView)

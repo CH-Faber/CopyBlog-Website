@@ -31,7 +31,16 @@ export default defineConfig({
   srcDir: "./src",
   output: "static",
   site: "https://faberhu.top",
-  trailingSlash: "always",
+  // Let Vite proxy extensionless API routes in development. The static build
+  // keeps canonical trailing slashes for the public site.
+  trailingSlash: process.env.NODE_ENV === "production" ? "always" : "ignore",
+  vite: {
+    server: {
+      proxy: {
+        "/api/organizer": "http://127.0.0.1:3020",
+      },
+    },
+  },
   alias: {
     "@": "./src",
   },

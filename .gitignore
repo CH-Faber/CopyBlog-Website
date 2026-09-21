@@ -6,6 +6,8 @@ dist
 .env
 .wrangler
 .gosync/
+test-results/
+playwright-report/
 
 AGENTS.md
 CLAUDE.md
