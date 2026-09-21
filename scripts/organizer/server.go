@@ -9,15 +9,12 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
-
-const aiBaseURLSetting = "ai_base_url"
 
 type Server struct {
 	cfg     Config
@@ -28,13 +25,7 @@ type Server struct {
 }
 
 func newServer(cfg Config, store *Store) *Server {
-	ai := newAIClient(cfg)
-	if value, ok, err := store.setting(aiBaseURLSetting); err == nil && ok {
-		if normalized, normalizeErr := normalizeAIBaseURL(value); normalizeErr == nil {
-			ai.SetBaseURL(normalized)
-		}
-	}
-	return &Server{cfg: cfg, store: store, ai: ai, push: newPushSender(cfg, store), limiter: newLoginLimiter()}
+	return &Server{cfg: cfg, store: store, ai: newAIClient(cfg), push: newPushSender(cfg, store), limiter: newLoginLimiter()}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -44,9 +35,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/organizer/v1/auth/logout", s.authorized(s.handleLogout))
 	mux.HandleFunc("GET /api/organizer/v1/session", s.authorized(s.handleSession))
 	mux.HandleFunc("PUT /api/organizer/v1/password", s.authorized(s.handleChangePassword))
-	mux.HandleFunc("GET /api/organizer/v1/ai-settings", s.authorized(s.handleGetAISettings))
-	mux.HandleFunc("PUT /api/organizer/v1/ai-settings", s.authorized(s.handleUpdateAISettings))
-	mux.HandleFunc("DELETE /api/organizer/v1/ai-settings", s.authorized(s.handleResetAISettings))
 	mux.HandleFunc("POST /api/organizer/v1/device-tokens", s.authorized(s.handleCreateDeviceToken))
 	mux.HandleFunc("POST /api/organizer/v1/captures", s.authorized(s.handleCreateCapture))
 	mux.HandleFunc("GET /api/organizer/v1/captures", s.authorized(s.handleListCaptures))
@@ -137,88 +125,6 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSession(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "pushEnabled": s.push.enabled(), "timezone": s.cfg.Timezone})
-}
-
-func (s *Server) requireBrowserSession(w http.ResponseWriter, r *http.Request) bool {
-	kind, ok := s.authenticate(r)
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return false
-	}
-	if kind != "cookie" {
-		writeError(w, http.StatusForbidden, "browser session required")
-		return false
-	}
-	return true
-}
-
-func (s *Server) aiSettingsResponse() map[string]any {
-	baseURL := s.ai.BaseURL()
-	return map[string]any{
-		"baseUrl":          baseURL,
-		"defaultBaseUrl":   s.cfg.AIBaseURL,
-		"model":            s.cfg.AIModel,
-		"apiKeyConfigured": s.cfg.AIAPIKey != "",
-		"overridden":       baseURL != s.cfg.AIBaseURL,
-	}
-}
-
-func (s *Server) handleGetAISettings(w http.ResponseWriter, r *http.Request) {
-	if !s.requireBrowserSession(w, r) {
-		return
-	}
-	writeJSON(w, http.StatusOK, s.aiSettingsResponse())
-}
-
-func normalizeAIBaseURL(raw string) (string, error) {
-	value := strings.TrimRight(strings.TrimSpace(raw), "/")
-	if value == "" {
-		return "", errors.New("AI proxy address is required")
-	}
-	parsed, err := url.Parse(value)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return "", errors.New("AI proxy address must be an absolute HTTP or HTTPS URL")
-	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", errors.New("AI proxy address cannot contain credentials, a query, or a fragment")
-	}
-	return value, nil
-}
-
-func (s *Server) handleUpdateAISettings(w http.ResponseWriter, r *http.Request) {
-	if !s.requireBrowserSession(w, r) {
-		return
-	}
-	var request struct {
-		BaseURL string `json:"baseUrl"`
-	}
-	if err := decodeJSON(r, &request, 32<<10); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	baseURL, err := normalizeAIBaseURL(request.BaseURL)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := s.store.setSetting(aiBaseURLSetting, baseURL); err != nil {
-		writeError(w, http.StatusInternalServerError, "save AI settings")
-		return
-	}
-	s.ai.SetBaseURL(baseURL)
-	writeJSON(w, http.StatusOK, s.aiSettingsResponse())
-}
-
-func (s *Server) handleResetAISettings(w http.ResponseWriter, r *http.Request) {
-	if !s.requireBrowserSession(w, r) {
-		return
-	}
-	if err := s.store.deleteSetting(aiBaseURLSetting); err != nil {
-		writeError(w, http.StatusInternalServerError, "reset AI settings")
-		return
-	}
-	s.ai.SetBaseURL(s.cfg.AIBaseURL)
-	writeJSON(w, http.StatusOK, s.aiSettingsResponse())
 }
 
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {

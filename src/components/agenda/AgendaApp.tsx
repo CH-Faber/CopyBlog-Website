@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Bell,
-  Bot,
   CalendarDays,
   Check,
   Clock3,
@@ -11,8 +10,6 @@ import {
   Loader2,
   LogOut,
   RefreshCw,
-  RotateCcw,
-  Save,
   Send,
   Settings,
   Sparkles,
@@ -20,7 +17,6 @@ import {
 import {
   organizerApi,
   OrganizerApiError,
-  type AISettings,
   type Candidate,
   type Capture,
   type OrganizerItem,
@@ -327,9 +323,6 @@ export function AgendaApp() {
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [passwordBusy, setPasswordBusy] = useState(false)
-  const [aiSettings, setAISettings] = useState<AISettings | null>(null)
-  const [aiBaseURL, setAIBaseURL] = useState("")
-  const [aiSettingsBusy, setAISettingsBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(async () => {
@@ -342,9 +335,7 @@ export function AgendaApp() {
     try {
       const value = await organizerApi.session()
       setSession(value)
-      const [settings] = await Promise.all([organizerApi.aiSettings(), refresh()])
-      setAISettings(settings)
-      setAIBaseURL(settings.baseUrl)
+      await refresh()
     } catch (caught) {
       if (caught instanceof OrganizerApiError && caught.status === 401) setSession(null)
       else setError(errorMessage(caught))
@@ -432,39 +423,6 @@ export function AgendaApp() {
     }
   }
 
-  async function saveAISettings(event: React.FormEvent) {
-    event.preventDefault()
-    setError("")
-    setMessage("")
-    setAISettingsBusy(true)
-    try {
-      const settings = await organizerApi.updateAISettings(aiBaseURL)
-      setAISettings(settings)
-      setAIBaseURL(settings.baseUrl)
-      setMessage("AI 代理地址已保存，下一次整理会立即使用新地址。")
-    } catch (caught) {
-      setError(errorMessage(caught))
-    } finally {
-      setAISettingsBusy(false)
-    }
-  }
-
-  async function resetAISettings() {
-    setError("")
-    setMessage("")
-    setAISettingsBusy(true)
-    try {
-      const settings = await organizerApi.resetAISettings()
-      setAISettings(settings)
-      setAIBaseURL(settings.baseUrl)
-      setMessage("AI 代理地址已恢复为服务器默认值。")
-    } catch (caught) {
-      setError(errorMessage(caught))
-    } finally {
-      setAISettingsBusy(false)
-    }
-  }
-
   if (!authChecked) {
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>
   }
@@ -488,49 +446,11 @@ export function AgendaApp() {
 
         {settingsOpen ? (
           <section className="mb-6 rounded-2xl border border-border bg-card p-5">
-            <h2 className="font-semibold">设置</h2>
-            <form onSubmit={saveAISettings} className="mt-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="flex items-center gap-2 font-medium"><Bot className="h-4 w-4 text-primary" />AI 整理</h3>
-                {aiSettings ? (
-                  <span className={`text-xs ${aiSettings.apiKeyConfigured ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
-                    {aiSettings.model || "未设置模型"} · API Key {aiSettings.apiKeyConfigured ? "已配置" : "未配置"}
-                  </span>
-                ) : null}
-              </div>
-              <label className="block text-xs text-muted-foreground" htmlFor="ai-base-url">AI 代理地址（OpenAI 兼容 Base URL）
-                <input
-                  id="ai-base-url"
-                  type="url"
-                  inputMode="url"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  required
-                  placeholder="https://api.openai.com/v1"
-                  value={aiBaseURL}
-                  onChange={(event) => setAIBaseURL(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none ring-primary/30 focus:ring-2"
-                />
-              </label>
-              <p className="text-xs text-muted-foreground">请求由服务器发出，API Key 不会传到浏览器。服务会自动追加 /chat/completions。</p>
-              <div className="flex flex-wrap gap-2">
-                <button disabled={aiSettingsBusy || !aiBaseURL.trim()} className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-medium disabled:opacity-50">
-                  {aiSettingsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  保存地址
-                </button>
-                <button type="button" disabled={aiSettingsBusy || !aiSettings?.overridden} onClick={() => void resetAISettings()} className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm disabled:opacity-50">
-                  <RotateCcw className="h-4 w-4" />恢复服务器默认值
-                </button>
-              </div>
-            </form>
-            <div className="mt-5 border-t border-border pt-5">
-              <h3 className="mb-2 font-medium">设备与 Obsidian</h3>
+            <h2 className="mb-2 font-semibold">设备与 Obsidian</h2>
             <p className="mb-3 text-sm text-muted-foreground">生成一个只供 Obsidian 使用的设备令牌。令牌只显示一次，不要发送给他人。</p>
             <button onClick={createDeviceToken} className="rounded-xl bg-secondary px-3 py-2 text-sm font-medium">生成 Obsidian 令牌</button>
             {deviceToken ? <div className="mt-3 rounded-xl bg-muted p-3 font-mono text-xs break-all select-all">{deviceToken}</div> : null}
             <a className="mt-4 inline-block text-sm text-primary hover:underline" href="/api/organizer/v1/export">导出全部事项数据</a>
-            </div>
             <form onSubmit={changePassword} className="mt-5 space-y-3 border-t border-border pt-5">
               <div>
                 <h3 className="font-medium">修改登录密码</h3>

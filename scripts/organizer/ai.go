@@ -12,12 +12,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 )
 
 type AIClient struct {
-	mu      sync.RWMutex
 	baseURL string
 	apiKey  string
 	model   string
@@ -34,18 +32,6 @@ func newAIClient(cfg Config) *AIClient {
 		IdleConnTimeout:       90 * time.Second,
 	}
 	return &AIClient{baseURL: cfg.AIBaseURL, apiKey: cfg.AIAPIKey, model: cfg.AIModel, zone: cfg.Timezone, client: &http.Client{Transport: transport, Timeout: 60 * time.Second}}
-}
-
-func (a *AIClient) BaseURL() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.baseURL
-}
-
-func (a *AIClient) SetBaseURL(value string) {
-	a.mu.Lock()
-	a.baseURL = value
-	a.mu.Unlock()
 }
 
 func fallbackParse(capture Capture, zone, reason string) ParseResult {
@@ -137,7 +123,7 @@ func (a *AIClient) request(ctx context.Context, payload map[string]any) (string,
 	if err != nil {
 		return "", 0, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.BaseURL()+"/chat/completions", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", 0, err
 	}
