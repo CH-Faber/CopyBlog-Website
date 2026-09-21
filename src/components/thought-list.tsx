@@ -95,20 +95,55 @@ const fullDateLabel = (dateString: string) => {
   return date.toLocaleString("zh-CN", { dateStyle: "long", timeStyle: "short" })
 }
 
-function ThoughtMedia({ images, onOpen }: { images: ThoughtMeta["images"]; onOpen: (index: number) => void }) {
-  if (!images.length) return null
-  const visibleImages = images.slice(0, 9)
-  const isSingle = images.length === 1
-  const columns = images.length === 2 || images.length === 4 ? "grid-cols-2" : "grid-cols-3"
-  const layout = isSingle ? "w-fit max-w-full" : cn("grid max-w-[17.5rem] grid-flow-row gap-1 sm:max-w-[20rem]", columns)
+function SingleThoughtImage({ image, onOpen }: { image: ThoughtMeta["images"][number]; onOpen: () => void }) {
+  const [isPortrait, setIsPortrait] = useState(false)
 
   return (
-    <div className={cn("mt-4", layout)}>
+    <button
+      type="button"
+      className={cn(
+        "group relative block overflow-hidden rounded-lg bg-muted/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        isPortrait ? "max-w-[56vw] sm:max-w-[15rem]" : "max-w-[68vw]",
+      )}
+      onClick={onOpen}
+      aria-label="查看第 1 张图片"
+    >
+      <img
+        src={image.src}
+        alt={image.alt || "闪念配图"}
+        loading="lazy"
+        decoding="async"
+        className="block h-auto max-h-[24rem] w-auto max-w-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
+        onLoad={(event) => {
+          const { naturalWidth, naturalHeight } = event.currentTarget
+          setIsPortrait(naturalWidth / naturalHeight < 0.82)
+        }}
+      />
+    </button>
+  )
+}
+
+function ThoughtMedia({ images, onOpen }: { images: ThoughtMeta["images"]; onOpen: (index: number) => void }) {
+  if (!images.length) return null
+  const isSingle = images.length === 1
+  if (isSingle) {
+    return (
+      <div className="mt-4 w-fit max-w-full">
+        <SingleThoughtImage image={images[0]} onOpen={() => onOpen(0)} />
+      </div>
+    )
+  }
+
+  const visibleImages = images.slice(0, 9)
+  const columns = images.length === 2 || images.length === 4 ? "grid-cols-2" : "grid-cols-3"
+
+  return (
+    <div className={cn("mt-4 grid max-w-[17.5rem] grid-flow-row gap-1 sm:max-w-[20rem]", columns)}>
       {visibleImages.map((image, index) => {
         const remaining = images.length - 9
         return (
-          <button key={`${image.src}-${index}`} type="button" className={cn("group relative block overflow-hidden bg-muted/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary", isSingle ? "max-w-[68vw] rounded-lg" : "aspect-square rounded-[0.3rem]")} onClick={() => onOpen(index)} aria-label={`查看第 ${index + 1} 张图片`}>
-            <img src={image.src} alt={image.alt || "闪念配图"} loading="lazy" decoding="async" className={cn("block transition-transform duration-300 group-hover:scale-[1.02]", isSingle ? "h-auto max-h-[24rem] max-w-full w-auto object-contain" : "h-full w-full object-cover")} />
+          <button key={`${image.src}-${index}`} type="button" className="group relative block aspect-square overflow-hidden rounded-[0.3rem] bg-muted/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={() => onOpen(index)} aria-label={`查看第 ${index + 1} 张图片`}>
+            <img src={image.src} alt={image.alt || "闪念配图"} loading="lazy" decoding="async" className="block h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
             {index === 8 && remaining > 0 ? <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-2xl font-semibold text-white">+{remaining}</span> : null}
           </button>
         )
