@@ -320,6 +320,9 @@ export function AgendaApp() {
   const [message, setMessage] = useState("")
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [deviceToken, setDeviceToken] = useState("")
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [passwordBusy, setPasswordBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(async () => {
@@ -399,6 +402,27 @@ export function AgendaApp() {
     }
   }
 
+  async function changePassword(event: React.FormEvent) {
+    event.preventDefault()
+    setError("")
+    setMessage("")
+    if (newPassword.length < 12) {
+      setError("新密码至少需要 12 个字符。")
+      return
+    }
+    setPasswordBusy(true)
+    try {
+      await organizerApi.changePassword(currentPassword, newPassword)
+      setCurrentPassword("")
+      setNewPassword("")
+      setMessage("登录密码已修改，其他设备上的旧会话已经失效。")
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setPasswordBusy(false)
+    }
+  }
+
   if (!authChecked) {
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>
   }
@@ -427,6 +451,39 @@ export function AgendaApp() {
             <button onClick={createDeviceToken} className="rounded-xl bg-secondary px-3 py-2 text-sm font-medium">生成 Obsidian 令牌</button>
             {deviceToken ? <div className="mt-3 rounded-xl bg-muted p-3 font-mono text-xs break-all select-all">{deviceToken}</div> : null}
             <a className="mt-4 inline-block text-sm text-primary hover:underline" href="/api/organizer/v1/export">导出全部事项数据</a>
+            <form onSubmit={changePassword} className="mt-5 space-y-3 border-t border-border pt-5">
+              <div>
+                <h3 className="font-medium">修改登录密码</h3>
+                <p className="mt-1 text-sm text-muted-foreground">修改后，其他设备上的旧登录会话会立即失效。</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs text-muted-foreground">当前密码
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    required
+                  />
+                </label>
+                <label className="text-xs text-muted-foreground">新密码（至少 12 个字符）
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    required
+                  />
+                </label>
+              </div>
+              <button disabled={passwordBusy} className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-medium disabled:opacity-50">
+                {passwordBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                修改密码
+              </button>
+            </form>
           </section>
         ) : null}
 
