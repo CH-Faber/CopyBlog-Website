@@ -55,3 +55,25 @@ func TestDirectItemDoesNotRequireCapture(t *testing.T) {
 		t.Fatalf("unexpected item: %#v", items)
 	}
 }
+
+func TestSettingsLifecycle(t *testing.T) {
+	store := testStore(t)
+	if value, ok, err := store.setting("test_setting"); err != nil || ok || value != "" {
+		t.Fatalf("unexpected missing setting: value=%q ok=%t err=%v", value, ok, err)
+	}
+	if err := store.setSetting("test_setting", "first"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.setSetting("test_setting", "second"); err != nil {
+		t.Fatal(err)
+	}
+	if value, ok, err := store.setting("test_setting"); err != nil || !ok || value != "second" {
+		t.Fatalf("unexpected saved setting: value=%q ok=%t err=%v", value, ok, err)
+	}
+	if err := store.deleteSetting("test_setting"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := store.setting("test_setting"); err != nil || ok {
+		t.Fatalf("setting was not deleted: ok=%t err=%v", ok, err)
+	}
+}

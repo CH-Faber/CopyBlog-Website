@@ -42,6 +42,14 @@ export type OrganizerItem = Candidate & {
   updatedAt: string
 }
 
+export type AISettings = {
+  baseUrl: string
+  defaultBaseUrl: string
+  model: string
+  apiKeyConfigured: boolean
+  overridden: boolean
+}
+
 export class OrganizerApiError extends Error {
   constructor(
     public status: number,
@@ -83,6 +91,10 @@ export const organizerApi = {
   session: () => request<{ authenticated: boolean; pushEnabled: boolean; timezone: string }>("/session"),
   changePassword: (currentPassword: string, newPassword: string) =>
     request("/password", { method: "PUT", body: JSON.stringify({ currentPassword, newPassword }) }),
+  aiSettings: () => request<AISettings>("/ai-settings"),
+  updateAISettings: (baseUrl: string) =>
+    request<AISettings>("/ai-settings", { method: "PUT", body: JSON.stringify({ baseUrl }) }),
+  resetAISettings: () => request<AISettings>("/ai-settings", { method: "DELETE", body: "{}" }),
   createDeviceToken: (name: string) =>
     request<{ id: string; token: string; message: string }>("/device-tokens", { method: "POST", body: JSON.stringify({ name }) }),
   listCaptures: () => request<{ captures: Capture[] }>("/captures?limit=100"),

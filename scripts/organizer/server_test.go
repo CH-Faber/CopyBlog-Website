@@ -26,6 +26,8 @@ func testServer(t *testing.T) (*Server, http.Handler, string) {
 		BackupDir:         filepath.Join(dir, "backups"),
 		PublicOrigin:      "https://faberhu.top",
 		AdminPasswordHash: hash,
+		AIBaseURL:         "https://api.openai.com/v1",
+		AIModel:           "test-model",
 		Timezone:          "Asia/Shanghai",
 		SessionTTL:        24 * 60 * 60 * 1e9,
 		MaxUploadBytes:    8 << 20,
@@ -40,6 +42,64 @@ func testServer(t *testing.T) (*Server, http.Handler, string) {
 	t.Cleanup(func() { _ = store.Close() })
 	server := newServer(cfg, store)
 	return server, server.Handler(), password
+}
+
+func TestAISettingsLifecycle(t *testing.T) {
+	server, handler, password := testServer(t)
+	cookie := loginCookie(t, handler, password)
+
+	initial := requestJSON(t, handler, http.MethodGet, "/api/organizer/v1/ai-settings", nil, cookie)
+	if initial.Code != http.StatusOK || !bytes.Contains(initial.Body.Bytes(), []byte(`"baseUrl":"https://api.openai.com/v1"`)) {
+		t.Fatalf("get initial AI settings failed: %d %s", initial.Code, initial.Body.String())
+	}
+
+	updated := requestJSON(t, handler, http.MethodPut, "/api/organizer/v1/ai-settings", map[string]string{
+		"baseUrl": " https://ai-proxy.example.test/openai/v1/ ",
+	}, cookie)
+	if updated.Code != http.StatusOK || server.ai.BaseURL() != "https://ai-proxy.example.test/openai/v1" {
+		t.Fatalf("update AI settings failed: %d %s baseURL=%q", updated.Code, updated.Body.String(), server.ai.BaseURL())
+	}
+
+	restarted := newServer(server.cfg, server.store)
+	if restarted.ai.BaseURL() != "https://ai-proxy.example.test/openai/v1" {
+		t.Fatalf("persisted AI settings were not restored: %q", restarted.ai.BaseURL())
+	}
+
+	reset := requestJSON(t, handler, http.MethodDelete, "/api/organizer/v1/ai-settings", nil, cookie)
+	if reset.Code != http.StatusOK || server.ai.BaseURL() != server.cfg.AIBaseURL {
+		t.Fatalf("reset AI settings failed: %d %s baseURL=%q", reset.Code, reset.Body.String(), server.ai.BaseURL())
+	}
+}
+
+func TestAISettingsRejectInvalidAddressAndDeviceToken(t *testing.T) {
+	server, handler, password := testServer(t)
+	cookie := loginCookie(t, handler, password)
+
+	invalidAddresses := []string{
+		"",
+		"api.example.test/v1",
+		"ftp://api.example.test/v1",
+		"https://user:password@api.example.test/v1",
+		"https://api.example.test/v1?token=secret",
+	}
+	for _, address := range invalidAddresses {
+		response := requestJSON(t, handler, http.MethodPut, "/api/organizer/v1/ai-settings", map[string]string{"baseUrl": address}, cookie)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid address %q returned %d: %s", address, response.Code, response.Body.String())
+		}
+	}
+
+	id, token, err := server.store.createDeviceToken("settings test")
+	if err != nil || id == "" || token == "" {
+		t.Fatalf("create device token: id=%q token=%q err=%v", id, token, err)
+	}
+	deviceRequest := httptest.NewRequest(http.MethodGet, "/api/organizer/v1/ai-settings", nil)
+	deviceRequest.Header.Set("Authorization", "Bearer "+token)
+	deviceResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deviceResponse, deviceRequest)
+	if deviceResponse.Code != http.StatusForbidden {
+		t.Fatalf("device token accessed AI settings: %d %s", deviceResponse.Code, deviceResponse.Body.String())
+	}
 }
 
 func bearerJSON(t *testing.T, handler http.Handler, method, path string, body any, token string) *httptest.ResponseRecorder {

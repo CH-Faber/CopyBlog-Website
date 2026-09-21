@@ -161,19 +161,39 @@ func hashSecret(value string) string {
 
 func nowString() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 
-func (s *Store) adminPasswordHash(fallback string) (string, error) {
+func (s *Store) setting(key string) (string, bool, error) {
 	var value string
-	err := s.db.QueryRow("SELECT value FROM settings WHERE key = 'admin_password_hash'").Scan(&value)
+	err := s.db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return value, err == nil, err
+}
+
+func (s *Store) setSetting(key, value string) error {
+	_, err := s.db.Exec(`INSERT INTO settings(key, value, updated_at) VALUES(?, ?, ?)
+ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`, key, value, nowString())
+	return err
+}
+
+func (s *Store) deleteSetting(key string) error {
+	_, err := s.db.Exec("DELETE FROM settings WHERE key = ?", key)
+	return err
+}
+
+func (s *Store) adminPasswordHash(fallback string) (string, error) {
+	value, ok, err := s.setting("admin_password_hash")
+	if err != nil {
+		return "", err
+	}
+	if !ok {
 		return fallback, nil
 	}
-	return value, err
+	return value, nil
 }
 
 func (s *Store) setAdminPasswordHash(value string) error {
-	_, err := s.db.Exec(`INSERT INTO settings(key, value, updated_at) VALUES('admin_password_hash', ?, ?)
-ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`, value, nowString())
-	return err
+	return s.setSetting("admin_password_hash", value)
 }
 
 func (s *Store) createSession(token string, expires time.Time) error {
