@@ -31,12 +31,14 @@ test("Agenda keeps a complete item lifecycle and renders responsively", async ({
   await expect(page.getByText(itemTitle)).toBeVisible()
   await page.getByRole("article").filter({ hasText: itemTitle }).getByLabel("完成事项").click()
   await page.getByRole("button", { name: "历史", exact: true }).click()
+  await expect(page.getByLabel("快速记录")).toHaveCount(0)
   await expect(page.getByText(itemTitle)).toBeVisible()
   await page.getByRole("article").filter({ hasText: itemTitle }).getByTitle("重新打开").click()
   await page.getByRole("button", { name: "今天", exact: true }).click()
   await expect(page.getByText(itemTitle)).toBeVisible()
 
   await page.getByRole("button", { name: "记忆", exact: true }).click()
+  await expect(page.getByLabel("快速记录")).toHaveCount(0)
   page.once("dialog", (dialog) => dialog.accept(memoryText))
   await page.getByRole("button", { name: "添加规则" }).click()
   await expect(page.getByText(memoryText)).toBeVisible()
@@ -59,6 +61,7 @@ test("quick capture remains reviewable before it becomes an item", async ({ page
   await page.getByRole("button", { name: "交给 Agenda" }).click()
 
   await expect(page.getByRole("heading", { name: "待整理" })).toBeVisible()
+  await expect(page.getByLabel("快速记录")).toHaveCount(0)
   await expect(page.getByText(captureText, { exact: true })).toBeVisible()
   await expect(page.getByRole("textbox", { name: "标题", exact: true })).toHaveValue(captureText)
   await page.getByRole("button", { name: "确认并安排" }).click()
