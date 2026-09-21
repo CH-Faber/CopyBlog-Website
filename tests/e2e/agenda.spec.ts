@@ -24,11 +24,14 @@ test("Agenda keeps a complete item lifecycle and renders responsively", async ({
   await itemDialog.getByRole("textbox", { name: "标题", exact: true }).fill(itemTitle)
   await itemDialog.getByLabel("项目").fill(projectName)
   await itemDialog.getByLabel("确定性").selectOption("tentative")
+  await itemDialog.getByLabel("优先级").selectOption("2")
   await itemDialog.getByLabel("预计用时（分钟）").fill("45")
   await itemDialog.getByRole("button", { name: "保存" }).click()
 
   await page.getByRole("button", { name: "今天", exact: true }).click()
+  await expect(page.getByRole("heading", { name: "现在最值得做" })).toBeVisible()
   await expect(page.getByText(itemTitle)).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath("agenda-today-desktop.png"), fullPage: true })
   await page.getByRole("article").filter({ hasText: itemTitle }).getByLabel("完成事项").click()
   await page.getByRole("button", { name: "历史", exact: true }).click()
   await expect(page.getByLabel("快速记录")).toHaveCount(0)
@@ -51,14 +54,21 @@ test("Agenda keeps a complete item lifecycle and renders responsively", async ({
   await page.screenshot({ path: testInfo.outputPath("agenda-mobile.png"), fullPage: true })
 })
 
-test("quick capture remains reviewable before it becomes an item", async ({ page }) => {
+test("quick capture remains reviewable before it becomes an item", async ({ page }, testInfo) => {
   const captureText = `临时安排 ${Date.now().toString(36)}：明天下午检查项目进度`
+  await page.route("**/api/organizer/v1/captures/*/parse", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+    await route.continue()
+  })
 
   await page.goto("/agenda/")
   await page.getByLabel("登录密码").fill(process.env.AGENDA_TEST_PASSWORD ?? "agenda-local-test-password")
   await page.getByRole("button", { name: "登录" }).click()
   await page.getByLabel("快速记录").fill(captureText)
   await page.getByRole("button", { name: "交给 Agenda" }).click()
+  await expect(page.getByText("已收到", { exact: true })).toBeVisible()
+  await expect(page.getByText("AI 正在整理内容，可以继续等待", { exact: true })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath("agenda-capture-processing.png"), fullPage: true })
 
   await expect(page.getByRole("heading", { name: "待整理" })).toBeVisible()
   await expect(page.getByLabel("快速记录")).toHaveCount(0)

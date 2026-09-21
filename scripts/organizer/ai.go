@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -62,7 +63,11 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...
 
 	location, _ := time.LoadLocation(a.zone)
 	now := time.Now().In(location).Format(time.RFC3339)
-	systemPrompt := `你是 Faber 的个人日程与项目整理助手。把用户输入或截图转换为结构化事项。只输出 JSON 对象，格式为 {"items":[...]}。每个事项字段：type(task|event|reminder|note)、title、description、startAt、endAt、dueAt、reminderAt、timezone、allDay、recurrenceRule、priority(0-3)、certainty(confirmed|tentative)、durationMinutes、availableFrom、availableUntil、project、tags、location、people、confidence(0-1)、ambiguities。时间使用 RFC3339 并带时区。startAt 表示实际开始或发生时间，dueAt 表示最晚完成时间，reminderAt 表示发送通知的时间；三者不可混淆。用户说“提醒我”时必须给出 reminderAt，优先使用明确的提醒时间，否则使用 startAt 或 dueAt。没有日期时保留为空。模糊日期存在多种解释时写入 ambiguities，不要伪造。明确是临时、可能、暂定的安排使用 certainty=tentative。一个输入可以拆成多个事项。默认时区为 ` + a.zone + `。当前时间为 ` + now + `。`
+	hasAttachment := capture.AttachmentPath != ""
+	systemPrompt := `你是 Faber 的个人日程与项目整理助手。把用户输入转换为结构化事项。只输出 JSON 对象，格式为 {"items":[...]}。每个事项字段：type(task|event|reminder|note)、title、description、startAt、endAt、dueAt、reminderAt、timezone、allDay、recurrenceRule、priority(0-3)、certainty(confirmed|tentative)、durationMinutes、availableFrom、availableUntil、project、tags、location、people、confidence(0-1)、ambiguities。时间使用 RFC3339 并带时区。startAt 表示实际开始或发生时间，dueAt 表示最晚完成时间，reminderAt 表示通知时间；不要混淆。没有日期时保留为空，模糊信息写入 ambiguities，不要伪造。一个输入可以拆成多个事项。默认时区为 ` + a.zone + `。当前时间为 ` + now + `。`
+	if hasAttachment {
+		systemPrompt = `你是 Faber 的截图事项整理助手。阅读截图，只提取需要行动、安排、跟进或保留的重要信息，不要输出无关的界面文字或完整 OCR。只输出 JSON：{"items":[...]}。每项可用字段：type(task|event|reminder|note)、title、description、startAt、endAt、dueAt、reminderAt、timezone、allDay、priority(0-3)、certainty(confirmed|tentative)、durationMinutes、project、tags、location、people、confidence(0-1)、ambiguities。时间用 RFC3339；无法确认的日期、对象或行动写入 ambiguities，绝不猜测。默认时区 ` + a.zone + `，当前时间 ` + now + `。`
+	}
 	memories := ""
 	if len(memoryContext) > 0 {
 		memories = memoryContext[0]
@@ -72,7 +77,7 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...
 	}
 
 	var userContent any = "请整理以下内容：\n" + capture.RawText
-	if capture.AttachmentPath != "" {
+	if hasAttachment {
 		data, err := os.ReadFile(capture.AttachmentPath)
 		if err != nil {
 			return ParseResult{}, err
@@ -86,6 +91,7 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...
 			{"type": "image_url", "image_url": map[string]string{"url": "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)}},
 		}
 	}
+	maxTokens := 2200
 	payload := map[string]any{
 		"model": a.model,
 		"messages": []map[string]any{
@@ -94,16 +100,24 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...
 		},
 		"response_format":       map[string]string{"type": "json_object"},
 		"temperature":           0.1,
-		"max_completion_tokens": 2200,
+		"max_completion_tokens": maxTokens,
+	}
+	if hasAttachment {
+		maxTokens = 800
+		payload["max_completion_tokens"] = maxTokens
+		payload["reasoning_effort"] = "low"
 	}
 	content, status, err := a.request(ctx, payload)
 	if err != nil && status == http.StatusBadRequest {
+		delete(payload, "reasoning_effort")
 		delete(payload, "max_completion_tokens")
-		payload["max_tokens"] = 2200
-		content, _, err = a.request(ctx, payload)
+		payload["max_tokens"] = maxTokens
+		content, status, err = a.request(ctx, payload)
 	}
 	if err != nil {
-		return fallbackParse(capture, a.zone, "AI 服务暂时不可用，已保留原文；请手动检查标题、日期和提醒时间"), nil
+		errorClass, reason := classifyAIError(err, status, hasAttachment)
+		log.Printf("AI parse fallback capture_id=%s attachment=%t status=%d error_class=%s", capture.ID, hasAttachment, status, errorClass)
+		return fallbackParse(capture, a.zone, reason), nil
 	}
 	content = strings.TrimSpace(content)
 	content = strings.TrimPrefix(content, "```json")
@@ -124,6 +138,35 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...
 	}
 	applyCaptureInvariants(capture, &result, a.zone)
 	return result, nil
+}
+
+func classifyAIError(err error, status int, hasAttachment bool) (string, string) {
+	prefix := "原文已保存。"
+	if hasAttachment {
+		prefix = "截图已保存。"
+	}
+	switch {
+	case status == http.StatusBadRequest && hasAttachment:
+		return "visual_request_rejected", prefix + "当前模型或中转站拒绝了图片识别请求，请检查模型能力后重试"
+	case status == http.StatusBadRequest:
+		return "request_rejected", prefix + "当前模型或中转站拒绝了整理请求，请检查模型配置后重试"
+	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		return "authentication", prefix + "服务器的 AI 鉴权或密钥配置有误，请检查后重试"
+	case status == http.StatusRequestEntityTooLarge:
+		return "image_too_large", prefix + "图片超过中转站允许的大小，请压缩截图后重试"
+	case status == http.StatusTooManyRequests:
+		return "rate_limited", prefix + "AI 上游当前限流，请稍后重新识别"
+	case status >= 500:
+		return "upstream_unavailable", prefix + "AI 上游暂时不可用，请稍后重试"
+	}
+	var networkError net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout()) {
+		return "timeout", prefix + "AI 识别超过等待时间，请重新识别"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "request_cancelled", prefix + "本次 AI 请求已中断，请重试"
+	}
+	return "network", prefix + "AI 网络请求失败，请检查中转站连接后重试"
 }
 
 func applyCaptureInvariants(capture Capture, result *ParseResult, zone string) {
