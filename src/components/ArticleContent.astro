@@ -7,9 +7,10 @@ interface Props {
   Content?: any
   words?: number
   minutes?: number
+  hasTableOfContents?: boolean
 }
 
-const { post, Content, words, minutes } = Astro.props as Props
+const { post, Content, words, minutes, hasTableOfContents = false } = Astro.props as Props
 const hasSlot = Astro.slots.has("default")
 const data = post.data
 const formattedDate = data.published?.toISOString().slice(0, 10)
@@ -94,20 +95,22 @@ const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#hom
       </div>
     )}
 
-    <div class="xl:hidden max-w-3xl mx-auto mb-4">
-      <details open class="group border border-border/60 bg-card/60 rounded-xl">
-        <summary class="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-foreground">
-          <span class="inline-flex items-center gap-2">
-            <span class="w-1 h-4 bg-primary rounded-full"></span>
-            目录
-          </span>
-          <span class="text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
-        </summary>
-        <div class="toc-scroll-container px-4 pb-3 pt-1 border-t border-border/50 max-h-72 overflow-y-auto overscroll-auto toc-scrollbar">
-          <TableOfContents showHeader={false} client:media="(max-width: 1279px)" />
-        </div>
-      </details>
-    </div>
+    {hasTableOfContents && (
+      <div class="xl:hidden max-w-3xl mx-auto mb-4">
+        <details open class="group border border-border/60 bg-card/60 rounded-xl">
+          <summary class="list-none cursor-pointer px-4 py-3 flex items-center justify-between text-sm text-foreground">
+            <span class="inline-flex items-center gap-2">
+              <span class="w-1 h-4 bg-primary rounded-full"></span>
+              目录
+            </span>
+            <span class="text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
+          </summary>
+          <div class="toc-scroll-container px-4 pb-3 pt-1 border-t border-border/50 max-h-72 overflow-y-auto overscroll-auto toc-scrollbar">
+            <TableOfContents showHeader={false} client:media="(max-width: 1279px)" />
+          </div>
+        </details>
+      </div>
+    )}
 
     <div class="relative max-w-3xl mx-auto">
       <article
@@ -132,13 +135,15 @@ const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#hom
         {hasSlot ? <slot /> : Content ? <Content /> : null}
       </article>
 
-      <aside class="hidden xl:block absolute top-0 left-full pl-12 w-72 h-full">
-        <div class="sticky top-24">
-          <div class="toc-scroll-container max-h-[calc(100dvh-8rem)] overflow-y-auto overscroll-contain toc-scrollbar border border-border/60 bg-card/60 rounded-xl p-4">
-            <TableOfContents client:media="(min-width: 1280px)" />
+      {hasTableOfContents && (
+        <aside class="hidden xl:block absolute top-0 left-full pl-12 w-72 h-full">
+          <div class="sticky top-24">
+            <div class="toc-scroll-container max-h-[calc(100dvh-8rem)] overflow-y-auto overscroll-contain toc-scrollbar border border-border/60 bg-card/60 rounded-xl p-4">
+              <TableOfContents client:media="(min-width: 1280px)" />
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+      )}
     </div>
 
     <footer class="mt-6 pt-4 border-t border-border max-w-3xl mx-auto">

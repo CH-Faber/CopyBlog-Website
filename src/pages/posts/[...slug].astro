@@ -7,6 +7,7 @@ import { getPostsWithNav, type PostEntry } from "@/lib/posts"
 import Disclaimer from "@/components/Disclaimer.astro"
 import PasswordProtection from "@/components/PasswordProtection.astro"
 import Comments from "@/components/Comments.astro"
+import type { MarkdownHeading } from "astro"
 import bcrypt from "bcryptjs"
 import CryptoJS from "crypto-js"
 
@@ -24,7 +25,7 @@ if (!post) {
   return Astro.redirect("/")
 }
 
-const { Content, remarkPluginFrontmatter } = await post.render()
+const { Content, headings, remarkPluginFrontmatter } = await post.render()
 const words = remarkPluginFrontmatter?.words
 const minutes = remarkPluginFrontmatter?.minutes
 
@@ -86,6 +87,9 @@ if (post.data.encrypted && post.data.password) {
     hash: passwordHash,
   }
 }
+const hasTableOfContents = !encryptedData && headings.some(
+  ({ depth, slug, text }: MarkdownHeading) => (depth === 2 || depth === 3) && Boolean(slug && text.trim()),
+)
 ---
 
 <BaseLayout
@@ -105,7 +109,7 @@ if (post.data.encrypted && post.data.password) {
   </Fragment>
   <div class="min-h-screen bg-background dark:bg-muted/30">
     <SiteHeader />
-    <ArticleContent post={post} {Content} {words} {minutes}>
+    <ArticleContent post={post} {Content} {words} {minutes} {hasTableOfContents}>
       <div class="mb-8">
         <Disclaimer disclaimers={post.data.disclaimer} publishedDate={post.data.published} />
       </div>
