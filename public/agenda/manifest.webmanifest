@@ -1,0 +1,25 @@
+{
+  "name": "一个闪念 · 日程",
+  "short_name": "一个闪念",
+  "description": "Faber 的私人事项、日程和提醒",
+  "lang": "zh-CN",
+  "start_url": "/agenda/",
+  "scope": "/agenda/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

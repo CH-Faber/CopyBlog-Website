@@ -1,0 +1,20 @@
+---
+import { AgendaApp } from "@/components/agenda/AgendaApp"
+import BaseLayout from "@/layouts/BaseLayout.astro"
+---
+
+<BaseLayout
+  title="一个闪念 · 日程"
+  description="Faber 的私人事项与日程空间"
+  robots="noindex,nofollow,noarchive"
+  analytics={false}
+>
+  <link slot="head" rel="manifest" href="/agenda/manifest.webmanifest" />
+  <meta slot="head" name="theme-color" content="#7c3aed" />
+  <meta slot="head" name="apple-mobile-web-app-capable" content="yes" />
+  <meta slot="head" name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta slot="head" name="apple-mobile-web-app-title" content="一个闪念 · 日程" />
+  <div data-pagefind-ignore>
+    <AgendaApp client:load />
+  </div>
+</BaseLayout>

@@ -14,6 +14,7 @@ interface Props {
   twitterTitle?: string
   twitterDescription?: string
   robots?: string
+  analytics?: boolean
 }
 
 const defaultTitle = "Faber的Blog"
@@ -31,6 +32,7 @@ const {
   twitterTitle,
   twitterDescription,
   robots,
+  analytics = true,
 } = Astro.props as Props
 
 const canonicalUrl = canonical || Astro.url.toString()
@@ -42,7 +44,7 @@ const resolvedTwitterDescription = twitterDescription || description
 ---
 
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-private-page={analytics ? undefined : ""}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -78,6 +80,7 @@ const resolvedTwitterDescription = twitterDescription || description
     <link rel="apple-touch-icon" href="/apple-icon.png" />
     <script is:inline>
       ;(() => {
+        if (document.documentElement.hasAttribute("data-private-page")) return
         let analyticsLoaded = false
         let clarityLoaded = false
 
