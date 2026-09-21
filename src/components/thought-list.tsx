@@ -366,11 +366,30 @@ export function ThoughtList({ thoughts, tags: sidebarTags, pagination, heading =
   return (
     <section id="thoughts-feed" className="thought-list-root px-5 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-8 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm onload-animation">
-          <div className="relative h-36 overflow-hidden bg-[radial-gradient(circle_at_20%_20%,hsl(var(--primary)/0.24),transparent_35%),linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--muted)),hsl(var(--background)))] sm:h-44"><div className="absolute -right-10 -top-20 h-56 w-56 rounded-full border border-primary/10 bg-primary/5 blur-2xl" /><div className="absolute bottom-0 left-0 h-20 w-full bg-gradient-to-t from-card/60 to-transparent" /></div>
-          <div className="relative px-5 pb-5 sm:px-7 sm:pb-6">
-            <img src={profile.avatar} alt={profile.name} width={76} height={76} className="-mt-10 h-[76px] w-[76px] rounded-full border-4 border-card bg-muted object-cover shadow-md" />
-            <div className="mt-3 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-semibold tracking-tight text-foreground">{profile.name}</h1><p className="mt-1 text-sm text-muted-foreground">{profile.bio}</p></div><div className="text-right text-xs text-muted-foreground"><div className="text-base font-semibold text-foreground">{thoughts.length}</div>条闪念</div></div>
+        <div className="group relative mb-8 min-h-[15.5rem] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm onload-animation sm:min-h-[18rem]">
+          <img
+            src="/images/thoughts/profile-cover.jpg"
+            alt=""
+            aria-hidden="true"
+            width={1600}
+            height={720}
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover object-[66%_54%] opacity-90 saturate-[0.82] transition-transform duration-700 ease-out group-hover:scale-[1.015] dark:opacity-65 dark:saturate-[0.72]"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-card via-card/65 to-card/10" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-card via-card/25 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 bg-primary/[0.04] mix-blend-soft-light" />
+
+          <div className="relative flex min-h-[15.5rem] items-end justify-between gap-4 px-5 pb-5 pt-20 sm:min-h-[18rem] sm:px-7 sm:pb-6">
+            <div className="min-w-0">
+              <img src={profile.avatar} alt={profile.name} width={76} height={76} className="h-[76px] w-[76px] rounded-full border-4 border-card/90 bg-muted object-cover shadow-lg" />
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{profile.name}</h1>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">{profile.bio}</p>
+            </div>
+            <div className="absolute right-4 top-4 shrink-0 rounded-xl border border-border/40 bg-card/65 px-3 py-2 text-right text-xs text-muted-foreground shadow-sm backdrop-blur-sm sm:static sm:bg-card/55">
+              <div className="text-base font-semibold text-foreground">{thoughts.length}</div>
+              条闪念
+            </div>
           </div>
         </div>
 
