@@ -143,6 +143,7 @@ export const organizerApi = {
     return request<Capture>("/captures", { method: "POST", body: JSON.stringify({ rawText, sourceType: "voice_text" }) })
   },
   parseCapture: (id: string) => request<{ items: Candidate[] }>(`/captures/${encodeURIComponent(id)}/parse`, { method: "POST", body: "{}" }),
+  deleteCapture: (id: string) => request<void>(`/captures/${encodeURIComponent(id)}`, { method: "DELETE" }),
   confirmCapture: (id: string, items: Candidate[]) =>
     request<{ items: OrganizerItem[] }>(`/captures/${encodeURIComponent(id)}/confirm`, { method: "POST", body: JSON.stringify({ items }) }),
   listItems: () => request<{ items: OrganizerItem[] }>("/items?limit=1000"),

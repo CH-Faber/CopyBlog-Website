@@ -400,6 +400,21 @@ func (s *Store) listCaptures(limit int) ([]Capture, error) {
 	return values, rows.Err()
 }
 
+func (s *Store) deleteCapture(id string) error {
+	result, err := s.db.Exec("DELETE FROM captures WHERE id=?", id)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (s *Store) setCaptureParsing(id string) error {
 	_, err := s.db.Exec("UPDATE captures SET status='parsing', error='', updated_at=? WHERE id=?", nowString(), id)
 	return err

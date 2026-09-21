@@ -142,7 +142,7 @@ func TestDeviceTokenCanUseOrganizerAPI(t *testing.T) {
 }
 
 func TestMultipartImageCapture(t *testing.T) {
-	_, handler, password := testServer(t)
+	server, handler, password := testServer(t)
 	cookie := loginCookie(t, handler, password)
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -169,6 +169,29 @@ func TestMultipartImageCapture(t *testing.T) {
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusCreated || !bytes.Contains(recorder.Body.Bytes(), []byte(`"hasAttachment":true`)) {
 		t.Fatalf("multipart capture failed: %d %s", recorder.Code, recorder.Body.String())
+	}
+	var capture Capture
+	if err := json.Unmarshal(recorder.Body.Bytes(), &capture); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := server.store.getCapture(capture.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stored.AttachmentPath); err != nil {
+		t.Fatalf("attachment was not stored: %v", err)
+	}
+
+	deleted := requestJSON(t, handler, http.MethodDelete, "/api/organizer/v1/captures/"+capture.ID, nil, cookie)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete capture failed: %d %s", deleted.Code, deleted.Body.String())
+	}
+	if _, err := os.Stat(stored.AttachmentPath); !os.IsNotExist(err) {
+		t.Fatalf("attachment was not permanently deleted: %v", err)
+	}
+	missing := requestJSON(t, handler, http.MethodGet, "/api/organizer/v1/captures/"+capture.ID, nil, cookie)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("deleted capture is still available: %d %s", missing.Code, missing.Body.String())
 	}
 }
 

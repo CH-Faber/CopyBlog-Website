@@ -39,6 +39,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/organizer/v1/captures", s.authorized(s.handleCreateCapture))
 	mux.HandleFunc("GET /api/organizer/v1/captures", s.authorized(s.handleListCaptures))
 	mux.HandleFunc("GET /api/organizer/v1/captures/{id}", s.authorized(s.handleGetCapture))
+	mux.HandleFunc("DELETE /api/organizer/v1/captures/{id}", s.authorized(s.handleDeleteCapture))
 	mux.HandleFunc("GET /api/organizer/v1/captures/{id}/attachment", s.authorized(s.handleCaptureAttachment))
 	mux.HandleFunc("POST /api/organizer/v1/captures/{id}/parse", s.authorized(s.handleParseCapture))
 	mux.HandleFunc("POST /api/organizer/v1/captures/{id}/confirm", s.authorized(s.handleConfirmCapture))
@@ -309,6 +310,60 @@ func (s *Server) handleGetCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, value)
+}
+
+func (s *Server) handleDeleteCapture(w http.ResponseWriter, r *http.Request) {
+	value, err := s.store.getCapture(r.PathValue("id"))
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "capture not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "get capture")
+		return
+	}
+
+	stagedAttachment := ""
+	if value.AttachmentPath != "" {
+		path, ok := attachmentPathWithin(s.cfg.AttachmentDir, value.AttachmentPath)
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "invalid attachment path")
+			return
+		}
+		stagedAttachment = path + ".deleting-" + value.ID
+		if err := os.Rename(path, stagedAttachment); err != nil && !errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusInternalServerError, "remove attachment")
+			return
+		}
+	}
+
+	if err := s.store.deleteCapture(value.ID); err != nil {
+		if stagedAttachment != "" {
+			_ = os.Rename(stagedAttachment, value.AttachmentPath)
+		}
+		writeError(w, http.StatusInternalServerError, "delete capture")
+		return
+	}
+	if stagedAttachment != "" {
+		_ = os.Remove(stagedAttachment)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func attachmentPathWithin(root, value string) (string, bool) {
+	rootPath, err := filepath.Abs(root)
+	if err != nil {
+		return "", false
+	}
+	path, err := filepath.Abs(value)
+	if err != nil {
+		return "", false
+	}
+	relative, err := filepath.Rel(rootPath, path)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return path, true
 }
 
 func (s *Server) handleCaptureAttachment(w http.ResponseWriter, r *http.Request) {

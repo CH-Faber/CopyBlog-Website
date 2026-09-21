@@ -78,4 +78,14 @@ test("quick capture remains reviewable before it becomes an item", async ({ page
 
   await page.getByRole("button", { name: "今天", exact: true }).click()
   await expect(page.getByText(captureText, { exact: true })).toBeVisible()
+
+  const unwantedText = `错误记录 ${Date.now().toString(36)}`
+  await page.getByLabel("快速记录").fill(unwantedText)
+  await page.getByRole("button", { name: "交给 Agenda" }).click()
+  const unwantedCard = page.getByRole("article").filter({ hasText: unwantedText })
+  await expect(unwantedCard).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath("agenda-capture-delete.png"), fullPage: true })
+  page.once("dialog", (dialog) => dialog.accept())
+  await unwantedCard.getByRole("button", { name: "彻底删除" }).click()
+  await expect(unwantedCard).toHaveCount(0)
 })
