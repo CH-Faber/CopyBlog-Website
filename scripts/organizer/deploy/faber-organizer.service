@@ -1,0 +1,24 @@
+[Unit]
+Description=Faber personal organizer API and reminder service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=faber-organizer
+Group=faber-organizer
+WorkingDirectory=/srv/faber-organizer
+EnvironmentFile=/etc/faber-organizer.env
+ExecStart=/usr/local/bin/faber-organizer
+Restart=on-failure
+RestartSec=5
+UMask=0027
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/faber-organizer
+
+[Install]
+WantedBy=multi-user.target
