@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -14,6 +15,18 @@ func TestMigratedTablesHaveWorkspaceColumns(t *testing.T) {
 		}
 		if count != 1 {
 			t.Fatalf("%s does not have one workspace_id column", table)
+		}
+	}
+}
+
+func TestAgendaRouteUnknownPath(t *testing.T) {
+	_, handler, _ := testServer(t)
+	for _, prefix := range []string{"/api/organizer/v1", "/api/agenda/v1"} {
+		req := httptest.NewRequest(http.MethodGet, prefix+"/does-not-exist", nil)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		if res.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 for %s, got %d", prefix, res.Code)
 		}
 	}
 }
