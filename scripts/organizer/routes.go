@@ -7,6 +7,9 @@ import "net/http"
 // the independent Agenda namespace expose identical behavior.
 func (s *Server) registerAgendaRoutes(mux *http.ServeMux, prefix string) {
 	mux.HandleFunc("GET "+prefix+"/health", s.handleHealth)
+	mux.HandleFunc("GET "+prefix+"/healthz", s.handleHealthZ)
+	mux.HandleFunc("GET "+prefix+"/readyz", s.handleReadyZ)
+	mux.HandleFunc("GET "+prefix+"/version", s.handleVersion)
 	mux.HandleFunc("POST "+prefix+"/auth/login", s.handleLogin)
 	mux.HandleFunc("POST "+prefix+"/auth/device", s.handleDeviceLogin)
 	mux.HandleFunc("POST "+prefix+"/auth/logout", s.authorized(s.handleLogout))
