@@ -4,6 +4,7 @@ import "encoding/json"
 
 type Capture struct {
 	ID             string          `json:"id"`
+	WorkspaceID    string          `json:"workspaceId"`
 	SourceType     string          `json:"sourceType"`
 	RawText        string          `json:"rawText"`
 	AttachmentName string          `json:"attachmentName,omitempty"`
@@ -47,6 +48,7 @@ type ParseResult struct {
 
 type Item struct {
 	ID              string   `json:"id"`
+	WorkspaceID     string   `json:"workspaceId"`
 	CaptureID       string   `json:"captureId,omitempty"`
 	Type            string   `json:"type"`
 	Title           string   `json:"title"`
@@ -79,6 +81,7 @@ type Item struct {
 
 type Project struct {
 	ID          string `json:"id"`
+	WorkspaceID string `json:"workspaceId"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Status      string `json:"status"`
@@ -104,6 +107,7 @@ type ItemEvent struct {
 
 type Memory struct {
 	ID            string `json:"id"`
+	WorkspaceID   string `json:"workspaceId"`
 	Kind          string `json:"kind"`
 	Key           string `json:"key,omitempty"`
 	Content       string `json:"content"`

@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func TestMigratedTablesHaveWorkspaceColumns(t *testing.T) {
+	store := testStore(t)
+	for _, table := range []string{"captures", "items", "projects", "memories", "correction_events", "push_subscriptions", "device_tokens"} {
+		var count int
+		if err := store.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name='workspace_id'", table).Scan(&count); err != nil {
+			t.Fatalf("inspect %s columns: %v", table, err)
+		}
+		if count != 1 {
+			t.Fatalf("%s does not have one workspace_id column", table)
+		}
+	}
+}
+
 func TestAgendaAndOrganizerRouteAliases(t *testing.T) {
 	_, handler, password := testServer(t)
 	for _, prefix := range []string{"/api/organizer/v1", "/api/agenda/v1"} {
