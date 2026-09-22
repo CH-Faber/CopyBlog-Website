@@ -97,15 +97,47 @@ export class OrganizerApiError extends Error {
   }
 }
 
-const base = "/api/organizer/v1"
+type OrganizerRuntime = {
+  baseUrl: string
+  deviceName?: string
+  token?: string
+  saveToken?: (token: string) => Promise<void>
+  clearToken?: () => Promise<void>
+}
+
+export type AgendaApiBaseOptions = {
+  configured?: string
+  legacy?: boolean
+}
+
+export function resolveAgendaApiBase(options: AgendaApiBaseOptions = {}) {
+  const base = options.configured || (options.legacy ? "/api/organizer/v1" : "/api/agenda/v1")
+  return base.replace(/\/$/, "")
+}
+
+const browserRuntime: OrganizerRuntime = {
+  baseUrl: resolveAgendaApiBase({
+    configured: typeof import.meta !== "undefined" ? import.meta.env?.PUBLIC_AGENDA_API_BASE_URL : undefined,
+  }),
+}
+let runtime = browserRuntime
+
+export function configureOrganizerApi(next: OrganizerRuntime) {
+  runtime = { ...next, baseUrl: next.baseUrl.replace(/\/$/, "") }
+}
+
+export function isNativeOrganizerApi() {
+  return runtime !== browserRuntime
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json")
-  const response = await fetch(`${base}${path}`, {
+  if (runtime.token) headers.set("Authorization", `Bearer ${runtime.token}`)
+  const response = await fetch(`${runtime.baseUrl}${path}`, {
     ...init,
     headers,
-    credentials: "same-origin",
+    credentials: runtime === browserRuntime ? "same-origin" : "omit",
   })
   const text = await response.text()
   let body: unknown = null
@@ -124,8 +156,24 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const organizerApi = {
-  login: (password: string) => request<{ authenticated: boolean }>("/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
-  logout: () => request("/auth/logout", { method: "POST", body: "{}" }),
+  login: async (password: string) => {
+    if (runtime === browserRuntime) return request<{ authenticated: boolean }>("/auth/login", { method: "POST", body: JSON.stringify({ password }) })
+    const result = await request<{ authenticated: boolean; deviceId: string; token: string }>("/auth/device", {
+      method: "POST",
+      body: JSON.stringify({ password, deviceName: runtime.deviceName || "Agenda Android" }),
+    })
+    runtime.token = result.token
+    await runtime.saveToken?.(result.token)
+    return result
+  },
+  logout: async () => {
+    try {
+      return await request("/auth/logout", { method: "POST", body: "{}" })
+    } finally {
+      runtime.token = undefined
+      await runtime.clearToken?.()
+    }
+  },
   session: () => request<{ authenticated: boolean; pushEnabled: boolean; timezone: string }>("/session"),
   changePassword: (currentPassword: string, newPassword: string) =>
     request("/password", { method: "PUT", body: JSON.stringify({ currentPassword, newPassword }) }),
