@@ -95,7 +95,11 @@ func (s *Server) authorized(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func setSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
+func (s *Server) sessionCookieSecure() bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(s.cfg.PublicOrigin)), "https://")
+}
+
+func (s *Server) setSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
@@ -103,11 +107,11 @@ func setSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
 		Expires:  expires,
 		MaxAge:   int(time.Until(expires).Seconds()),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   s.sessionCookieSecure(),
 		SameSite: http.SameSiteStrictMode,
 	})
 }
 
-func clearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+func (s *Server) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.sessionCookieSecure(), SameSite: http.SameSiteStrictMode})
 }

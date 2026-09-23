@@ -118,7 +118,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "save session")
 		return
 	}
-	setSessionCookie(w, token, expires)
+	s.setSessionCookie(w, token, expires)
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "expiresAt": expires.UTC().Format(time.RFC3339)})
 }
 
@@ -174,7 +174,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		_ = s.store.deleteSession(cookie.Value)
 	}
-	clearSessionCookie(w)
+	s.clearSessionCookie(w)
 	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
 }
 
@@ -216,7 +216,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "save session")
 		return
 	}
-	setSessionCookie(w, token, expires)
+	s.setSessionCookie(w, token, expires)
 	writeJSON(w, http.StatusOK, map[string]bool{"updated": true})
 }
 
