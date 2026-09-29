@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Check, CircleHelp, Loader2, RefreshCw, Send, X } from "lucide-react"
-import { organizerApi, OrganizerApiError, type AssistantConversationView, type AssistantPlanRecord, type AssistantTurn } from "@/lib/organizer-api"
+import { Check, CircleHelp, FileImage, Loader2, Paperclip, RefreshCw, Send, X } from "lucide-react"
+import { organizerApi, OrganizerApiError, type AssistantConversationView, type AssistantPlanRecord, type AssistantTurn, type Candidate } from "@/lib/organizer-api"
 
 function errorMessage(error: unknown) { return error instanceof OrganizerApiError || error instanceof Error ? error.message : "发生未知错误" }
 function makeKey() { return `agenda-${Date.now()}-${Math.random().toString(36).slice(2)}` }
@@ -11,7 +11,6 @@ function assistantContent(turn: AssistantTurn) {
   const result = value as { kind?: string; reply?: string; ambiguityQuestions?: string[] }
   return result
 }
-
 function queryResults(record?: AssistantPlanRecord) {
   if (!record) return null
   const action = record.actions.find((value) => value.operation === "list_items" && value.result && typeof value.result === "object")
@@ -24,11 +23,14 @@ function queryResults(record?: AssistantPlanRecord) {
 export function AssistantPanel({ embedded = false, onClose, onChanged }: { embedded?: boolean; onClose?: () => void; onChanged: () => Promise<void> }) {
   const [conversation, setConversation] = useState<AssistantConversationView | null>(null)
   const [composer, setComposer] = useState("")
+  const [attachment, setAttachment] = useState<File>()
+  const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [pending, setPending] = useState<{ plan?: AssistantPlanRecord; receipt?: AssistantPlanRecord; clarification?: string[] }>({})
   const endRef = useRef<HTMLDivElement>(null)
   const conversationKey = "agenda-assistant-conversation"
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     let id = window.localStorage.getItem(conversationKey)
@@ -49,9 +51,18 @@ export function AssistantPanel({ embedded = false, onClose, onChanged }: { embed
   async function submit(event?: React.FormEvent) {
     event?.preventDefault()
     const text = composer.trim()
-    if (!text || busy || !conversation) return
+    if ((!text && !attachment) || busy || !conversation) return
     setBusy(true); setError(""); setPending({})
     try {
+      if (attachment) {
+        const image = attachment
+        const capture = await organizerApi.createCapture(text, image)
+        const parsed = await organizerApi.parseCapture(capture.id)
+        setComposer(""); setAttachment(undefined)
+        await onChanged()
+        setConversation((current) => current ? { ...current, turns: [...current.turns, { id: `image-${Date.now()}`, role: "assistant", content: imageResultMessage(image, parsed.items), structuredResult: { kind: "image_capture", captureId: capture.id, candidates: parsed.items } }] } : current)
+        return
+      }
       const response = await organizerApi.submitAssistantTurn(conversation.id, text, makeKey())
       setComposer("")
       setPending({ plan: response.plan, receipt: response.receipt, clarification: response.clarificationQuestions })
@@ -59,6 +70,18 @@ export function AssistantPanel({ embedded = false, onClose, onChanged }: { embed
       await onChanged()
     } catch (caught) { setError(`发送失败：${errorMessage(caught)}`) }
     finally { setBusy(false) }
+  }
+
+  function chooseFile(file?: File) {
+    if (!file) return
+    const supportedTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"])
+    if (!supportedTypes.has(file.type.toLowerCase())) { setError("请选择 PNG、JPEG、WebP 或 GIF 图片") ; return }
+    setAttachment(file); setError("")
+  }
+
+  function imageResultMessage(file: File, items: Candidate[]) {
+    if (!items.length) return `已收到图片「${file.name}」，但没有识别出明确事项。原图已保存到待整理。`
+    return `已识别图片「${file.name}」，发现 ${items.length} 个事项，已放入待整理。`
   }
 
   async function act(action: "confirm" | "cancel") {
@@ -103,9 +126,13 @@ export function AssistantPanel({ embedded = false, onClose, onChanged }: { embed
       {pending.plan?.requiresConfirmation && pending.plan.state === "awaiting_confirmation" ? <div className="flex gap-2 pl-2"><button disabled={busy} onClick={() => void act("confirm")} className="flex items-center gap-1.5 bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"><Check className="h-3.5 w-3.5" />确认执行</button><button disabled={busy} onClick={() => void act("cancel")} className="flex items-center gap-1.5 border border-border px-3 py-2 text-xs disabled:opacity-50"><X className="h-3.5 w-3.5" />取消</button></div> : null}
       {error ? <div className="flex items-center justify-between gap-2 border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"><span>{error}</span><button onClick={() => void submit()} disabled={busy || !composer.trim()} aria-label="重试"><RefreshCw className="h-3.5 w-3.5" /></button></div> : null}<div ref={endRef} />
     </div>
-    <form onSubmit={(event) => void submit(event)} className={embedded ? "mx-auto w-full max-w-5xl border-t border-border pt-3" : "border-t border-border bg-card p-3"}>
-      <textarea value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit() } }} rows={2} disabled={busy} placeholder="输入任何想安排、调整、查询或讨论的内容…" className="w-full resize-y border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30" aria-label="发送给 Agenda AI" />
-      <div className="mt-2 flex items-center justify-between"><span className="text-[11px] text-muted-foreground">你的输入法语音转文字可以直接使用</span><button type="submit" disabled={busy || !composer.trim()} className="flex items-center gap-1.5 bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}{busy ? "处理中" : "发送"}</button></div>
+    <form onSubmit={(event) => void submit(event)} className={embedded ? "mx-auto w-full max-w-5xl border-t border-border pt-3" : "border-t border-border bg-card p-3"} onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); chooseFile(event.dataTransfer.files?.[0]) }} onPaste={(event) => { const file = Array.from(event.clipboardData.files).find((value) => value.type.startsWith("image/")); if (file) { event.preventDefault(); chooseFile(file) } }}>
+      <div className={`relative ${dragging ? "ring-2 ring-primary/50" : ""}`}>
+        <textarea value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void submit() } }} rows={2} disabled={busy} placeholder="输入任何想安排、调整、查询或讨论的内容…也可以拖入图片" className="w-full resize-y border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30" aria-label="发送给 Agenda AI" />
+        {dragging ? <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-primary/10 text-sm font-medium text-primary">松开即可添加图片</div> : null}
+      </div>
+      {attachment ? <div className="mt-2 flex items-center gap-2 border border-primary/20 bg-primary/5 px-2.5 py-2 text-xs"><FileImage className="h-4 w-4 text-primary" /><span className="min-w-0 flex-1 truncate">{attachment.name}</span><button type="button" onClick={() => setAttachment(undefined)} aria-label="移除图片" className="p-1 hover:bg-muted"><X className="h-3.5 w-3.5" /></button></div> : null}
+      <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[11px] text-muted-foreground">可选择、拖入或粘贴图片；输入法语音转文字也可直接使用</span><div className="flex items-center gap-2"><input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(event) => { chooseFile(event.target.files?.[0]); event.currentTarget.value = "" }} /><button type="button" onClick={() => fileRef.current?.click()} disabled={busy} aria-label="添加图片" title="添加图片" className="border border-border p-2 hover:bg-muted disabled:opacity-50"><Paperclip className="h-4 w-4" /></button><button type="submit" disabled={busy || (!composer.trim() && !attachment)} className="flex items-center gap-1.5 bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}{busy ? "处理中" : "发送"}</button></div></div>
     </form>
   </section>
 }
