@@ -88,6 +88,50 @@ export type Memory = {
   updatedAt: string
 }
 
+export type AssistantActionResult = {
+  actionId: string
+  operation: string
+  state: string
+  error?: string
+  result?: unknown
+}
+
+export type AssistantPlan = {
+  kind?: "answer" | "query" | "plan" | "clarification" | string
+  reply?: string
+  intentSummary: string
+  ambiguityQuestions?: string[]
+  riskLevel: "low" | "medium" | "high" | string
+  requiresConfirmation: boolean
+  actions?: AssistantActionResult[]
+}
+
+export type AssistantPlanRecord = {
+  id: string
+  conversationId?: string
+  state: string
+  plan: AssistantPlan
+  requiresConfirmation: boolean
+  actions: AssistantActionResult[]
+}
+
+export type AssistantTurn = {
+  id: string
+  role: string
+  content: string
+  structuredResult?: unknown
+}
+
+export type AssistantConversationView = { id: string; turns: AssistantTurn[] }
+export type AssistantTurnResponse = {
+  requestId: string
+  kind?: string
+  reply?: string
+  plan?: AssistantPlanRecord
+  receipt?: AssistantPlanRecord
+  clarificationQuestions?: string[]
+}
+
 export class OrganizerApiError extends Error {
   constructor(
     public status: number,
@@ -97,15 +141,47 @@ export class OrganizerApiError extends Error {
   }
 }
 
-const base = "/api/organizer/v1"
+type OrganizerRuntime = {
+  baseUrl: string
+  deviceName?: string
+  token?: string
+  saveToken?: (token: string) => Promise<void>
+  clearToken?: () => Promise<void>
+}
+
+export type AgendaApiBaseOptions = {
+  configured?: string
+  legacy?: boolean
+}
+
+export function resolveAgendaApiBase(options: AgendaApiBaseOptions = {}) {
+  const base = options.configured || (options.legacy ? "/api/organizer/v1" : "/api/agenda/v1")
+  return base.replace(/\/$/, "")
+}
+
+const browserRuntime: OrganizerRuntime = {
+  baseUrl: resolveAgendaApiBase({
+    configured: typeof import.meta !== "undefined" ? import.meta.env?.PUBLIC_AGENDA_API_BASE_URL : undefined,
+  }),
+}
+let runtime = browserRuntime
+
+export function configureOrganizerApi(next: OrganizerRuntime) {
+  runtime = { ...next, baseUrl: next.baseUrl.replace(/\/$/, "") }
+}
+
+export function isNativeOrganizerApi() {
+  return runtime !== browserRuntime
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json")
-  const response = await fetch(`${base}${path}`, {
+  if (runtime.token) headers.set("Authorization", `Bearer ${runtime.token}`)
+  const response = await fetch(`${runtime.baseUrl}${path}`, {
     ...init,
     headers,
-    credentials: "same-origin",
+    credentials: runtime === browserRuntime ? "same-origin" : "omit",
   })
   const text = await response.text()
   let body: unknown = null
@@ -124,8 +200,24 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const organizerApi = {
-  login: (password: string) => request<{ authenticated: boolean }>("/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
-  logout: () => request("/auth/logout", { method: "POST", body: "{}" }),
+  login: async (password: string) => {
+    if (runtime === browserRuntime) return request<{ authenticated: boolean }>("/auth/login", { method: "POST", body: JSON.stringify({ password }) })
+    const result = await request<{ authenticated: boolean; deviceId: string; token: string }>("/auth/device", {
+      method: "POST",
+      body: JSON.stringify({ password, deviceName: runtime.deviceName || "Agenda Android" }),
+    })
+    runtime.token = result.token
+    await runtime.saveToken?.(result.token)
+    return result
+  },
+  logout: async () => {
+    try {
+      return await request("/auth/logout", { method: "POST", body: "{}" })
+    } finally {
+      runtime.token = undefined
+      await runtime.clearToken?.()
+    }
+  },
   session: () => request<{ authenticated: boolean; pushEnabled: boolean; timezone: string }>("/session"),
   changePassword: (currentPassword: string, newPassword: string) =>
     request("/password", { method: "PUT", body: JSON.stringify({ currentPassword, newPassword }) }),
@@ -163,6 +255,13 @@ export const organizerApi = {
   listMemories: () => request<{ memories: Memory[] }>("/memories"),
   createMemory: (memory: Pick<Memory, "content"> & Partial<Memory>) => request<Memory>("/memories", { method: "POST", body: JSON.stringify(memory) }),
   updateMemory: (memory: Memory) => request<Memory>(`/memories/${encodeURIComponent(memory.id)}`, { method: "PUT", body: JSON.stringify(memory) }),
+  createAssistantConversation: () => request<{ id: string }>("/assistant/conversations", { method: "POST", body: "{}" }),
+  getAssistantConversation: (id: string) => request<AssistantConversationView>(`/assistant/conversations/${encodeURIComponent(id)}`),
+  submitAssistantTurn: (id: string, content: string, idempotencyKey: string) =>
+    request<AssistantTurnResponse>(`/assistant/conversations/${encodeURIComponent(id)}/turns`, { method: "POST", body: JSON.stringify({ content, idempotencyKey }) }),
+  confirmAssistantPlan: (id: string) => request<AssistantTurnResponse>(`/assistant/plans/${encodeURIComponent(id)}/confirm`, { method: "POST", body: "{}" }),
+  cancelAssistantPlan: (id: string) => request<AssistantTurnResponse>(`/assistant/plans/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }),
+  undoAssistantPlan: (id: string) => request<AssistantTurnResponse>(`/assistant/plans/${encodeURIComponent(id)}/undo`, { method: "POST", body: "{}" }),
   vapidKey: () => request<{ enabled: boolean; publicKey: string }>("/push/vapid-key"),
   subscribe: (subscription: PushSubscriptionJSON) =>
     request("/push/subscriptions", { method: "POST", body: JSON.stringify(subscription) }),

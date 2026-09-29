@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
-  AlertTriangle, Archive, Bell, Brain, CalendarDays, Check, CheckCircle2, ChevronRight,
+  Archive, Bell, Brain, CalendarDays, Check, CheckCircle2, ChevronRight,
   CircleDashed, Clock3, Edit3, FileImage, FolderKanban, History, Inbox,
   KeyRound, LayoutList, Loader2, LogOut, Menu, Plus, RefreshCw, RotateCcw,
-  Search, Send, Settings, Sparkles, Trash2, X, Zap,
+  Search, Settings, Sparkles, Trash2, X, Zap,
 } from "lucide-react"
 import {
   organizerApi, OrganizerApiError, type Candidate, type Capture, type ItemEvent,
   type Memory, type OrganizerItem, type Project,
 } from "@/lib/organizer-api"
+import {
+  enableNativeNotifications, getNativeNotificationStatus, isNativeAgenda, requestExactAlarmAccess,
+  sendNativeTestNotification, syncNativeNotifications, type NativeNotificationStatus,
+} from "@/lib/agenda-native"
+import { AssistantPanel } from "./AssistantPanel"
 
 type Session = { authenticated: boolean; pushEnabled: boolean; timezone: string }
 type View = "today" | "calendar" | "projects" | "inbox" | "history" | "memory"
@@ -122,56 +127,6 @@ function Login({ onAuthenticated }: { onAuthenticated: () => void }) {
   </main>
 }
 
-type CapturePhase = "idle" | "sending" | "processing" | "success" | "saved_error"
-
-function QuickCapture({ onCreated }: { onCreated: (message: string) => Promise<void> }) {
-  const [text, setText] = useState("")
-  const [attachment, setAttachment] = useState<File>()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState("")
-  const [phase, setPhase] = useState<CapturePhase>("idle")
-  const [processingImage, setProcessingImage] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
-  async function submit(event: React.FormEvent) {
-    event.preventDefault()
-    if (!text.trim() && !attachment) return
-    const hasImage = Boolean(attachment)
-    let accepted = false
-    setProcessingImage(hasImage); setBusy(true); setError(""); setPhase("sending")
-    try {
-      const capture = await organizerApi.createCapture(text.trim(), attachment)
-      accepted = true; setPhase("processing")
-      setText(""); setAttachment(undefined); if (fileRef.current) fileRef.current.value = ""
-      const result = await organizerApi.parseCapture(capture.id)
-      const fallback = hasImage && isAIFallback(result.items)
-      setPhase(fallback ? "saved_error" : "success")
-      await new Promise((resolve) => window.setTimeout(resolve, fallback ? 900 : 550))
-      await onCreated(fallback ? "截图已保存，但这次识别需要检查。你可以在下方重新识别。" : hasImage ? "截图识别完成，已进入待整理。" : "记录整理完成，已进入待整理。")
-    } catch (caught) {
-      if (accepted) {
-        setPhase("saved_error")
-        await new Promise((resolve) => window.setTimeout(resolve, 900))
-        await onCreated(`原始内容已保存，但 AI 整理未完成：${errorMessage(caught)}`).catch(() => undefined)
-      } else {
-        setPhase("idle"); setError(`发送失败，内容尚未保存：${errorMessage(caught)}`)
-      }
-    } finally { setBusy(false) }
-  }
-  return <section className="border-b border-border bg-card px-4 py-4 sm:px-6">
-    <form onSubmit={submit} className="mx-auto flex max-w-5xl items-end gap-2">
-      <div className="min-w-0 flex-1"><label htmlFor="agenda-quick-capture" className="mb-1 block text-xs font-medium text-muted-foreground">快速记录</label><textarea id="agenda-quick-capture" rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="写下日程、任务、临时安排或一个想法…" className="block min-h-16 w-full resize-none border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30" /></div>
-      <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center border border-border hover:bg-muted" title="添加截图"><FileImage className="h-4 w-4" /><input ref={fileRef} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => setAttachment(e.target.files?.[0])} /></label>
-      <button aria-label={phase === "sending" ? "发送中" : phase === "processing" ? processingImage ? "识别中" : "AI 整理中" : "交给 Agenda"} disabled={busy || (!text.trim() && !attachment)} className="flex h-10 shrink-0 items-center gap-2 bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}<span className="hidden sm:inline">{phase === "sending" ? "发送中" : phase === "processing" ? processingImage ? "识别中" : "AI 整理中" : "交给 Agenda"}</span></button>
-    </form>
-    {attachment ? <p className="mx-auto mt-2 max-w-5xl text-xs text-muted-foreground">已附加：{attachment.name}</p> : null}
-    {error ? <p className="mx-auto mt-2 max-w-5xl text-sm text-destructive">{error}</p> : null}
-    {phase !== "idle" ? <div className={`agenda-capture-toast ${phase === "saved_error" ? "border-amber-500/50" : "border-primary/40"}`} role="status" aria-live="polite">
-      <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${phase === "saved_error" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-primary/10 text-primary"}`}>{phase === "success" ? <CheckCircle2 className="h-5 w-5" /> : phase === "saved_error" ? <AlertTriangle className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}</div>
-      <div><p className="text-sm font-semibold">{phase === "sending" ? "正在发送" : phase === "processing" ? "已收到" : phase === "success" ? "整理完成" : "内容已保存"}</p><p className="mt-0.5 text-xs text-muted-foreground">{phase === "sending" ? "正在上传到服务器…" : phase === "processing" ? processingImage ? "AI 正在识别截图，可以继续等待" : "AI 正在整理内容，可以继续等待" : phase === "success" ? "正在打开待整理内容" : "AI 未能完成处理，原始内容不会丢失"}</p></div>
-    </div> : null}
-  </section>
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="text-xs text-muted-foreground">{label}{children}</label> }
 
 function CandidateEditor({ value, projects, onChange, onRemove }: { value: Candidate; projects: Project[]; onChange: (value: Candidate) => void; onRemove: () => void }) {
@@ -269,11 +224,29 @@ function ProjectEditor({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   return <div className="flex gap-2 border border-border bg-card p-3"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="项目名称" className="min-w-0 flex-1 border border-border bg-background px-3 py-2 text-sm" /><input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="项目目标（可选）" className="hidden min-w-0 flex-[2] border border-border bg-background px-3 py-2 text-sm sm:block" /><button onClick={save} disabled={busy || !name.trim()} className="bg-primary px-3 text-sm text-primary-foreground">创建</button><button onClick={onClose} className="p-2"><X className="h-4 w-4" /></button></div>
 }
 
-function SettingsPanel({ onClose, onMessage }: { onClose: () => void; onMessage: (value: string) => void }) {
+function NativeNotificationPanel({ items, onMessage }: { items: OrganizerItem[]; onMessage: (value: string) => void }) {
+  const [status, setStatus] = useState<NativeNotificationStatus>()
+  const [busy, setBusy] = useState(false)
+  const refreshStatus = useCallback(async () => setStatus(await getNativeNotificationStatus()), [])
+  useEffect(() => { void refreshStatus() }, [refreshStatus])
+  async function run(action: () => Promise<unknown>, message?: string) {
+    setBusy(true)
+    try { await action(); await refreshStatus(); if (message) onMessage(message) }
+    finally { setBusy(false) }
+  }
+  if (!isNativeAgenda()) return null
+  return <section className="space-y-3"><h3 className="font-medium">本机通知</h3>
+    <div className="grid grid-cols-3 border border-border text-center text-xs"><div className="p-3"><p className="text-muted-foreground">通知权限</p><p className="mt-1 font-medium">{status?.permission === "granted" ? "已允许" : "未允许"}</p></div><div className="border-l border-border p-3"><p className="text-muted-foreground">精确提醒</p><p className="mt-1 font-medium">{status?.exactAlarm === "granted" ? "已允许" : "需设置"}</p></div><div className="border-l border-border p-3"><p className="text-muted-foreground">已安排</p><p className="mt-1 font-medium">{status?.scheduled ?? "…"} 条</p></div></div>
+    <div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => void run(() => enableNativeNotifications(items), "本机提醒已同步。")} className="bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">开启并同步</button><button disabled={busy} onClick={() => void run(requestExactAlarmAccess)} className="border border-border px-3 py-2 text-sm disabled:opacity-50">精确提醒设置</button><button disabled={busy} onClick={() => void run(sendNativeTestNotification, "测试通知将在 1 分钟后出现。")} className="border border-border px-3 py-2 text-sm disabled:opacity-50">1 分钟测试</button></div>
+    <p className="text-xs leading-5 text-muted-foreground">请同时在 vivo 设置中允许通知、自启动和后台高耗电。系统“强行停止”后，需要重新打开一次应用。</p>
+  </section>
+}
+
+function SettingsPanel({ items, onClose, onMessage }: { items: OrganizerItem[]; onClose: () => void; onMessage: (value: string) => void }) {
   const [deviceToken, setDeviceToken] = useState(""), [currentPassword, setCurrentPassword] = useState(""), [newPassword, setNewPassword] = useState(""), [busy, setBusy] = useState(false)
   async function token() { const value = await organizerApi.createDeviceToken("Obsidian"); setDeviceToken(value.token) }
   async function password(event: React.FormEvent) { event.preventDefault(); setBusy(true); try { await organizerApi.changePassword(currentPassword, newPassword); setCurrentPassword(""); setNewPassword(""); onMessage("密码已修改。") } finally { setBusy(false) } }
-  return <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}><aside className="h-full w-full max-w-md overflow-y-auto border-l border-border bg-card p-6 shadow-2xl"><header className="mb-8 flex items-center justify-between"><h2 className="text-lg font-semibold">设置</h2><button onClick={onClose} className="p-2 hover:bg-muted"><X className="h-4 w-4" /></button></header><section className="space-y-3"><h3 className="font-medium">通知与设备</h3><button onClick={token} className="border border-border px-3 py-2 text-sm">生成 Obsidian 令牌</button>{deviceToken ? <div className="break-all bg-muted p-3 font-mono text-xs select-all">{deviceToken}</div> : null}<a className="block text-sm text-primary hover:underline" href="/api/organizer/v1/export">导出完整数据</a></section><form onSubmit={password} className="mt-8 space-y-3 border-t border-border pt-6"><h3 className="font-medium">修改密码</h3><input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="当前密码" className="field" required /><input type="password" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="新密码（至少 12 位）" className="field" required /><button disabled={busy} className="bg-secondary px-3 py-2 text-sm font-medium">修改密码</button></form></aside></div>
+  return <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}><aside className="h-full w-full max-w-md overflow-y-auto border-l border-border bg-card p-6 shadow-2xl"><header className="mb-8 flex items-center justify-between"><h2 className="text-lg font-semibold">设置</h2><button onClick={onClose} className="p-2 hover:bg-muted"><X className="h-4 w-4" /></button></header><NativeNotificationPanel items={items} onMessage={onMessage} /><section className={`${isNativeAgenda() ? "mt-8 border-t border-border pt-6" : ""} space-y-3`}><h3 className="font-medium">通知与设备</h3><button onClick={token} className="border border-border px-3 py-2 text-sm">生成 Obsidian 令牌</button>{deviceToken ? <div className="break-all bg-muted p-3 font-mono text-xs select-all">{deviceToken}</div> : null}{!isNativeAgenda() ? <a className="block text-sm text-primary hover:underline" href="/api/organizer/v1/export">导出完整数据</a> : null}</section><form onSubmit={password} className="mt-8 space-y-3 border-t border-border pt-6"><h3 className="font-medium">修改密码</h3><input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="当前密码" className="field" required /><input type="password" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="新密码（至少 12 位）" className="field" required /><button disabled={busy} className="bg-secondary px-3 py-2 text-sm font-medium">修改密码</button></form></aside></div>
 }
 
 export function AgendaApp() {
@@ -285,10 +258,16 @@ export function AgendaApp() {
   const refresh = useCallback(async () => {
     const [itemResponse, captureResponse, projectResponse, memoryResponse, eventResponse] = await Promise.all([organizerApi.listItems(), organizerApi.listCaptures(), organizerApi.listProjects(), organizerApi.listMemories(), organizerApi.listEvents()])
     setItems(itemResponse.items); setCaptures(captureResponse.captures); setProjects(projectResponse.projects); setMemories(memoryResponse.memories); setEvents(eventResponse.events)
+    await syncNativeNotifications(itemResponse.items)
   }, [])
   const checkSession = useCallback(async () => { try { setSession(await organizerApi.session()); await refresh() } catch (e) { if (e instanceof OrganizerApiError && e.status === 401) setSession(null); else setError(errorMessage(e)) } finally { setAuthChecked(true) } }, [refresh])
   useEffect(() => { void checkSession() }, [checkSession])
-  useEffect(() => { if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/agenda/sw.js", { scope: "/agenda/" }) }, [])
+  useEffect(() => { if (!isNativeAgenda() && "serviceWorker" in navigator) void navigator.serviceWorker.register("/agenda/sw.js", { scope: "/agenda/" }) }, [])
+  useEffect(() => {
+    const handleNativeRefresh = () => void refresh()
+    window.addEventListener("agenda-native-refresh", handleNativeRefresh)
+    return () => window.removeEventListener("agenda-native-refresh", handleNativeRefresh)
+  }, [refresh])
 
   const filtered = useMemo(() => { const q = search.trim().toLocaleLowerCase(); return q ? items.filter((item) => [item.title, item.description, item.project, item.location, ...(item.tags ?? [])].some((value) => value?.toLocaleLowerCase().includes(q))) : items }, [items, search])
   const active = filtered.filter(isActive), history = filtered.filter((item) => !isActive(item))
@@ -302,7 +281,7 @@ export function AgendaApp() {
   const calendarGroups = useMemo(() => { const result = new Map<string, OrganizerItem[]>(); for (const item of active) { const key = itemMoment(item) ? dayKey(itemMoment(item)) : "未安排"; result.set(key, [...(result.get(key) ?? []), item]) } return [...result.entries()] }, [active])
 
   async function enablePush() {
-    try { if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("当前浏览器不支持通知"); const permission = await Notification.requestPermission(); if (permission !== "granted") throw new Error("通知权限没有开启"); const registration = await navigator.serviceWorker.ready; const vapid = await organizerApi.vapidKey(); if (!vapid.enabled) throw new Error("服务器尚未配置推送"); let subscription = await registration.pushManager.getSubscription(); subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapid.publicKey) }); await organizerApi.subscribe(subscription.toJSON()); setMessage("这台设备已经开启提醒。") } catch (e) { setError(errorMessage(e)) }
+    try { if (isNativeAgenda()) { const status = await enableNativeNotifications(items); setMessage(`本机提醒已开启，已安排 ${status.scheduled} 条。`); return } if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("当前浏览器不支持通知"); const permission = await Notification.requestPermission(); if (permission !== "granted") throw new Error("通知权限没有开启"); const registration = await navigator.serviceWorker.ready; const vapid = await organizerApi.vapidKey(); if (!vapid.enabled) throw new Error("服务器尚未配置推送"); let subscription = await registration.pushManager.getSubscription(); subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapid.publicKey) }); await organizerApi.subscribe(subscription.toJSON()); setMessage("这台设备已经开启提醒。") } catch (e) { setError(errorMessage(e)) }
   }
   async function updateMemory(memory: Memory, status: Memory["status"]) { try { await organizerApi.updateMemory({ ...memory, status }); await refresh() } catch (e) { setError(errorMessage(e)) } }
   async function createMemory() { const content = window.prompt("写下希望 Agenda 记住的规则"); if (!content?.trim()) return; await organizerApi.createMemory({ content: content.trim(), kind: "preference", status: "active", scope: "global" }); await refresh() }
@@ -315,7 +294,7 @@ export function AgendaApp() {
     <div className="min-h-screen md:grid md:grid-cols-[216px_minmax(0,1fr)]">
       <aside className="hidden border-r border-border bg-card md:flex md:flex-col"><div className="border-b border-border px-5 py-5"><p className="text-xs text-muted-foreground">个人工作台</p><h1 className="mt-1 text-xl font-semibold">Agenda</h1></div><nav className="flex-1 space-y-1 p-3">{navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className={`flex w-full items-center gap-3 px-3 py-2 text-sm ${view === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}><Icon className="h-4 w-4" />{label}{id === "inbox" && pending.length ? <span className="ml-auto text-xs">{pending.length}</span> : null}{id === "memory" && memories.some((m) => m.status === "proposed") ? <CircleDashed className="ml-auto h-3.5 w-3.5" /> : null}</button>)}</nav><div className="border-t border-border p-3"><button onClick={() => setSettingsOpen(true)} className="flex w-full items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><Settings className="h-4 w-4" />设置</button></div></aside>
       <div className="min-w-0 pb-20 md:pb-0"><header className="flex h-16 items-center justify-between border-b border-border bg-card px-4 sm:px-6"><div className="flex items-center gap-3"><Menu className="h-5 w-5 md:hidden" /><div><h1 className="font-semibold">{title}</h1><p className="hidden text-xs text-muted-foreground sm:block">{view === "today" ? new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(new Date()) : "管理你的日程、项目与历史"}</p></div></div><div className="flex items-center gap-1"><button onClick={() => setEditing("new")} className="flex items-center gap-2 bg-primary px-3 py-2 text-sm text-primary-foreground"><Plus className="h-4 w-4" /><span className="hidden sm:inline">新增</span></button><button onClick={() => void refresh()} className="p-2.5 hover:bg-muted" aria-label="刷新"><RefreshCw className="h-4 w-4" /></button><button onClick={enablePush} className="p-2.5 hover:bg-muted" aria-label="通知"><Bell className="h-4 w-4" /></button><button onClick={() => setSettingsOpen(true)} className="p-2.5 hover:bg-muted md:hidden" aria-label="设置"><Settings className="h-4 w-4" /></button><button onClick={async () => { await organizerApi.logout(); setSession(null) }} className="p-2.5 hover:bg-muted" aria-label="退出"><LogOut className="h-4 w-4" /></button></div></header>
-        {(view === "today" || view === "calendar" || view === "projects") ? <QuickCapture onCreated={async (captureMessage) => { await refresh(); setMessage(captureMessage); setView("inbox") }} /> : null}
+        {(view === "today" || view === "calendar" || view === "projects") ? <AssistantPanel embedded onChanged={refresh} /> : null}
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
           {(view === "calendar" || view === "projects" || view === "history") ? <div className="mb-5 flex items-center gap-2 border border-border bg-card px-3"><Search className="h-4 w-4 text-muted-foreground" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索标题、项目、标签或地点" className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" />{search ? <button onClick={() => setSearch("")}><X className="h-4 w-4" /></button> : null}</div> : null}
           {error ? <div className="mb-4 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}<button onClick={() => setError("")} className="float-right"><X className="h-4 w-4" /></button></div> : null}{message ? <div className="mb-4 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">{message}</div> : null}
@@ -336,7 +315,7 @@ export function AgendaApp() {
     </div>
     <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-border bg-card md:hidden">{navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className={`flex h-16 flex-col items-center justify-center gap-1 text-[10px] ${view === id ? "text-primary" : "text-muted-foreground"}`}><Icon className="h-4 w-4" />{label}</button>)}</nav>
     {editing ? <ItemDialog item={editing === "new" ? undefined : editing} projects={projects} onClose={() => setEditing(null)} onSaved={refresh} /> : null}
-    {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} onMessage={setMessage} /> : null}
+    {settingsOpen ? <SettingsPanel items={items} onClose={() => setSettingsOpen(false)} onMessage={setMessage} /> : null}
   </main>
 }
 
