@@ -6,6 +6,12 @@ on:
     branches:
       - deploy
 
+# The target directory is shared by every deployment. Serialize rsync runs so
+# one job cannot delete another job's temporary files via --delete.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
