@@ -29,6 +29,7 @@ export type Capture = {
   rawText: string
   attachmentName?: string
   attachmentMime?: string
+  attachments?: { name: string; mime: string }[]
   hasAttachment: boolean
   status: "received" | "parsing" | "needs_review" | "confirmed" | "failed"
   aiResult?: { items: Candidate[] }
@@ -224,12 +225,12 @@ export const organizerApi = {
   createDeviceToken: (name: string) =>
     request<{ id: string; token: string; message: string }>("/device-tokens", { method: "POST", body: JSON.stringify({ name }) }),
   listCaptures: () => request<{ captures: Capture[] }>("/captures?limit=100"),
-  createCapture: (rawText: string, attachment?: File) => {
-    if (attachment) {
+  createCapture: (rawText: string, attachments: File[] = []) => {
+    if (attachments.length) {
       const form = new FormData()
       form.set("rawText", rawText)
       form.set("sourceType", "image")
-      form.set("attachment", attachment)
+      for (const attachment of attachments) form.append("attachments", attachment)
       return request<Capture>("/captures", { method: "POST", body: form })
     }
     return request<Capture>("/captures", { method: "POST", body: JSON.stringify({ rawText, sourceType: "voice_text" }) })
