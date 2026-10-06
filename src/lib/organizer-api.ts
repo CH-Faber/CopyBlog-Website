@@ -123,7 +123,17 @@ export type AssistantTurn = {
   structuredResult?: unknown
 }
 
-export type AssistantConversationView = { id: string; turns: AssistantTurn[] }
+export type AssistantConversation = {
+  id: string
+  title: string
+  status: string
+  provider?: string
+  model?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type AssistantConversationView = AssistantConversation & { turns: AssistantTurn[] }
 export type AssistantTurnResponse = {
   requestId: string
   kind?: string
@@ -256,8 +266,11 @@ export const organizerApi = {
   listMemories: () => request<{ memories: Memory[] }>("/memories"),
   createMemory: (memory: Pick<Memory, "content"> & Partial<Memory>) => request<Memory>("/memories", { method: "POST", body: JSON.stringify(memory) }),
   updateMemory: (memory: Memory) => request<Memory>(`/memories/${encodeURIComponent(memory.id)}`, { method: "PUT", body: JSON.stringify(memory) }),
-  createAssistantConversation: () => request<{ id: string }>("/assistant/conversations", { method: "POST", body: "{}" }),
+  createAssistantConversation: () => request<AssistantConversation>("/assistant/conversations", { method: "POST", body: "{}" }),
+  listAssistantConversations: () => request<{ conversations: AssistantConversation[] }>("/assistant/conversations?limit=100"),
   getAssistantConversation: (id: string) => request<AssistantConversationView>(`/assistant/conversations/${encodeURIComponent(id)}`),
+  attachAssistantCapture: (id: string, captureId: string) =>
+    request<{ userTurn: AssistantTurn; assistantTurn: AssistantTurn }>(`/assistant/conversations/${encodeURIComponent(id)}/captures`, { method: "POST", body: JSON.stringify({ captureId }) }),
   submitAssistantTurn: (id: string, content: string, idempotencyKey: string) =>
     request<AssistantTurnResponse>(`/assistant/conversations/${encodeURIComponent(id)}/turns`, { method: "POST", body: JSON.stringify({ content, idempotencyKey }) }),
   confirmAssistantPlan: (id: string) => request<AssistantTurnResponse>(`/assistant/plans/${encodeURIComponent(id)}/confirm`, { method: "POST", body: "{}" }),

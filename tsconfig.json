@@ -6,5 +6,5 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "astro.config.mjs"]
+  "include": ["src/**/*", "apps/agenda-android/src/**/*", "apps/agenda-android/*.ts", "astro.config.mjs"]
 }

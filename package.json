@@ -8,7 +8,11 @@
     "build": "astro build && pagefind --site dist",
     "preview": "astro preview",
     "check": "astro check",
-    "test:agenda": "playwright test tests/e2e/agenda.spec.ts"
+    "test:agenda": "playwright test tests/e2e/agenda.spec.ts",
+    "android:web": "pnpm --filter agenda-android build",
+    "android:sync": "pnpm --filter agenda-android sync",
+    "android:apk": "pnpm --filter agenda-android apk",
+    "android:open": "pnpm --filter agenda-android open"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "8.0.0",
@@ -92,6 +96,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.6",
+    "@capacitor/cli": "8.5.2",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4.1.9",
     "@tailwindcss/typography": "^0.5.19",
@@ -101,10 +106,12 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/sanitize-html": "^2.16.0",
+    "@vitejs/plugin-react": "4.7.0",
     "astro": "^5.16.5",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "6.4.3"
   }
 }

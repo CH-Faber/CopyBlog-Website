@@ -958,3 +958,246 @@ a.card-github:hover .github-logo {
     animation: none;
   }
 }
+
+/* Agenda workspace: quiet surfaces, clear hierarchy, touch-friendly controls. */
+.agenda-root {
+  --agenda-surface: oklch(0.975 0.006 145);
+  --agenda-panel: oklch(1 0 0);
+  --agenda-border: color-mix(in oklab, var(--border), transparent 18%);
+  background: var(--agenda-surface);
+}
+
+.agenda-login {
+  background: radial-gradient(circle at 50% 0%, color-mix(in oklab, var(--primary), transparent 92%), var(--background) 42%);
+}
+
+.agenda-login-card {
+  border-radius: 0.875rem;
+  box-shadow: 0 18px 55px oklch(0 0 0 / 0.08);
+}
+
+.agenda-root button,
+.agenda-root input,
+.agenda-root select,
+.agenda-root textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.agenda-root button:focus-visible,
+.agenda-root input:focus-visible,
+.agenda-root select:focus-visible,
+.agenda-root textarea:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--primary), transparent 25%);
+  outline-offset: 2px;
+}
+
+.agenda-sidebar {
+  background: color-mix(in oklab, var(--card), var(--agenda-surface) 35%);
+}
+
+.agenda-nav-item {
+  border-radius: 0.5rem;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.agenda-nav-item:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.agenda-nav-item.is-active {
+  background: color-mix(in oklab, var(--primary), white 86%);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.agenda-content {
+  background: var(--agenda-surface);
+}
+
+.agenda-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in oklab, var(--agenda-surface), transparent 7%);
+  backdrop-filter: blur(16px);
+}
+
+.agenda-content-inner {
+  width: 100%;
+}
+
+.agenda-primary-action {
+  background: var(--primary);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.08);
+  transition: filter 160ms ease, box-shadow 160ms ease;
+}
+
+.agenda-primary-action:hover {
+  filter: brightness(0.96);
+  box-shadow: 0 3px 8px oklch(0 0 0 / 0.12);
+}
+
+.agenda-secondary-action,
+.agenda-icon-button {
+  border-radius: 0.5rem;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.agenda-secondary-action:hover,
+.agenda-icon-button:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.agenda-search {
+  border: 1px solid var(--agenda-border);
+  border-radius: 0.625rem;
+  background: var(--card);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.03);
+}
+
+.agenda-assistant-panel {
+  background: color-mix(in oklab, var(--card), var(--agenda-surface) 22%);
+}
+
+.agenda-surface,
+.agenda-hero-card,
+.agenda-focus-card,
+.agenda-capture-card {
+  border-color: var(--agenda-border);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.035);
+}
+
+.agenda-hero-card {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--card), var(--primary) 3%), var(--card));
+}
+
+.agenda-stats > div {
+  transition: background-color 160ms ease;
+}
+
+.agenda-stats > div:hover {
+  background: color-mix(in oklab, var(--card), var(--primary) 3%);
+}
+
+.agenda-item-row {
+  transition: background-color 160ms ease;
+}
+
+.agenda-item-row:hover {
+  background: color-mix(in oklab, var(--muted), transparent 38%);
+}
+
+.agenda-editor-card {
+  border: 1px solid var(--agenda-border);
+  border-radius: 0.875rem;
+  background: color-mix(in oklab, var(--card), var(--agenda-surface) 18%);
+}
+
+.agenda-segmented {
+  border-radius: 0.625rem;
+  background: var(--muted);
+}
+
+.agenda-description {
+  border: 1px solid var(--agenda-border);
+  border-radius: 0.625rem;
+  background: color-mix(in oklab, var(--muted), transparent 35%);
+}
+
+.agenda-description:focus {
+  border-color: color-mix(in oklab, var(--primary), transparent 35%);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary), transparent 88%);
+}
+
+.agenda-status-section {
+  border-top: 1px solid var(--agenda-border);
+  padding: 1rem 0 0;
+}
+
+.agenda-dialog-backdrop {
+  background: oklch(0.15 0.02 145 / 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.agenda-dialog {
+  border: 1px solid var(--agenda-border);
+  border-radius: 1rem 1rem 0 0;
+  background: var(--background);
+  box-shadow: 0 24px 70px oklch(0 0 0 / 0.24);
+}
+
+.agenda-dialog-header,
+.agenda-dialog-footer {
+  border-color: var(--agenda-border);
+  background: color-mix(in oklab, var(--card), transparent 5%);
+  backdrop-filter: blur(14px);
+  padding: 1rem 1.25rem;
+}
+
+.agenda-dialog-header {
+  border-bottom: 1px solid var(--agenda-border);
+}
+
+.agenda-dialog-footer {
+  border-top: 1px solid var(--agenda-border);
+}
+
+.agenda-dialog-scroll {
+  overscroll-behavior: contain;
+}
+
+.agenda-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+  background: color-mix(in oklab, var(--card), transparent 4%);
+  backdrop-filter: blur(18px);
+}
+
+.agenda-bottom-nav-item {
+  min-height: 4rem;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.agenda-bottom-nav-item.is-active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+@media (min-width: 640px) {
+  .agenda-dialog {
+    border-radius: 1rem;
+  }
+
+  .agenda-dialog-header,
+  .agenda-dialog-footer {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .agenda-content-inner {
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  }
+
+  .agenda-dialog {
+    max-height: calc(100dvh - env(safe-area-inset-top));
+  }
+
+  .agenda-dialog-scroll {
+    padding-bottom: 1.5rem;
+  }
+}
+
+.dark .agenda-root {
+  --agenda-surface: oklch(0.18 0.014 145);
+  --agenda-panel: oklch(0.23 0.015 145);
+}
+
+.dark .agenda-nav-item.is-active {
+  background: color-mix(in oklab, var(--primary), transparent 82%);
+}
+
+.dark .agenda-hero-card {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--card), var(--primary) 8%), var(--card));
+}
