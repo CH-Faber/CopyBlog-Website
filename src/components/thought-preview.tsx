@@ -1,5 +1,7 @@
 import { profile } from "@/data/profile"
 
+const thumbnailImageSrc = (src: string) => src.replace(/(\/obsidian-assets\/[^/]+\/[^/]+)(\.[a-z0-9]+)$/i, "$1-thumb$2")
+
 export type ThoughtPreviewItem = {
   slug: string
   title?: string
@@ -52,7 +54,7 @@ export function ThoughtPreview({
                 </div>
                 {thought.title ? <div className="mt-1 line-clamp-1 text-xs font-medium text-foreground">{thought.title}</div> : null}
                 <div className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-3 whitespace-pre-line">{thought.excerpt}</div>
-                {thought.image ? <img src={thought.image} alt="" loading="lazy" className="mt-2 h-16 w-16 rounded-lg object-cover" /> : null}
+                {thought.image ? <img src={thumbnailImageSrc(thought.image)} alt="" loading="lazy" className="mt-2 h-16 w-16 rounded-lg object-cover" /> : null}
               </div>
             </a>
           ))}

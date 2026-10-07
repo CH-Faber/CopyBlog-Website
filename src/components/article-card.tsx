@@ -6,6 +6,8 @@ import type { ArticleMeta } from "./article-list"
 import { cn } from "@/lib/utils"
 import { navigate } from "astro:transitions/client"
 
+const thumbnailImageSrc = (src: string) => src.replace(/(\/obsidian-assets\/[^/]+\/[^/]+)(\.[a-z0-9]+)$/i, "$1-thumb$2")
+
 export function ArticleCard({
   article,
   className,
@@ -104,7 +106,7 @@ export function ArticleCard({
         {article.image ? (
           <div className="hidden sm:block w-28 h-20 shrink-0 rounded-lg overflow-hidden">
             <img
-              src={article.image}
+              src={thumbnailImageSrc(article.image)}
               alt=""
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
