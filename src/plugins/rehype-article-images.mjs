@@ -59,6 +59,7 @@ const imageButton = (image, index, total) => {
   image.properties.draggable = "false"
 
   const source = String(image.properties.src ?? "")
+  const originalSource = source.replace(/(\/obsidian-assets\/[^/]+\/[^/]+)(\.[a-z0-9]+)$/i, "$1-original$2")
   const caption = String(image.properties.title ?? "").trim()
   delete image.properties.title
 
@@ -69,7 +70,7 @@ const imageButton = (image, index, total) => {
       type: "button",
       className: ["article-image-trigger"],
       "data-article-image": "true",
-      "data-image-src": source,
+      "data-image-src": originalSource,
       "data-image-caption": caption,
       ariaLabel: caption ? `查看大图：${caption}` : `查看第 ${index + 1} 张图片，共 ${total} 张`,
     },

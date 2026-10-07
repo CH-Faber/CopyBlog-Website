@@ -471,8 +471,9 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 			usedAssets = appendAsset(usedAssets, cover)
 		}
 		for _, asset := range usedAssets {
-			key := builder.ProjectFilePrefix + "public" + asset.PublicURL
-			assetsToDownload[key] = asset
+			assetsToDownload[builder.ProjectFilePrefix+"public"+asset.PublicURL] = asset
+			assetsToDownload[builder.ProjectFilePrefix+"public"+asset.OriginalURL] = asset
+			assetsToDownload[builder.ProjectFilePrefix+"public"+asset.ThumbURL] = asset
 		}
 		data, serializeErr := contentmodel.Serialize(contentmodel.Document{Metadata: publishedMetadata, Content: publishedContent})
 		if serializeErr != nil {
@@ -499,13 +500,33 @@ func (m *Manager) Publish(jobID string, request PublishRequest) (*PublishRespons
 	_ = m.saveLocked(job)
 	m.mu.Unlock()
 
+	assetBytes := map[string][]byte{}
 	for key, asset := range assetsToDownload {
-		data, downloadErr := m.syncer.DownloadImage(asset.SourceKey, asset.ETag)
+		cacheKey := asset.SourceKey + "\x00" + asset.ETag
+		data, ok := assetBytes[cacheKey]
+		var downloadErr error
+		if !ok {
+			data, downloadErr = m.syncer.DownloadImage(asset.SourceKey, asset.ETag)
+			if downloadErr == nil {
+				assetBytes[cacheKey] = data
+			}
+		}
 		if downloadErr != nil {
 			m.fail(jobID, downloadErr)
 			return nil, downloadErr
 		}
-		imageData := data
+		variant := data
+		switch {
+		case strings.HasSuffix(key, asset.ThumbURL):
+			variant, downloadErr = media.EncodeVariant(data, asset.SourceKey, 480, 78)
+		case strings.HasSuffix(key, asset.PublicURL):
+			variant, downloadErr = media.EncodeVariant(data, asset.SourceKey, 1600, 82)
+		}
+		if downloadErr != nil {
+			m.fail(jobID, downloadErr)
+			return nil, downloadErr
+		}
+		imageData := variant
 		files[key] = &imageData
 		expected[key] = ""
 	}

@@ -20,9 +20,11 @@ type Object struct {
 }
 
 type PublishedAsset struct {
-	SourceKey string `json:"sourceKey"`
-	ETag      string `json:"etag"`
-	PublicURL string `json:"publicUrl"`
+	SourceKey   string `json:"sourceKey"`
+	ETag        string `json:"etag"`
+	PublicURL   string `json:"publicUrl"`
+	OriginalURL string `json:"originalUrl"`
+	ThumbURL    string `json:"thumbUrl"`
 }
 
 type Index struct {
@@ -101,6 +103,19 @@ func publicURL(object Object) string {
 	return "/obsidian-assets/" + digest[:2] + "/" + digest + extension
 }
 
+func assetURLs(object Object) (content, original, thumb string) {
+	extension := strings.ToLower(path.Ext(object.Key))
+	sum := sha256.Sum256([]byte(object.Key + "\x00" + object.ETag))
+	digest := hex.EncodeToString(sum[:])
+	base := "/obsidian-assets/" + digest[:2] + "/" + digest
+	return base + extension, base + "-original" + extension, base + "-thumb" + extension
+}
+
+func publishedAsset(object Object) PublishedAsset {
+	content, original, thumb := assetURLs(object)
+	return PublishedAsset{SourceKey: object.Key, ETag: object.ETag, PublicURL: content, OriginalURL: original, ThumbURL: thumb}
+}
+
 func (index *Index) Resolve(rawTarget, articleKey string) (PublishedAsset, error) {
 	target := cleanTarget(rawTarget)
 	if target == "" || !IsImageKey(target) {
@@ -125,7 +140,7 @@ func (index *Index) Resolve(rawTarget, articleKey string) (PublishedAsset, error
 	for _, candidate := range candidates {
 		for _, object := range index.objects {
 			if object.Key == candidate {
-				return PublishedAsset{SourceKey: object.Key, ETag: object.ETag, PublicURL: publicURL(object)}, nil
+				return publishedAsset(object), nil
 			}
 		}
 	}
@@ -140,7 +155,7 @@ func (index *Index) Resolve(rawTarget, articleKey string) (PublishedAsset, error
 	}
 	if len(caseInsensitive) == 1 {
 		object := caseInsensitive[0]
-		return PublishedAsset{SourceKey: object.Key, ETag: object.ETag, PublicURL: publicURL(object)}, nil
+		return publishedAsset(object), nil
 	}
 
 	basename := path.Base(target)
@@ -152,7 +167,7 @@ func (index *Index) Resolve(rawTarget, articleKey string) (PublishedAsset, error
 	}
 	if len(byName) == 1 {
 		object := byName[0]
-		return PublishedAsset{SourceKey: object.Key, ETag: object.ETag, PublicURL: publicURL(object)}, nil
+		return publishedAsset(object), nil
 	}
 	if len(byName) > 1 {
 		paths := make([]string, 0, len(byName))

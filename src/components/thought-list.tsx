@@ -95,6 +95,9 @@ const fullDateLabel = (dateString: string) => {
   return date.toLocaleString("zh-CN", { dateStyle: "long", timeStyle: "short" })
 }
 
+const originalImageSrc = (src: string) => src.replace(/(\/obsidian-assets\/[^/]+\/[^/]+)(\.[a-z0-9]+)$/i, "$1-original$2")
+const thumbImageSrc = (src: string) => src.replace(/(\/obsidian-assets\/[^/]+\/[^/]+)(\.[a-z0-9]+)$/i, "$1-thumb$2")
+
 function SingleThoughtImage({ image, onOpen }: { image: ThoughtMeta["images"][number]; onOpen: () => void }) {
   const [isPortrait, setIsPortrait] = useState(false)
 
@@ -143,7 +146,7 @@ function ThoughtMedia({ images, onOpen }: { images: ThoughtMeta["images"]; onOpe
         const remaining = images.length - 9
         return (
           <button key={`${image.src}-${index}`} type="button" className="group relative block aspect-square overflow-hidden rounded-[0.3rem] bg-muted/50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={() => onOpen(index)} aria-label={`查看第 ${index + 1} 张图片`}>
-            <img src={image.src} alt={image.alt || "闪念配图"} loading="lazy" decoding="async" className="block h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+            <img src={thumbImageSrc(image.src)} alt={image.alt || "闪念配图"} loading="lazy" decoding="async" className="block h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
             {index === 8 && remaining > 0 ? <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-2xl font-semibold text-white">+{remaining}</span> : null}
           </button>
         )
@@ -236,7 +239,7 @@ function ThoughtCard({ thought, index }: { thought: ThoughtMeta; index: number }
           onTouchEnd={handleLightboxTouchEnd}
         >
           <img
-            src={activeImage.src}
+            src={originalImageSrc(activeImage.src)}
             alt={activeImage.alt || "闪念配图"}
             className="max-h-[88dvh] max-w-[94vw] object-contain"
             draggable={false}
