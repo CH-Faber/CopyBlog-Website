@@ -25,10 +25,15 @@ for (const file of files) {
   const extension = path.extname(file)
   const base = file.slice(0, -extension.length)
   const original = `${base}-original${extension}`
+  const encode = (image, quality) => {
+    if (extension.toLowerCase() === ".png") return image.png({ compressionLevel: 9 })
+    if (extension.toLowerCase() === ".webp") return image.webp({ quality })
+    return image.jpeg({ quality, mozjpeg: true })
+  }
   await fs.copyFile(file, original)
-  await sharp(original).resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82, mozjpeg: true }).toFile(`${base}.optimized${extension}`)
+  await encode(sharp(original).resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }), 82).toFile(`${base}.optimized${extension}`)
   await fs.rename(`${base}.optimized${extension}`, file)
-  await sharp(original).resize({ width: 480, height: 480, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 78, mozjpeg: true }).toFile(`${base}-thumb${extension}`)
+  await encode(sharp(original).resize({ width: 480, height: 480, fit: "inside", withoutEnlargement: true }), 78).toFile(`${base}-thumb${extension}`)
 }
 
 console.log(`Generated responsive image variants for ${files.length} source images.`)
