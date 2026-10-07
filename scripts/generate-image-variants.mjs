@@ -30,7 +30,11 @@ for (const file of files) {
     if (extension.toLowerCase() === ".webp") return image.webp({ quality })
     return image.jpeg({ quality, mozjpeg: true })
   }
-  await fs.copyFile(file, original)
+  try {
+    await fs.access(original)
+  } catch {
+    await fs.copyFile(file, original)
+  }
   await encode(sharp(original).resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }), 82).toFile(`${base}.optimized${extension}`)
   await fs.rename(`${base}.optimized${extension}`, file)
   await encode(sharp(original).resize({ width: 480, height: 480, fit: "inside", withoutEnlargement: true }), 78).toFile(`${base}-thumb${extension}`)

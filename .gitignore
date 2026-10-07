@@ -13,3 +13,5 @@ AGENTS.md
 CLAUDE.md
 TODO.md
 Design/
+public/obsidian-assets/**/*-original.*
+public/obsidian-assets/**/*-thumb.*
