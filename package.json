@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "node scripts/generate-image-variants.mjs && astro build && pagefind --site dist",
+    "build": "node scripts/generate-image-variants.mjs && astro build && pagefind --site dist && node scripts/restore-image-sources.mjs",
     "preview": "astro preview",
     "check": "astro check",
     "test:agenda": "playwright test tests/e2e/agenda.spec.ts",
