@@ -97,6 +97,7 @@ func PublishFiles(cfg *config.Config, files map[string]*[]byte, expected map[str
 		data           *[]byte
 		key            string
 		alreadyApplied bool
+		existed        bool
 	}
 	resolved := []resolvedFile{}
 	for key, data := range files {
@@ -123,13 +124,42 @@ func PublishFiles(cfg *config.Config, files map[string]*[]byte, expected map[str
 				return "", fmt.Errorf("publish conflict: %s changed after review started", key)
 			}
 		}
-		resolved = append(resolved, resolvedFile{path: path, rel: rel, data: data, key: key, alreadyApplied: desiredAlreadyApplied})
+		_, statErr := os.Stat(path)
+		if statErr != nil && !os.IsNotExist(statErr) {
+			return "", statErr
+		}
+		resolved = append(resolved, resolvedFile{path: path, rel: rel, data: data, key: key, alreadyApplied: desiredAlreadyApplied, existed: statErr == nil})
 	}
+
+	mutated := []resolvedFile{}
+	rollbackNeeded := false
+	defer func() {
+		if !rollbackNeeded {
+			return
+		}
+		for index := len(mutated) - 1; index >= 0; index-- {
+			file := mutated[index]
+			if file.existed {
+				if err := runCommand(cfg.ProjectRootDir, "git", "restore", "--source=HEAD", "--staged", "--worktree", "--", file.rel); err != nil {
+					log.Printf("Failed to roll back published file %s: %v", file.rel, err)
+				}
+				continue
+			}
+			cmd := exec.Command("git", "rm", "--cached", "--quiet", "--ignore-unmatch", "--", file.rel)
+			cmd.Dir = cfg.ProjectRootDir
+			_ = cmd.Run()
+			if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
+				log.Printf("Failed to remove partially published file %s: %v", file.rel, err)
+			}
+		}
+	}()
 
 	for _, file := range resolved {
 		if file.alreadyApplied {
 			continue
 		}
+		mutated = append(mutated, file)
+		rollbackNeeded = true
 		if file.data == nil {
 			if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
 				return "", err
@@ -148,6 +178,7 @@ func PublishFiles(cfg *config.Config, files map[string]*[]byte, expected map[str
 	}
 
 	if !gitHasStagedChanges(cfg.ProjectRootDir) {
+		rollbackNeeded = false
 		if err := runCommand(cfg.ProjectRootDir, "git", "push", "origin", "deploy"); err != nil {
 			return "", err
 		}
@@ -159,6 +190,7 @@ func PublishFiles(cfg *config.Config, files map[string]*[]byte, expected map[str
 	if err := runCommand(cfg.ProjectRootDir, "git", "commit", "-m", commitMessage); err != nil {
 		return "", err
 	}
+	rollbackNeeded = false
 	if err := runCommand(cfg.ProjectRootDir, "git", "push", "origin", "deploy"); err != nil {
 		return "", err
 	}
