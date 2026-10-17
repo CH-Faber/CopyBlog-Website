@@ -1,4 +1,4 @@
-const CACHE_NAME = "faber-agenda-v1"
+const CACHE_NAME = "faber-agenda-v2"
 const APP_SHELL = ["/agenda/", "/agenda/manifest.webmanifest", "/icon.svg", "/apple-icon.png"]
 
 self.addEventListener("install", (event) => {
@@ -18,7 +18,10 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return
 
   const url = new URL(request.url)
-  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/organizer/")) return
+  // API responses must always go to the network. Caching or replaying an API
+  // request from a stale service worker makes mobile failures look like fetch
+  // errors and can hide a recovered server.
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/organizer/") || url.pathname.startsWith("/api/agenda/")) return
 
   if (request.mode === "navigate" && url.pathname.startsWith("/agenda")) {
     event.respondWith(

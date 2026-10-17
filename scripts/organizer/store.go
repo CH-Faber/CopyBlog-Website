@@ -20,6 +20,13 @@ import (
 
 var errConflict = errors.New("version conflict")
 
+const (
+	maxAssistantTurnText       = 16 * 1024
+	maxAssistantResultJSON     = 64 * 1024
+	maxAssistantMetadataLength = 128
+	maxAssistantResultRef      = 512
+)
+
 type Store struct {
 	db *sql.DB
 }
@@ -51,217 +58,191 @@ func openStore(path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-func (s *Store) migrate() error {
-	const schema = `
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS sessions (
-  token_hash TEXT PRIMARY KEY,
-  expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
-CREATE TABLE IF NOT EXISTS device_tokens (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
-  created_at TEXT NOT NULL,
-  last_used_at TEXT NOT NULL,
-  revoked_at TEXT NOT NULL DEFAULT ''
-);
-CREATE TABLE IF NOT EXISTS captures (
-  id TEXT PRIMARY KEY,
-  source_type TEXT NOT NULL,
-  raw_text TEXT NOT NULL DEFAULT '',
-  attachment_name TEXT NOT NULL DEFAULT '',
-  attachment_mime TEXT NOT NULL DEFAULT '',
-  attachment_path TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL,
-  ai_result TEXT NOT NULL DEFAULT '',
-  error TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_captures_status_created ON captures(status, created_at DESC);
-CREATE TABLE IF NOT EXISTS items (
-  id TEXT PRIMARY KEY,
-  capture_id TEXT,
-  type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  description TEXT NOT NULL DEFAULT '',
-  start_at TEXT NOT NULL DEFAULT '',
-  end_at TEXT NOT NULL DEFAULT '',
-  due_at TEXT NOT NULL DEFAULT '',
-  reminder_at TEXT NOT NULL DEFAULT '',
-  timezone TEXT NOT NULL,
-  all_day INTEGER NOT NULL DEFAULT 0,
-  recurrence_rule TEXT NOT NULL DEFAULT '',
-  priority INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL,
-  project TEXT NOT NULL DEFAULT '',
-  tags_json TEXT NOT NULL DEFAULT '[]',
-  location TEXT NOT NULL DEFAULT '',
-  people_json TEXT NOT NULL DEFAULT '[]',
-  version INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY(capture_id) REFERENCES captures(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS idx_items_status_due ON items(status, due_at);
-CREATE INDEX IF NOT EXISTS idx_items_status_start ON items(status, start_at);
-CREATE TABLE IF NOT EXISTS reminders (
-  id TEXT PRIMARY KEY,
-  item_id TEXT NOT NULL,
-  remind_at TEXT NOT NULL,
-  status TEXT NOT NULL,
-  attempts INTEGER NOT NULL DEFAULT 0,
-  sent_at TEXT NOT NULL DEFAULT '',
-  last_error TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(status, remind_at);
-CREATE TABLE IF NOT EXISTS push_subscriptions (
-  endpoint TEXT PRIMARY KEY,
-  p256dh TEXT NOT NULL,
-  auth TEXT NOT NULL,
-  user_agent TEXT NOT NULL DEFAULT '',
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS projects (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  description TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'active',
-  priority INTEGER NOT NULL DEFAULT 0,
-  color TEXT NOT NULL DEFAULT '',
-  goal TEXT NOT NULL DEFAULT '',
-  deadline TEXT NOT NULL DEFAULT '',
-  review_at TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_projects_status_updated ON projects(status, updated_at DESC);
-CREATE TABLE IF NOT EXISTS item_events (
-  id TEXT PRIMARY KEY,
-  item_id TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  data_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_item_events_item_created ON item_events(item_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_item_events_created ON item_events(created_at DESC);`
-	const memorySchema = `
-CREATE TABLE IF NOT EXISTS memories (
-  id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL,
-  memory_key TEXT NOT NULL DEFAULT '',
-  content TEXT NOT NULL,
-  scope TEXT NOT NULL DEFAULT 'global',
-  status TEXT NOT NULL DEFAULT 'proposed',
-  evidence_count INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_key_status ON memories(memory_key, status) WHERE memory_key<>'';
-CREATE TABLE IF NOT EXISTS correction_events (
-  id TEXT PRIMARY KEY,
-  capture_id TEXT NOT NULL,
-  field TEXT NOT NULL,
-  context TEXT NOT NULL DEFAULT '',
-  before_json TEXT NOT NULL,
-  after_json TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY(capture_id) REFERENCES captures(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_corrections_field_context ON correction_events(field, context, created_at DESC);`
-	if _, err := s.db.Exec(schema); err != nil {
-		return err
-	}
-	if _, err := s.db.Exec(memorySchema); err != nil {
-		return err
-	}
-	columns := []struct{ name, definition string }{
-		{"certainty", "TEXT NOT NULL DEFAULT 'confirmed'"},
-		{"duration_minutes", "INTEGER NOT NULL DEFAULT 0"},
-		{"available_from", "TEXT NOT NULL DEFAULT ''"},
-		{"available_until", "TEXT NOT NULL DEFAULT ''"},
-		{"project_id", "TEXT NOT NULL DEFAULT ''"},
-		{"completed_at", "TEXT NOT NULL DEFAULT ''"},
-		{"cancelled_at", "TEXT NOT NULL DEFAULT ''"},
-		{"archived_at", "TEXT NOT NULL DEFAULT ''"},
-	}
-	for _, column := range columns {
-		if err := s.ensureColumn("items", column.name, column.definition); err != nil {
-			return err
-		}
-	}
-	if _, err := s.db.Exec("UPDATE items SET completed_at=updated_at WHERE status='done' AND completed_at=''"); err != nil {
-		return err
-	}
-	if _, err := s.db.Exec("UPDATE items SET cancelled_at=updated_at WHERE status='cancelled' AND cancelled_at=''"); err != nil {
-		return err
-	}
-	return s.migrateProjects()
+func (s *Store) createAssistantConversation() (AssistantConversation, error) {
+	return s.createAssistantConversationWithMetadata("", "")
 }
 
-func (s *Store) ensureColumn(table, name, definition string) error {
-	rows, err := s.db.Query("PRAGMA table_info(" + table + ")")
+func (s *Store) createAssistantConversationWithMetadata(provider, model string) (AssistantConversation, error) {
+	if err := validateAssistantMetadata(provider, model); err != nil {
+		return AssistantConversation{}, err
+	}
+	now := nowString()
+	conversation := AssistantConversation{
+		ID: newID("conversation"), WorkspaceID: s.defaultWorkspaceID(), Status: "active",
+		Title: "新对话", Provider: provider, Model: model, CreatedAt: now, UpdatedAt: now,
+	}
+	_, err := s.db.Exec(`INSERT INTO assistant_conversations(id, workspace_id, title, status, provider, model, created_at, updated_at)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?)`, conversation.ID, conversation.WorkspaceID, conversation.Title, conversation.Status, provider, model, now, now)
+	return conversation, err
+}
+
+func (s *Store) listAssistantConversations(limit int) ([]AssistantConversation, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.db.Query(`SELECT id, workspace_id, title, status, provider, model, created_at, updated_at
+FROM assistant_conversations WHERE workspace_id=? ORDER BY updated_at DESC, id DESC LIMIT ?`, s.defaultWorkspaceID(), limit)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
+	conversations := make([]AssistantConversation, 0)
 	for rows.Next() {
-		var cid int
-		var columnName, columnType string
-		var notNull, primaryKey int
-		var defaultValue any
-		if err := rows.Scan(&cid, &columnName, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
-			return err
+		var conversation AssistantConversation
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.Title, &conversation.Status, &conversation.Provider, &conversation.Model, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+			return nil, err
 		}
-		if columnName == name {
-			return nil
-		}
+		conversations = append(conversations, conversation)
 	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	_, err = s.db.Exec("ALTER TABLE " + table + " ADD COLUMN " + name + " " + definition)
-	return err
+	return conversations, rows.Err()
 }
 
-func (s *Store) migrateProjects() error {
-	rows, err := s.db.Query("SELECT DISTINCT TRIM(project) FROM items WHERE TRIM(project)<>''")
+func (s *Store) getAssistantConversation(id string) (AssistantConversation, error) {
+	var conversation AssistantConversation
+	err := s.db.QueryRow(`SELECT id, workspace_id, title, status, provider, model, created_at, updated_at
+FROM assistant_conversations WHERE id=? AND workspace_id=?`, id, s.defaultWorkspaceID()).Scan(
+		&conversation.ID, &conversation.WorkspaceID, &conversation.Title, &conversation.Status, &conversation.Provider,
+		&conversation.Model, &conversation.CreatedAt, &conversation.UpdatedAt,
+	)
+	return conversation, err
+}
+
+func (s *Store) listAssistantTurns(conversationID string) ([]AssistantTurn, error) {
+	if _, err := s.getAssistantConversation(conversationID); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(`SELECT id, workspace_id, conversation_id, role, content, structured_result,
+structured_result_ref, provider, model, created_at FROM assistant_turns
+WHERE workspace_id=? AND conversation_id=? ORDER BY rowid`, s.defaultWorkspaceID(), conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	turns := make([]AssistantTurn, 0)
+	for rows.Next() {
+		var turn AssistantTurn
+		var result string
+		if err := rows.Scan(&turn.ID, &turn.WorkspaceID, &turn.ConversationID, &turn.Role, &turn.Content, &result,
+			&turn.StructuredResultRef, &turn.Provider, &turn.Model, &turn.CreatedAt); err != nil {
+			return nil, err
+		}
+		if result != "" {
+			turn.StructuredResult = json.RawMessage(result)
+		}
+		turns = append(turns, turn)
+	}
+	return turns, rows.Err()
+}
+
+func (s *Store) appendUserTurn(conversationID, text string) (AssistantTurn, error) {
+	if len(text) == 0 || len(text) > maxAssistantTurnText {
+		return AssistantTurn{}, fmt.Errorf("user turn text must be between 1 and %d bytes", maxAssistantTurnText)
+	}
+	return s.appendAssistantTurnRecord(conversationID, "user", text, nil, "", "", "")
+}
+
+func (s *Store) appendAssistantTurn(conversationID, text string, result json.RawMessage, resultRef, provider, model string) (AssistantTurn, error) {
+	return s.appendAssistantTurnRecord(conversationID, "assistant", text, result, resultRef, provider, model)
+}
+
+func (s *Store) appendActionResultTurn(conversationID, text string, result json.RawMessage, resultRef, provider, model string) (AssistantTurn, error) {
+	return s.appendAssistantTurnRecord(conversationID, "action", text, result, resultRef, provider, model)
+}
+
+func (s *Store) appendAssistantTurnRecord(conversationID, role, text string, result json.RawMessage, resultRef, provider, model string) (AssistantTurn, error) {
+	if role != "assistant" && role != "action" && role != "user" {
+		return AssistantTurn{}, errors.New("invalid assistant turn role")
+	}
+	if len(text) > maxAssistantTurnText {
+		return AssistantTurn{}, fmt.Errorf("turn text exceeds %d bytes", maxAssistantTurnText)
+	}
+	if role == "user" && text == "" {
+		return AssistantTurn{}, errors.New("user turn text is required")
+	}
+	if len(result) > maxAssistantResultJSON {
+		return AssistantTurn{}, fmt.Errorf("structured result exceeds %d bytes", maxAssistantResultJSON)
+	}
+	if len(resultRef) > maxAssistantResultRef {
+		return AssistantTurn{}, fmt.Errorf("structured result reference exceeds %d bytes", maxAssistantResultRef)
+	}
+	if len(result) > 0 && !json.Valid(result) {
+		return AssistantTurn{}, errors.New("structured result must be valid JSON")
+	}
+	if err := validateAssistantMetadata(provider, model); err != nil {
+		return AssistantTurn{}, err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return AssistantTurn{}, err
+	}
+	defer tx.Rollback()
+	workspaceID := s.defaultWorkspaceID()
+	var ignored string
+	if err := tx.QueryRow("SELECT id FROM assistant_conversations WHERE id=? AND workspace_id=?", conversationID, workspaceID).Scan(&ignored); err != nil {
+		return AssistantTurn{}, err
+	}
+	now, id := nowString(), newID("turn")
+	turn := AssistantTurn{
+		ID: id, WorkspaceID: workspaceID, ConversationID: conversationID, Role: role, Content: text,
+		StructuredResult: append(json.RawMessage(nil), result...), StructuredResultRef: resultRef,
+		Provider: provider, Model: model, CreatedAt: now,
+	}
+	resultText := ""
+	if len(result) > 0 {
+		resultText = string(result)
+	}
+	if _, err := tx.Exec(`INSERT INTO assistant_turns(id, workspace_id, conversation_id, role, content, structured_result,
+structured_result_ref, provider, model, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, workspaceID,
+		conversationID, role, text, resultText, resultRef, provider, model, now); err != nil {
+		return AssistantTurn{}, err
+	}
+	title := ""
+	if role == "user" {
+		title = assistantConversationTitle(text)
+	}
+	_, err = tx.Exec(`UPDATE assistant_conversations SET updated_at=?,
+title=CASE WHEN ?<>'' AND (title='' OR title='新对话') THEN ? ELSE title END,
+provider=CASE WHEN ?<>'' THEN ? ELSE provider END,
+model=CASE WHEN ?<>'' THEN ? ELSE model END WHERE id=? AND workspace_id=?`, now, title, title, provider, provider, model, model, conversationID, workspaceID)
+	if err != nil {
+		return AssistantTurn{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return AssistantTurn{}, err
+	}
+	return turn, nil
+}
+
+func assistantConversationTitle(text string) string {
+	value := strings.Join(strings.Fields(text), " ")
+	runes := []rune(value)
+	if len(runes) > 40 {
+		value = string(runes[:40]) + "…"
+	}
+	return value
+}
+
+func validateAssistantMetadata(provider, model string) error {
+	if len(provider) > maxAssistantMetadataLength || len(model) > maxAssistantMetadataLength {
+		return fmt.Errorf("provider and model metadata must be at most %d bytes", maxAssistantMetadataLength)
+	}
+	return nil
+}
+
+func (s *Store) deleteAssistantConversation(id string) error {
+	result, err := s.db.Exec("DELETE FROM assistant_conversations WHERE id=? AND workspace_id=?", id, s.defaultWorkspaceID())
 	if err != nil {
 		return err
 	}
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			rows.Close()
-			return err
-		}
-		names = append(names, name)
-	}
-	if err := rows.Close(); err != nil {
+	count, err := result.RowsAffected()
+	if err != nil {
 		return err
 	}
-	for _, name := range names {
-		now := nowString()
-		if _, err := s.db.Exec("INSERT OR IGNORE INTO projects(id, name, created_at, updated_at) VALUES(?, ?, ?, ?)", newID("project"), name, now, now); err != nil {
-			return err
-		}
+	if count == 0 {
+		return sql.ErrNoRows
 	}
-	_, err = s.db.Exec("UPDATE items SET project_id=COALESCE((SELECT id FROM projects WHERE name=items.project COLLATE NOCASE), '') WHERE project_id='' AND TRIM(project)<>''")
-	return err
+	return nil
 }
 
 func newID(prefix string) string {
@@ -334,7 +315,7 @@ func (s *Store) createDeviceToken(name string) (string, string, error) {
 	}
 	id := newID("device")
 	now := nowString()
-	_, err = s.db.Exec("INSERT INTO device_tokens(id, name, token_hash, created_at, last_used_at) VALUES(?, ?, ?, ?, ?)", id, strings.TrimSpace(name), hashSecret(secret), now, now)
+	_, err = s.db.Exec("INSERT INTO device_tokens(id, workspace_id, name, token_hash, created_at, last_used_at) VALUES(?, ?, ?, ?, ?, ?)", id, s.defaultWorkspaceID(), strings.TrimSpace(name), hashSecret(secret), now, now)
 	return id, secret, err
 }
 
@@ -343,12 +324,20 @@ func (s *Store) validDeviceToken(token string) bool {
 		return false
 	}
 	now := nowString()
-	result, err := s.db.Exec("UPDATE device_tokens SET last_used_at=? WHERE token_hash=? AND revoked_at=''", now, hashSecret(token))
+	result, err := s.db.Exec("UPDATE device_tokens SET last_used_at=? WHERE workspace_id=? AND token_hash=? AND revoked_at=''", now, s.defaultWorkspaceID(), hashSecret(token))
 	if err != nil {
 		return false
 	}
 	count, _ := result.RowsAffected()
 	return count == 1
+}
+
+func (s *Store) revokeDeviceToken(token string) error {
+	if token == "" {
+		return nil
+	}
+	_, err := s.db.Exec("UPDATE device_tokens SET revoked_at=? WHERE workspace_id=? AND token_hash=? AND revoked_at=''", nowString(), s.defaultWorkspaceID(), hashSecret(token))
+	return err
 }
 
 func (s *Store) createCapture(capture Capture) (Capture, error) {
@@ -360,16 +349,41 @@ func (s *Store) createCapture(capture Capture) (Capture, error) {
 	if capture.Status == "" {
 		capture.Status = "received"
 	}
-	_, err := s.db.Exec(`INSERT INTO captures(id, source_type, raw_text, attachment_name, attachment_mime, attachment_path, status, ai_result, error, created_at, updated_at)
-VALUES(?, ?, ?, ?, ?, ?, ?, '', '', ?, ?)`, capture.ID, capture.SourceType, capture.RawText, capture.AttachmentName, capture.AttachmentMime, capture.AttachmentPath, capture.Status, now, now)
-	capture.HasAttachment = capture.AttachmentPath != ""
-	return capture, err
+	capture.WorkspaceID = s.defaultWorkspaceID()
+	if len(capture.Attachments) == 0 && capture.AttachmentPath != "" {
+		capture.Attachments = []CaptureAttachment{{Name: capture.AttachmentName, Mime: capture.AttachmentMime, Path: capture.AttachmentPath}}
+	}
+	if len(capture.Attachments) > 0 {
+		capture.AttachmentName = capture.Attachments[0].Name
+		capture.AttachmentMime = capture.Attachments[0].Mime
+		capture.AttachmentPath = capture.Attachments[0].Path
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Capture{}, err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`INSERT INTO captures(id, workspace_id, source_type, raw_text, attachment_name, attachment_mime, attachment_path, status, ai_result, error, created_at, updated_at)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, '', '', ?, ?)`, capture.ID, capture.WorkspaceID, capture.SourceType, capture.RawText, capture.AttachmentName, capture.AttachmentMime, capture.AttachmentPath, capture.Status, now, now)
+	if err != nil {
+		return Capture{}, err
+	}
+	for ordinal, attachment := range capture.Attachments {
+		if _, err := tx.Exec(`INSERT INTO capture_attachments(capture_id, ordinal, name, mime, path) VALUES(?, ?, ?, ?, ?)`, capture.ID, ordinal, attachment.Name, attachment.Mime, attachment.Path); err != nil {
+			return Capture{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return Capture{}, err
+	}
+	capture.HasAttachment = len(capture.Attachments) > 0
+	return capture, nil
 }
 
 func scanCapture(scanner interface{ Scan(...any) error }) (Capture, error) {
 	var c Capture
 	var ai string
-	err := scanner.Scan(&c.ID, &c.SourceType, &c.RawText, &c.AttachmentName, &c.AttachmentMime, &c.AttachmentPath, &c.Status, &ai, &c.Error, &c.CreatedAt, &c.UpdatedAt)
+	err := scanner.Scan(&c.ID, &c.WorkspaceID, &c.SourceType, &c.RawText, &c.AttachmentName, &c.AttachmentMime, &c.AttachmentPath, &c.Status, &ai, &c.Error, &c.CreatedAt, &c.UpdatedAt)
 	if ai != "" {
 		c.AIResult = json.RawMessage(ai)
 	}
@@ -377,14 +391,46 @@ func scanCapture(scanner interface{ Scan(...any) error }) (Capture, error) {
 	return c, err
 }
 
-const captureColumns = "id, source_type, raw_text, attachment_name, attachment_mime, attachment_path, status, ai_result, error, created_at, updated_at"
+const captureColumns = "id, workspace_id, source_type, raw_text, attachment_name, attachment_mime, attachment_path, status, ai_result, error, created_at, updated_at"
 
 func (s *Store) getCapture(id string) (Capture, error) {
-	return scanCapture(s.db.QueryRow("SELECT "+captureColumns+" FROM captures WHERE id=?", id))
+	capture, err := scanCapture(s.db.QueryRow("SELECT "+captureColumns+" FROM captures WHERE id=? AND workspace_id=?", id, s.defaultWorkspaceID()))
+	if err != nil {
+		return capture, err
+	}
+	if err := s.loadCaptureAttachments(&capture); err != nil {
+		return Capture{}, err
+	}
+	return capture, nil
+}
+
+func (s *Store) loadCaptureAttachments(capture *Capture) error {
+	rows, err := s.db.Query(`SELECT name, mime, path FROM capture_attachments WHERE capture_id=? ORDER BY ordinal`, capture.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	attachments := make([]CaptureAttachment, 0)
+	for rows.Next() {
+		var attachment CaptureAttachment
+		if err := rows.Scan(&attachment.Name, &attachment.Mime, &attachment.Path); err != nil {
+			return err
+		}
+		attachments = append(attachments, attachment)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(attachments) == 0 && capture.AttachmentPath != "" {
+		attachments = append(attachments, CaptureAttachment{Name: capture.AttachmentName, Mime: capture.AttachmentMime, Path: capture.AttachmentPath})
+	}
+	capture.Attachments = attachments
+	capture.HasAttachment = len(attachments) > 0
+	return nil
 }
 
 func (s *Store) listCaptures(limit int) ([]Capture, error) {
-	rows, err := s.db.Query("SELECT "+captureColumns+" FROM captures ORDER BY created_at DESC LIMIT ?", limit)
+	rows, err := s.db.Query("SELECT "+captureColumns+" FROM captures WHERE workspace_id=? ORDER BY created_at DESC LIMIT ?", s.defaultWorkspaceID(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -397,11 +443,22 @@ func (s *Store) listCaptures(limit int) ([]Capture, error) {
 		}
 		values = append(values, value)
 	}
-	return values, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for index := range values {
+		if err := s.loadCaptureAttachments(&values[index]); err != nil {
+			return nil, err
+		}
+	}
+	return values, nil
 }
 
 func (s *Store) deleteCapture(id string) error {
-	result, err := s.db.Exec("DELETE FROM captures WHERE id=?", id)
+	result, err := s.db.Exec("DELETE FROM captures WHERE id=? AND workspace_id=?", id, s.defaultWorkspaceID())
 	if err != nil {
 		return err
 	}
@@ -416,7 +473,7 @@ func (s *Store) deleteCapture(id string) error {
 }
 
 func (s *Store) setCaptureParsing(id string) error {
-	_, err := s.db.Exec("UPDATE captures SET status='parsing', error='', updated_at=? WHERE id=?", nowString(), id)
+	_, err := s.db.Exec("UPDATE captures SET status='parsing', error='', updated_at=? WHERE id=? AND workspace_id=?", nowString(), id, s.defaultWorkspaceID())
 	return err
 }
 
@@ -425,12 +482,12 @@ func (s *Store) setCaptureResult(id string, result ParseResult) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec("UPDATE captures SET status='needs_review', ai_result=?, error='', updated_at=? WHERE id=?", string(data), nowString(), id)
+	_, err = s.db.Exec("UPDATE captures SET status='needs_review', ai_result=?, error='', updated_at=? WHERE id=? AND workspace_id=?", string(data), nowString(), id, s.defaultWorkspaceID())
 	return err
 }
 
 func (s *Store) setCaptureError(id string, parseErr error) error {
-	_, err := s.db.Exec("UPDATE captures SET status='failed', error=?, updated_at=? WHERE id=?", parseErr.Error(), nowString(), id)
+	_, err := s.db.Exec("UPDATE captures SET status='failed', error=?, updated_at=? WHERE id=? AND workspace_id=?", parseErr.Error(), nowString(), id, s.defaultWorkspaceID())
 	return err
 }
 
@@ -493,13 +550,13 @@ func sourceForCapture(captureID string) string {
 	return "capture"
 }
 
-func ensureProjectTx(tx *sql.Tx, name string) (string, error) {
+func ensureProjectTx(tx *sql.Tx, workspaceID, name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", nil
 	}
 	var id string
-	err := tx.QueryRow("SELECT id FROM projects WHERE name=? COLLATE NOCASE", name).Scan(&id)
+	err := tx.QueryRow("SELECT id FROM projects WHERE workspace_id=? AND name=? COLLATE NOCASE", workspaceID, name).Scan(&id)
 	if err == nil {
 		return id, nil
 	}
@@ -507,8 +564,8 @@ func ensureProjectTx(tx *sql.Tx, name string) (string, error) {
 		return "", err
 	}
 	id, now := newID("project"), nowString()
-	if _, err := tx.Exec("INSERT INTO projects(id, name, created_at, updated_at) VALUES(?, ?, ?, ?)", id, name, now, now); err != nil {
-		if queryErr := tx.QueryRow("SELECT id FROM projects WHERE name=? COLLATE NOCASE", name).Scan(&id); queryErr == nil {
+	if _, err := tx.Exec("INSERT INTO projects(id, workspace_id, name, created_at, updated_at) VALUES(?, ?, ?, ?, ?)", id, workspaceID, name, now, now); err != nil {
+		if queryErr := tx.QueryRow("SELECT id FROM projects WHERE workspace_id=? AND name=? COLLATE NOCASE", workspaceID, name).Scan(&id); queryErr == nil {
 			return id, nil
 		}
 		return "", err
@@ -523,6 +580,34 @@ func recordItemEventTx(tx *sql.Tx, itemID, eventType string, data any) error {
 	}
 	_, err = tx.Exec("INSERT INTO item_events(id, item_id, event_type, data_json, created_at) VALUES(?, ?, ?, ?, ?)", newID("event"), itemID, eventType, string(encoded), nowString())
 	return err
+}
+
+func recordProjectEventTx(tx *sql.Tx, workspaceID, projectID, eventType string, data any) error {
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("INSERT INTO project_events(id, project_id, workspace_id, event_type, data_json, created_at) VALUES(?, ?, ?, ?, ?, ?)", newID("project_event"), projectID, workspaceID, eventType, string(encoded), nowString())
+	return err
+}
+
+func (s *Store) listProjectEvents(workspaceID, projectID string, limit int) ([]ProjectEvent, error) {
+	rows, err := s.db.Query("SELECT id, project_id, event_type, data_json, created_at FROM project_events WHERE workspace_id=? AND project_id=? ORDER BY created_at DESC, rowid DESC LIMIT ?", workspaceID, projectID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := []ProjectEvent{}
+	for rows.Next() {
+		var event ProjectEvent
+		var data string
+		if err := rows.Scan(&event.ID, &event.ProjectID, &event.EventType, &data, &event.CreatedAt); err != nil {
+			return nil, err
+		}
+		event.Data = json.RawMessage(data)
+		values = append(values, event)
+	}
+	return values, rows.Err()
 }
 
 func (s *Store) createItems(captureID string, candidates []Candidate, defaultTimezone string) ([]Item, error) {
@@ -540,7 +625,7 @@ func (s *Store) createItems(captureID string, candidates []Candidate, defaultTim
 		tags, _ := json.Marshal(candidate.Tags)
 		people, _ := json.Marshal(candidate.People)
 		now, id := nowString(), newID("item")
-		projectID, err := ensureProjectTx(tx, candidate.Project)
+		projectID, err := ensureProjectTx(tx, defaultPersonalWorkspaceID, candidate.Project)
 		if err != nil {
 			return nil, err
 		}
@@ -548,8 +633,8 @@ func (s *Store) createItems(captureID string, candidates []Candidate, defaultTim
 		if captureID != "" {
 			captureReference = captureID
 		}
-		_, err = tx.Exec(`INSERT INTO items(id, capture_id, type, title, description, start_at, end_at, due_at, reminder_at, timezone, all_day, recurrence_rule, priority, status, certainty, duration_minutes, available_from, available_until, project_id, project, tags_json, location, people_json, version, completed_at, cancelled_at, archived_at, created_at, updated_at)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '', '', '', ?, ?)`, id, captureReference, candidate.Type, candidate.Title, candidate.Description, candidate.StartAt, candidate.EndAt, candidate.DueAt, candidate.ReminderAt, candidate.Timezone, candidate.AllDay, candidate.RecurrenceRule, candidate.Priority, candidate.Certainty, candidate.DurationMinutes, candidate.AvailableFrom, candidate.AvailableUntil, projectID, candidate.Project, string(tags), candidate.Location, string(people), now, now)
+		_, err = tx.Exec(`INSERT INTO items(id, workspace_id, capture_id, type, title, description, start_at, end_at, due_at, reminder_at, timezone, all_day, recurrence_rule, priority, status, certainty, duration_minutes, available_from, available_until, project_id, project, tags_json, location, people_json, version, completed_at, cancelled_at, archived_at, created_at, updated_at)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '', '', '', ?, ?)`, id, defaultPersonalWorkspaceID, captureReference, candidate.Type, candidate.Title, candidate.Description, candidate.StartAt, candidate.EndAt, candidate.DueAt, candidate.ReminderAt, candidate.Timezone, candidate.AllDay, candidate.RecurrenceRule, candidate.Priority, candidate.Certainty, candidate.DurationMinutes, candidate.AvailableFrom, candidate.AvailableUntil, projectID, candidate.Project, string(tags), candidate.Location, string(people), now, now)
 		if err != nil {
 			return nil, err
 		}
@@ -562,10 +647,10 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?,
 		if err := recordItemEventTx(tx, id, "created", map[string]any{"source": sourceForCapture(captureID), "captureId": captureID}); err != nil {
 			return nil, err
 		}
-		created = append(created, Item{ID: id, CaptureID: captureID, Type: candidate.Type, Title: candidate.Title, Description: candidate.Description, StartAt: candidate.StartAt, EndAt: candidate.EndAt, DueAt: candidate.DueAt, ReminderAt: candidate.ReminderAt, Timezone: candidate.Timezone, AllDay: candidate.AllDay, RecurrenceRule: candidate.RecurrenceRule, Priority: candidate.Priority, Status: "todo", Certainty: candidate.Certainty, DurationMinutes: candidate.DurationMinutes, AvailableFrom: candidate.AvailableFrom, AvailableUntil: candidate.AvailableUntil, ProjectID: projectID, Project: candidate.Project, Tags: candidate.Tags, Location: candidate.Location, People: candidate.People, Version: 1, CreatedAt: now, UpdatedAt: now})
+		created = append(created, Item{ID: id, WorkspaceID: defaultPersonalWorkspaceID, CaptureID: captureID, Type: candidate.Type, Title: candidate.Title, Description: candidate.Description, StartAt: candidate.StartAt, EndAt: candidate.EndAt, DueAt: candidate.DueAt, ReminderAt: candidate.ReminderAt, Timezone: candidate.Timezone, AllDay: candidate.AllDay, RecurrenceRule: candidate.RecurrenceRule, Priority: candidate.Priority, Status: "todo", Certainty: candidate.Certainty, DurationMinutes: candidate.DurationMinutes, AvailableFrom: candidate.AvailableFrom, AvailableUntil: candidate.AvailableUntil, ProjectID: projectID, Project: candidate.Project, Tags: candidate.Tags, Location: candidate.Location, People: candidate.People, Version: 1, CreatedAt: now, UpdatedAt: now})
 	}
 	if captureID != "" {
-		if _, err := tx.Exec("UPDATE captures SET status='confirmed', updated_at=? WHERE id=?", nowString(), captureID); err != nil {
+		if _, err := tx.Exec("UPDATE captures SET status='confirmed', updated_at=? WHERE id=? AND workspace_id=?", nowString(), captureID, defaultPersonalWorkspaceID); err != nil {
 			return nil, err
 		}
 	}
@@ -575,13 +660,13 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?,
 	return created, nil
 }
 
-const itemColumns = "id, COALESCE(capture_id, ''), type, title, description, start_at, end_at, due_at, reminder_at, timezone, all_day, recurrence_rule, priority, status, certainty, duration_minutes, available_from, available_until, project_id, project, tags_json, location, people_json, version, completed_at, cancelled_at, archived_at, created_at, updated_at"
+const itemColumns = "id, workspace_id, COALESCE(capture_id, ''), type, title, description, start_at, end_at, due_at, reminder_at, timezone, all_day, recurrence_rule, priority, status, certainty, duration_minutes, available_from, available_until, project_id, project, tags_json, location, people_json, version, completed_at, cancelled_at, archived_at, archived_from_status, created_at, updated_at"
 
 func scanItem(scanner interface{ Scan(...any) error }) (Item, error) {
 	var item Item
 	var allDay int
 	var tags, people string
-	err := scanner.Scan(&item.ID, &item.CaptureID, &item.Type, &item.Title, &item.Description, &item.StartAt, &item.EndAt, &item.DueAt, &item.ReminderAt, &item.Timezone, &allDay, &item.RecurrenceRule, &item.Priority, &item.Status, &item.Certainty, &item.DurationMinutes, &item.AvailableFrom, &item.AvailableUntil, &item.ProjectID, &item.Project, &tags, &item.Location, &people, &item.Version, &item.CompletedAt, &item.CancelledAt, &item.ArchivedAt, &item.CreatedAt, &item.UpdatedAt)
+	err := scanner.Scan(&item.ID, &item.WorkspaceID, &item.CaptureID, &item.Type, &item.Title, &item.Description, &item.StartAt, &item.EndAt, &item.DueAt, &item.ReminderAt, &item.Timezone, &allDay, &item.RecurrenceRule, &item.Priority, &item.Status, &item.Certainty, &item.DurationMinutes, &item.AvailableFrom, &item.AvailableUntil, &item.ProjectID, &item.Project, &tags, &item.Location, &people, &item.Version, &item.CompletedAt, &item.CancelledAt, &item.ArchivedAt, &item.ArchivedFromStatus, &item.CreatedAt, &item.UpdatedAt)
 	item.AllDay = allDay != 0
 	_ = json.Unmarshal([]byte(tags), &item.Tags)
 	_ = json.Unmarshal([]byte(people), &item.People)
@@ -595,14 +680,15 @@ func scanItem(scanner interface{ Scan(...any) error }) (Item, error) {
 }
 
 func (s *Store) getItem(id string) (Item, error) {
-	return scanItem(s.db.QueryRow("SELECT "+itemColumns+" FROM items WHERE id=?", id))
+	return scanItem(s.db.QueryRow("SELECT "+itemColumns+" FROM items WHERE id=? AND workspace_id=?", id, s.defaultWorkspaceID()))
 }
 
 func (s *Store) listItems(status string, limit int) ([]Item, error) {
 	query := "SELECT " + itemColumns + " FROM items"
-	args := []any{}
+	args := []any{s.defaultWorkspaceID()}
+	query += " WHERE workspace_id=?"
 	if status != "" {
-		query += " WHERE status=?"
+		query += " AND status=?"
 		args = append(args, status)
 	}
 	query += " ORDER BY CASE WHEN start_at<>'' THEN start_at WHEN due_at<>'' THEN due_at ELSE created_at END ASC LIMIT ?"
@@ -624,15 +710,16 @@ func (s *Store) listItems(status string, limit int) ([]Item, error) {
 }
 
 func (s *Store) listProjects() ([]Project, error) {
-	rows, err := s.db.Query(`SELECT p.id, p.name, p.description, p.status, p.priority, p.color, p.goal, p.deadline, p.review_at,
+	rows, err := s.db.Query(`SELECT p.id, p.workspace_id, p.name, p.description, p.status, p.priority, p.color, p.goal, p.deadline, p.review_at, p.archived_at, p.archived_from_status, p.version,
   COUNT(i.id),
   SUM(CASE WHEN i.status IN ('inbox','todo','doing') THEN 1 ELSE 0 END),
   SUM(CASE WHEN i.status='done' THEN 1 ELSE 0 END),
   p.created_at, p.updated_at
 FROM projects p
-LEFT JOIN items i ON i.project_id=p.id
+LEFT JOIN items i ON i.project_id=p.id AND i.workspace_id=p.workspace_id
+WHERE p.workspace_id=?
 GROUP BY p.id
-ORDER BY CASE p.status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 WHEN 'blocked' THEN 2 WHEN 'completed' THEN 3 ELSE 4 END, p.priority DESC, p.updated_at DESC`)
+ORDER BY CASE p.status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 WHEN 'blocked' THEN 2 WHEN 'completed' THEN 3 ELSE 4 END, p.priority DESC, p.updated_at DESC`, s.defaultWorkspaceID())
 	if err != nil {
 		return nil, err
 	}
@@ -640,7 +727,7 @@ ORDER BY CASE p.status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 WHEN 'blocked'
 	values := make([]Project, 0)
 	for rows.Next() {
 		var value Project
-		if err := rows.Scan(&value.ID, &value.Name, &value.Description, &value.Status, &value.Priority, &value.Color, &value.Goal, &value.Deadline, &value.ReviewAt, &value.ItemCount, &value.OpenCount, &value.DoneCount, &value.CreatedAt, &value.UpdatedAt); err != nil {
+		if err := rows.Scan(&value.ID, &value.WorkspaceID, &value.Name, &value.Description, &value.Status, &value.Priority, &value.Color, &value.Goal, &value.Deadline, &value.ReviewAt, &value.ArchivedAt, &value.ArchivedFromStatus, &value.Version, &value.ItemCount, &value.OpenCount, &value.DoneCount, &value.CreatedAt, &value.UpdatedAt); err != nil {
 			return nil, err
 		}
 		values = append(values, value)
@@ -650,11 +737,23 @@ ORDER BY CASE p.status WHEN 'active' THEN 0 WHEN 'waiting' THEN 1 WHEN 'blocked'
 
 func (s *Store) getProject(id string) (Project, error) {
 	var value Project
-	err := s.db.QueryRow(`SELECT p.id, p.name, p.description, p.status, p.priority, p.color, p.goal, p.deadline, p.review_at,
+	err := s.db.QueryRow(`SELECT p.id, p.workspace_id, p.name, p.description, p.status, p.priority, p.color, p.goal, p.deadline, p.review_at, p.archived_at, p.archived_from_status, p.version,
   COUNT(i.id), SUM(CASE WHEN i.status IN ('inbox','todo','doing') THEN 1 ELSE 0 END), SUM(CASE WHEN i.status='done' THEN 1 ELSE 0 END),
   p.created_at, p.updated_at
-FROM projects p LEFT JOIN items i ON i.project_id=p.id WHERE p.id=? GROUP BY p.id`, id).Scan(&value.ID, &value.Name, &value.Description, &value.Status, &value.Priority, &value.Color, &value.Goal, &value.Deadline, &value.ReviewAt, &value.ItemCount, &value.OpenCount, &value.DoneCount, &value.CreatedAt, &value.UpdatedAt)
+FROM projects p LEFT JOIN items i ON i.project_id=p.id AND i.workspace_id=p.workspace_id WHERE p.id=? AND p.workspace_id=? GROUP BY p.id`, id, s.defaultWorkspaceID()).Scan(&value.ID, &value.WorkspaceID, &value.Name, &value.Description, &value.Status, &value.Priority, &value.Color, &value.Goal, &value.Deadline, &value.ReviewAt, &value.ArchivedAt, &value.ArchivedFromStatus, &value.Version, &value.ItemCount, &value.OpenCount, &value.DoneCount, &value.CreatedAt, &value.UpdatedAt)
 	return value, err
+}
+
+func (s *Store) AssistantItemVersion(workspaceID, itemID string) (int, error) {
+	var version int
+	err := s.db.QueryRow("SELECT version FROM items WHERE id=? AND workspace_id=?", itemID, workspaceID).Scan(&version)
+	return version, err
+}
+
+func (s *Store) AssistantProjectVersion(workspaceID, projectID string) (int, error) {
+	var version int
+	err := s.db.QueryRow("SELECT version FROM projects WHERE id=? AND workspace_id=?", projectID, workspaceID).Scan(&version)
+	return version, err
 }
 
 func normalizeProject(project Project) Project {
@@ -683,9 +782,20 @@ func (s *Store) createProject(project Project) (Project, error) {
 	if project.Name == "" {
 		return Project{}, errors.New("project name is required")
 	}
-	project.ID, project.CreatedAt, project.UpdatedAt = newID("project"), nowString(), nowString()
-	_, err := s.db.Exec(`INSERT INTO projects(id, name, description, status, priority, color, goal, deadline, review_at, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, project.ID, project.Name, project.Description, project.Status, project.Priority, project.Color, project.Goal, project.Deadline, project.ReviewAt, project.CreatedAt, project.UpdatedAt)
+	project.ID, project.CreatedAt, project.UpdatedAt, project.Version = newID("project"), nowString(), nowString(), 1
+	project.WorkspaceID = s.defaultWorkspaceID()
+	tx, err := s.db.Begin()
 	if err != nil {
+		return Project{}, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT INTO projects(id, workspace_id, name, description, status, priority, color, goal, deadline, review_at, version, archived_at, archived_from_status, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, project.ID, project.WorkspaceID, project.Name, project.Description, project.Status, project.Priority, project.Color, project.Goal, project.Deadline, project.ReviewAt, project.Version, project.ArchivedAt, project.ArchivedFromStatus, project.CreatedAt, project.UpdatedAt); err != nil {
+		return Project{}, err
+	}
+	if err := recordProjectEventTx(tx, project.WorkspaceID, project.ID, "created", map[string]any{"after": project}); err != nil {
+		return Project{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return Project{}, err
 	}
 	return s.getProject(project.ID)
@@ -700,24 +810,219 @@ func (s *Store) updateProject(project Project) (Project, error) {
 	if err != nil {
 		return Project{}, err
 	}
+	expectedVersion := project.Version
+	if expectedVersion < 1 {
+		return Project{}, errConflict
+	}
+	if expectedVersion != before.Version {
+		return Project{}, errConflict
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return Project{}, err
 	}
 	defer tx.Rollback()
 	now := nowString()
-	if _, err := tx.Exec(`UPDATE projects SET name=?, description=?, status=?, priority=?, color=?, goal=?, deadline=?, review_at=?, updated_at=? WHERE id=?`, project.Name, project.Description, project.Status, project.Priority, project.Color, project.Goal, project.Deadline, project.ReviewAt, now, project.ID); err != nil {
+	if project.Status == "archived" && before.Status != "archived" {
+		project.ArchivedAt, project.ArchivedFromStatus = now, before.Status
+	} else if project.Status != "archived" {
+		project.ArchivedAt, project.ArchivedFromStatus = "", ""
+	} else {
+		project.ArchivedAt, project.ArchivedFromStatus = before.ArchivedAt, before.ArchivedFromStatus
+	}
+	project.Version = expectedVersion + 1
+	result, err := tx.Exec(`UPDATE projects SET name=?, description=?, status=?, priority=?, color=?, goal=?, deadline=?, review_at=?, archived_at=?, archived_from_status=?, version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?`, project.Name, project.Description, project.Status, project.Priority, project.Color, project.Goal, project.Deadline, project.ReviewAt, project.ArchivedAt, project.ArchivedFromStatus, now, project.ID, s.defaultWorkspaceID(), expectedVersion)
+	if err != nil {
 		return Project{}, err
 	}
+	if count, _ := result.RowsAffected(); count != 1 {
+		return Project{}, errConflict
+	}
 	if project.Name != before.Name {
-		if _, err := tx.Exec("UPDATE items SET project=?, updated_at=? WHERE project_id=?", project.Name, now, project.ID); err != nil {
+		rows, err := tx.Query("SELECT "+itemColumns+" FROM items WHERE project_id=? AND workspace_id=?", project.ID, s.defaultWorkspaceID())
+		if err != nil {
 			return Project{}, err
 		}
+		var items []Item
+		for rows.Next() {
+			item, scanErr := scanItem(rows)
+			if scanErr != nil {
+				rows.Close()
+				return Project{}, scanErr
+			}
+			items = append(items, item)
+		}
+		if err := rows.Close(); err != nil {
+			return Project{}, err
+		}
+		for _, item := range items {
+			result, err := tx.Exec("UPDATE items SET project=?, version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?", project.Name, now, item.ID, s.defaultWorkspaceID(), item.Version)
+			if err != nil {
+				return Project{}, err
+			}
+			count, _ := result.RowsAffected()
+			if count != 1 {
+				return Project{}, errConflict
+			}
+			item.Project, item.Version, item.UpdatedAt = project.Name, item.Version+1, now
+			if err := recordItemEventTx(tx, item.ID, "project_renamed", map[string]any{"before": before.Name, "after": project.Name, "version": item.Version}); err != nil {
+				return Project{}, err
+			}
+		}
+	}
+	if err := recordProjectEventTx(tx, project.WorkspaceID, project.ID, "updated", map[string]any{"before": before, "after": project}); err != nil {
+		return Project{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return Project{}, err
 	}
 	return s.getProject(project.ID)
+}
+
+func (s *Store) mergeProject(sourceID, targetID string, expectedVersions map[string]int, expectedProjectVersions ...int) error {
+	if sourceID == targetID {
+		return errors.New("source and target projects must differ")
+	}
+	if len(expectedProjectVersions) != 0 && len(expectedProjectVersions) != 2 {
+		return errors.New("merge requires source and target project versions")
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	workspaceID := s.defaultWorkspaceID()
+	var sourceName, targetName, sourceStatus, sourceArchivedAt, sourceArchivedFrom string
+	var sourceVersion, targetVersion int
+	if err := tx.QueryRow("SELECT name, status, archived_at, archived_from_status, version FROM projects WHERE id=? AND workspace_id=?", sourceID, workspaceID).Scan(&sourceName, &sourceStatus, &sourceArchivedAt, &sourceArchivedFrom, &sourceVersion); err != nil {
+		return err
+	}
+	if err := tx.QueryRow("SELECT name, version FROM projects WHERE id=? AND workspace_id=?", targetID, workspaceID).Scan(&targetName, &targetVersion); err != nil {
+		return err
+	}
+	if len(expectedProjectVersions) == 2 && (expectedProjectVersions[0] != sourceVersion || expectedProjectVersions[1] != targetVersion) {
+		return errConflict
+	}
+	rows, err := tx.Query("SELECT "+itemColumns+" FROM items WHERE project_id=? AND workspace_id=?", sourceID, workspaceID)
+	if err != nil {
+		return err
+	}
+	var items []Item
+	for rows.Next() {
+		item, scanErr := scanItem(rows)
+		if scanErr != nil {
+			rows.Close()
+			return scanErr
+		}
+		items = append(items, item)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if len(items) != len(expectedVersions) {
+		return errConflict
+	}
+	for _, item := range items {
+		if expectedVersions[item.ID] != item.Version {
+			return errConflict
+		}
+	}
+	now := nowString()
+	result, err := tx.Exec("UPDATE projects SET version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?", now, targetID, workspaceID, targetVersion)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count != 1 {
+		return errConflict
+	}
+	for _, item := range items {
+		result, err := tx.Exec("UPDATE items SET project_id=?, project=?, version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?", targetID, targetName, now, item.ID, workspaceID, expectedVersions[item.ID])
+		if err != nil {
+			return err
+		}
+		count, _ := result.RowsAffected()
+		if count != 1 {
+			return errConflict
+		}
+		if err := recordItemEventTx(tx, item.ID, "project_merged", map[string]any{"fromProjectId": sourceID, "fromProject": sourceName, "toProjectId": targetID, "toProject": targetName, "version": item.Version + 1}); err != nil {
+			return err
+		}
+	}
+	if sourceStatus == "archived" {
+		return errConflict
+	}
+	now = nowString()
+	result, err = tx.Exec("UPDATE projects SET status='archived', archived_at=?, archived_from_status=?, version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?", now, sourceStatus, now, sourceID, workspaceID, sourceVersion)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count != 1 {
+		return errConflict
+	}
+	if err := recordProjectEventTx(tx, workspaceID, sourceID, "archived_by_merge", map[string]any{"beforeStatus": sourceStatus, "afterStatus": "archived", "archivedFromStatus": sourceStatus, "archivedAt": now, "previousArchivedAt": sourceArchivedAt, "previousArchivedFromStatus": sourceArchivedFrom}); err != nil {
+		return err
+	}
+	if err := recordProjectEventTx(tx, workspaceID, targetID, "merge_received", map[string]any{"sourceProjectId": sourceID, "sourceProject": sourceName, "version": targetVersion + 1}); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// moveItemsToProject applies one allowlisted bulk move atomically. Callers
+// validate workspace ownership and versions before invoking this helper; the
+// transaction repeats those checks so a concurrent edit cannot be overwritten.
+func (s *Store) moveItemsToProject(itemIDs []string, targetProjectID string, expectedVersions map[string]int, expectedProjectVersions ...int) ([]Item, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	workspaceID := s.defaultWorkspaceID()
+	var targetName string
+	var targetVersion int
+	if err := tx.QueryRow("SELECT name, version FROM projects WHERE id=? AND workspace_id=?", targetProjectID, workspaceID).Scan(&targetName, &targetVersion); err != nil {
+		return nil, err
+	}
+	if len(expectedProjectVersions) > 0 && (len(expectedProjectVersions) != 1 || expectedProjectVersions[0] != targetVersion) {
+		return nil, errConflict
+	}
+	updated := make([]Item, 0, len(itemIDs))
+	for _, id := range itemIDs {
+		item, err := scanItem(tx.QueryRow("SELECT "+itemColumns+" FROM items WHERE id=? AND workspace_id=?", id, workspaceID))
+		if err != nil {
+			return nil, err
+		}
+		if expected, ok := expectedVersions[id]; ok && expected != item.Version {
+			return nil, errConflict
+		}
+		now := nowString()
+		result, err := tx.Exec("UPDATE items SET project_id=?, project=?, version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?", targetProjectID, targetName, now, id, workspaceID, item.Version)
+		if err != nil {
+			return nil, err
+		}
+		count, _ := result.RowsAffected()
+		if count != 1 {
+			return nil, errConflict
+		}
+		item.ProjectID, item.Project, item.Version, item.UpdatedAt = targetProjectID, targetName, item.Version+1, now
+		if err := recordItemEventTx(tx, id, "project_moved", map[string]any{"toProjectId": targetProjectID, "toProject": targetName, "version": item.Version}); err != nil {
+			return nil, err
+		}
+		updated = append(updated, item)
+	}
+	if len(expectedProjectVersions) > 0 {
+		result, err := tx.Exec("UPDATE projects SET version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?", nowString(), targetProjectID, workspaceID, targetVersion)
+		if err != nil {
+			return nil, err
+		}
+		if count, _ := result.RowsAffected(); count != 1 {
+			return nil, errConflict
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }
 
 func (s *Store) listItemEvents(itemID string, limit int) ([]ItemEvent, error) {
@@ -727,7 +1032,7 @@ func (s *Store) listItemEvents(itemID string, limit int) ([]ItemEvent, error) {
 		query += " WHERE item_id=?"
 		args = append(args, itemID)
 	}
-	query += " ORDER BY created_at DESC LIMIT ?"
+	query += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
 	args = append(args, limit)
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -772,10 +1077,10 @@ func normalizeMemory(memory Memory) Memory {
 }
 
 func (s *Store) listMemories(status string) ([]Memory, error) {
-	query := "SELECT id, kind, memory_key, content, scope, status, evidence_count, created_at, updated_at FROM memories"
-	args := []any{}
+	query := "SELECT id, workspace_id, kind, memory_key, content, scope, status, evidence_count, created_at, updated_at FROM memories WHERE workspace_id=?"
+	args := []any{s.defaultWorkspaceID()}
 	if status != "" {
-		query += " WHERE status=?"
+		query += " AND status=?"
 		args = append(args, status)
 	}
 	query += " ORDER BY CASE status WHEN 'proposed' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, updated_at DESC"
@@ -787,7 +1092,7 @@ func (s *Store) listMemories(status string) ([]Memory, error) {
 	values := make([]Memory, 0)
 	for rows.Next() {
 		var value Memory
-		if err := rows.Scan(&value.ID, &value.Kind, &value.Key, &value.Content, &value.Scope, &value.Status, &value.EvidenceCount, &value.CreatedAt, &value.UpdatedAt); err != nil {
+		if err := rows.Scan(&value.ID, &value.WorkspaceID, &value.Kind, &value.Key, &value.Content, &value.Scope, &value.Status, &value.EvidenceCount, &value.CreatedAt, &value.UpdatedAt); err != nil {
 			return nil, err
 		}
 		values = append(values, value)
@@ -801,7 +1106,8 @@ func (s *Store) createMemory(memory Memory) (Memory, error) {
 		return Memory{}, errors.New("memory content is required")
 	}
 	memory.ID, memory.CreatedAt, memory.UpdatedAt = newID("memory"), nowString(), nowString()
-	_, err := s.db.Exec(`INSERT INTO memories(id, kind, memory_key, content, scope, status, evidence_count, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`, memory.ID, memory.Kind, memory.Key, memory.Content, memory.Scope, memory.Status, memory.EvidenceCount, memory.CreatedAt, memory.UpdatedAt)
+	memory.WorkspaceID = s.defaultWorkspaceID()
+	_, err := s.db.Exec(`INSERT INTO memories(id, workspace_id, kind, memory_key, content, scope, status, evidence_count, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, memory.ID, memory.WorkspaceID, memory.Kind, memory.Key, memory.Content, memory.Scope, memory.Status, memory.EvidenceCount, memory.CreatedAt, memory.UpdatedAt)
 	return memory, err
 }
 
@@ -811,7 +1117,7 @@ func (s *Store) updateMemory(memory Memory) (Memory, error) {
 		return Memory{}, errors.New("memory content is required")
 	}
 	memory.UpdatedAt = nowString()
-	result, err := s.db.Exec(`UPDATE memories SET kind=?, content=?, scope=?, status=?, evidence_count=?, updated_at=? WHERE id=?`, memory.Kind, memory.Content, memory.Scope, memory.Status, memory.EvidenceCount, memory.UpdatedAt, memory.ID)
+	result, err := s.db.Exec(`UPDATE memories SET kind=?, content=?, scope=?, status=?, evidence_count=?, updated_at=? WHERE id=? AND workspace_id=?`, memory.Kind, memory.Content, memory.Scope, memory.Status, memory.EvidenceCount, memory.UpdatedAt, memory.ID, s.defaultWorkspaceID())
 	if err != nil {
 		return Memory{}, err
 	}
@@ -819,7 +1125,7 @@ func (s *Store) updateMemory(memory Memory) (Memory, error) {
 	if count != 1 {
 		return Memory{}, sql.ErrNoRows
 	}
-	err = s.db.QueryRow("SELECT memory_key, created_at FROM memories WHERE id=?", memory.ID).Scan(&memory.Key, &memory.CreatedAt)
+	err = s.db.QueryRow("SELECT memory_key, created_at FROM memories WHERE id=? AND workspace_id=?", memory.ID, s.defaultWorkspaceID()).Scan(&memory.Key, &memory.CreatedAt)
 	return memory, err
 }
 
@@ -896,7 +1202,7 @@ func (s *Store) recordCaptureCorrections(capture Capture, confirmed ParseResult,
 			}
 			oldJSON, _ := json.Marshal(oldValue)
 			newJSON, _ := json.Marshal(newValue)
-			if _, err := tx.Exec(`INSERT INTO correction_events(id, capture_id, field, context, before_json, after_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)`, newID("correction"), capture.ID, field.name, period, string(oldJSON), string(newJSON), nowString()); err != nil {
+			if _, err := tx.Exec(`INSERT INTO correction_events(id, workspace_id, capture_id, field, context, before_json, after_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`, newID("correction"), s.defaultWorkspaceID(), capture.ID, field.name, period, string(oldJSON), string(newJSON), nowString()); err != nil {
 				return err
 			}
 			if period != "" && (field.name == "startAt" || field.name == "dueAt" || field.name == "reminderAt") {
@@ -905,13 +1211,13 @@ func (s *Store) recordCaptureCorrections(capture Capture, confirmed ParseResult,
 					continue
 				}
 				var count int
-				if err := tx.QueryRow(`SELECT COUNT(*) FROM correction_events WHERE field=? AND context=? AND after_json=?`, field.name, period, string(newJSON)).Scan(&count); err != nil {
+				if err := tx.QueryRow(`SELECT COUNT(*) FROM correction_events WHERE workspace_id=? AND field=? AND context=? AND after_json=?`, s.defaultWorkspaceID(), field.name, period, string(newJSON)).Scan(&count); err != nil {
 					return err
 				}
 				if count >= 2 {
 					key := "fuzzy-time:" + period + ":" + field.name
 					content := "当用户说“" + period + "”时，默认将" + field.name + "设为当地时间 " + clock + "。"
-					_, err := tx.Exec(`INSERT INTO memories(id, kind, memory_key, content, scope, status, evidence_count, created_at, updated_at) VALUES(?, 'preference', ?, ?, 'global', 'proposed', ?, ?, ?) ON CONFLICT(memory_key, status) WHERE memory_key<>'' DO UPDATE SET content=excluded.content, evidence_count=excluded.evidence_count, updated_at=excluded.updated_at`, newID("memory"), key, content, count, nowString(), nowString())
+					_, err := tx.Exec(`INSERT INTO memories(id, workspace_id, kind, memory_key, content, scope, status, evidence_count, created_at, updated_at) VALUES(?, ?, 'preference', ?, ?, 'global', 'proposed', ?, ?, ?) ON CONFLICT(memory_key, status) WHERE memory_key<>'' DO UPDATE SET content=excluded.content, evidence_count=excluded.evidence_count, updated_at=excluded.updated_at`, newID("memory"), s.defaultWorkspaceID(), key, content, count, nowString(), nowString())
 					if err != nil {
 						return err
 					}
@@ -946,17 +1252,25 @@ func (s *Store) updateItem(item Item) (Item, error) {
 	tags, _ := json.Marshal(candidate.Tags)
 	people, _ := json.Marshal(candidate.People)
 	now := nowString()
-	item.CompletedAt, item.CancelledAt, item.ArchivedAt = before.CompletedAt, before.CancelledAt, before.ArchivedAt
+	item.CompletedAt, item.CancelledAt, item.ArchivedAt, item.ArchivedFromStatus = before.CompletedAt, before.CancelledAt, before.ArchivedAt, before.ArchivedFromStatus
 	if item.Status != before.Status {
 		switch item.Status {
 		case "done":
-			item.CompletedAt, item.CancelledAt, item.ArchivedAt = now, "", ""
+			completedAt := now
+			if before.Status == "archived" && before.ArchivedFromStatus == "done" {
+				completedAt = before.CompletedAt
+			}
+			item.CompletedAt, item.CancelledAt, item.ArchivedAt, item.ArchivedFromStatus = completedAt, "", "", ""
 		case "cancelled":
-			item.CompletedAt, item.CancelledAt, item.ArchivedAt = "", now, ""
+			cancelledAt := now
+			if before.Status == "archived" && before.ArchivedFromStatus == "cancelled" {
+				cancelledAt = before.CancelledAt
+			}
+			item.CompletedAt, item.CancelledAt, item.ArchivedAt, item.ArchivedFromStatus = "", cancelledAt, "", ""
 		case "archived":
-			item.ArchivedAt = now
+			item.ArchivedAt, item.ArchivedFromStatus = now, before.Status
 		default:
-			item.CompletedAt, item.CancelledAt, item.ArchivedAt = "", "", ""
+			item.CompletedAt, item.CancelledAt, item.ArchivedAt, item.ArchivedFromStatus = "", "", "", ""
 		}
 	}
 	tx, err := s.db.Begin()
@@ -964,12 +1278,24 @@ func (s *Store) updateItem(item Item) (Item, error) {
 		return Item{}, err
 	}
 	defer tx.Rollback()
-	projectID, err := ensureProjectTx(tx, item.Project)
-	if err != nil {
-		return Item{}, err
+	projectID := ""
+	if item.ProjectID != "" && item.ProjectID != before.ProjectID {
+		var projectName string
+		if err := tx.QueryRow("SELECT name FROM projects WHERE id=? AND workspace_id=?", item.ProjectID, s.defaultWorkspaceID()).Scan(&projectName); err != nil {
+			return Item{}, err
+		}
+		if item.Project != "" && !strings.EqualFold(strings.TrimSpace(item.Project), projectName) {
+			return Item{}, errors.New("project id and name do not match")
+		}
+		item.Project, projectID = projectName, item.ProjectID
+	} else {
+		projectID, err = ensureProjectTx(tx, s.defaultWorkspaceID(), item.Project)
+		if err != nil {
+			return Item{}, err
+		}
 	}
 	item.ProjectID = projectID
-	result, err := tx.Exec(`UPDATE items SET type=?, title=?, description=?, start_at=?, end_at=?, due_at=?, reminder_at=?, timezone=?, all_day=?, recurrence_rule=?, priority=?, status=?, certainty=?, duration_minutes=?, available_from=?, available_until=?, project_id=?, project=?, tags_json=?, location=?, people_json=?, completed_at=?, cancelled_at=?, archived_at=?, version=version+1, updated_at=? WHERE id=? AND version=?`, item.Type, item.Title, item.Description, item.StartAt, item.EndAt, item.DueAt, item.ReminderAt, item.Timezone, item.AllDay, item.RecurrenceRule, item.Priority, item.Status, item.Certainty, item.DurationMinutes, item.AvailableFrom, item.AvailableUntil, projectID, item.Project, string(tags), item.Location, string(people), item.CompletedAt, item.CancelledAt, item.ArchivedAt, now, item.ID, item.Version)
+	result, err := tx.Exec(`UPDATE items SET type=?, title=?, description=?, start_at=?, end_at=?, due_at=?, reminder_at=?, timezone=?, all_day=?, recurrence_rule=?, priority=?, status=?, certainty=?, duration_minutes=?, available_from=?, available_until=?, project_id=?, project=?, tags_json=?, location=?, people_json=?, completed_at=?, cancelled_at=?, archived_at=?, archived_from_status=?, version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?`, item.Type, item.Title, item.Description, item.StartAt, item.EndAt, item.DueAt, item.ReminderAt, item.Timezone, item.AllDay, item.RecurrenceRule, item.Priority, item.Status, item.Certainty, item.DurationMinutes, item.AvailableFrom, item.AvailableUntil, projectID, item.Project, string(tags), item.Location, string(people), item.CompletedAt, item.CancelledAt, item.ArchivedAt, item.ArchivedFromStatus, now, item.ID, s.defaultWorkspaceID(), item.Version)
 	if err != nil {
 		return Item{}, err
 	}
@@ -977,7 +1303,7 @@ func (s *Store) updateItem(item Item) (Item, error) {
 	if count != 1 {
 		return Item{}, errConflict
 	}
-	if _, err := tx.Exec("DELETE FROM reminders WHERE item_id=? AND status='pending'", item.ID); err != nil {
+	if _, err := tx.Exec("DELETE FROM reminders WHERE item_id=? AND EXISTS (SELECT 1 FROM items WHERE items.id=reminders.item_id AND items.workspace_id=?) AND status='pending'", item.ID, s.defaultWorkspaceID()); err != nil {
 		return Item{}, err
 	}
 	if item.ReminderAt != "" && item.Status != "done" && item.Status != "cancelled" && item.Status != "archived" {
@@ -1016,11 +1342,78 @@ func (s *Store) completeItem(id string) (Item, error) {
 	return s.setItemStatus(id, "done")
 }
 
+func (s *Store) completeItemExpected(id string, expected int) (Item, error) {
+	item, err := s.getItem(id)
+	if err != nil {
+		return Item{}, err
+	}
+	if item.Version != expected {
+		return Item{}, errConflict
+	}
+	item.Version, item.Status = expected, "done"
+	return s.updateItem(item)
+}
+
 func (s *Store) cancelItem(id string) (Item, error) { return s.setItemStatus(id, "cancelled") }
 
-func (s *Store) reopenItem(id string) (Item, error) { return s.setItemStatus(id, "todo") }
+func (s *Store) reopenItem(id string) (Item, error) {
+	item, err := s.getItem(id)
+	if err != nil {
+		return Item{}, err
+	}
+	if item.Status == "archived" && item.ArchivedFromStatus != "" {
+		item.Status = item.ArchivedFromStatus
+	} else {
+		item.Status = "todo"
+	}
+	return s.updateItem(item)
+}
+
+func (s *Store) reopenItemExpected(id string, expected int) (Item, error) {
+	item, err := s.getItem(id)
+	if err != nil {
+		return Item{}, err
+	}
+	if item.Version != expected {
+		return Item{}, errConflict
+	}
+	if item.Status == "archived" && item.ArchivedFromStatus != "" {
+		item.Status = item.ArchivedFromStatus
+	} else {
+		item.Status = "todo"
+	}
+	item.Version = expected
+	return s.updateItem(item)
+}
 
 func (s *Store) archiveItem(id string) (Item, error) { return s.setItemStatus(id, "archived") }
+
+func (s *Store) archiveItemExpected(id string, expected int) (Item, error) {
+	item, err := s.getItem(id)
+	if err != nil {
+		return Item{}, err
+	}
+	if item.Version != expected {
+		return Item{}, errConflict
+	}
+	item.Version, item.Status = expected, "archived"
+	return s.updateItem(item)
+}
+
+func (s *Store) purgeItem(id string) error {
+	result, err := s.db.Exec("DELETE FROM items WHERE id=? AND workspace_id=?", id, s.defaultWorkspaceID())
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
 
 func (s *Store) setItemStatus(id, status string) (Item, error) {
 	item, err := s.getItem(id)
@@ -1032,9 +1425,16 @@ func (s *Store) setItemStatus(id, status string) (Item, error) {
 }
 
 func (s *Store) snoozeItem(id string, remindAt string) (Item, error) {
+	return s.snoozeItemExpected(id, remindAt, nil)
+}
+
+func (s *Store) snoozeItemExpected(id string, remindAt string, expected *int) (Item, error) {
 	before, err := s.getItem(id)
 	if err != nil {
 		return Item{}, err
+	}
+	if expected != nil && before.Version != *expected {
+		return Item{}, errConflict
 	}
 	now := nowString()
 	tx, err := s.db.Begin()
@@ -1042,13 +1442,13 @@ func (s *Store) snoozeItem(id string, remindAt string) (Item, error) {
 		return Item{}, err
 	}
 	defer tx.Rollback()
-	result, err := tx.Exec("UPDATE items SET reminder_at=?, version=version+1, updated_at=? WHERE id=?", remindAt, now, id)
+	result, err := tx.Exec("UPDATE items SET reminder_at=?, version=version+1, updated_at=? WHERE id=? AND workspace_id=? AND version=?", remindAt, now, id, s.defaultWorkspaceID(), before.Version)
 	if err != nil {
 		return Item{}, err
 	}
 	count, _ := result.RowsAffected()
 	if count != 1 {
-		return Item{}, sql.ErrNoRows
+		return Item{}, errConflict
 	}
 	if _, err := tx.Exec("UPDATE reminders SET status='cancelled', updated_at=? WHERE item_id=? AND status='pending'", now, id); err != nil {
 		return Item{}, err
@@ -1057,7 +1457,7 @@ func (s *Store) snoozeItem(id string, remindAt string) (Item, error) {
 	if err != nil {
 		return Item{}, err
 	}
-	if err := recordItemEventTx(tx, id, "snoozed", map[string]any{"before": before.ReminderAt, "after": remindAt}); err != nil {
+	if err := recordItemEventTx(tx, id, "snoozed", map[string]any{"before": before.ReminderAt, "after": remindAt, "version": before.Version + 1}); err != nil {
 		return Item{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -1067,7 +1467,7 @@ func (s *Store) snoozeItem(id string, remindAt string) (Item, error) {
 }
 
 func (s *Store) dueReminders(limit int) ([]ReminderDelivery, error) {
-	rows, err := s.db.Query(`SELECT r.id, r.item_id, i.title, r.remind_at FROM reminders r JOIN items i ON i.id=r.item_id WHERE r.status='pending' AND r.remind_at<=? AND i.status NOT IN ('done','cancelled') ORDER BY r.remind_at LIMIT ?`, nowString(), limit)
+	rows, err := s.db.Query(`SELECT r.id, r.item_id, i.title, r.remind_at FROM reminders r JOIN items i ON i.id=r.item_id WHERE i.workspace_id=? AND r.status='pending' AND r.remind_at<=? AND i.status NOT IN ('done','cancelled') ORDER BY r.remind_at LIMIT ?`, s.defaultWorkspaceID(), nowString(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1089,19 +1489,19 @@ func (s *Store) markReminder(id string, delivered bool, message string) error {
 	if delivered {
 		status, sentAt = "sent", nowString()
 	}
-	_, err := s.db.Exec("UPDATE reminders SET status=CASE WHEN ?='sent' THEN 'sent' WHEN attempts+1>=5 THEN 'failed' ELSE 'pending' END, attempts=attempts+1, sent_at=?, last_error=?, updated_at=? WHERE id=?", status, sentAt, message, nowString(), id)
+	_, err := s.db.Exec("UPDATE reminders SET status=CASE WHEN ?='sent' THEN 'sent' WHEN attempts+1>=5 THEN 'failed' ELSE 'pending' END, attempts=attempts+1, sent_at=?, last_error=?, updated_at=? WHERE id=? AND EXISTS (SELECT 1 FROM items WHERE items.id=reminders.item_id AND items.workspace_id=?)", status, sentAt, message, nowString(), id, s.defaultWorkspaceID())
 	return err
 }
 
 func (s *Store) savePushSubscription(value PushSubscription) error {
 	now := nowString()
-	_, err := s.db.Exec(`INSERT INTO push_subscriptions(endpoint, p256dh, auth, user_agent, active, created_at, updated_at) VALUES(?, ?, ?, ?, 1, ?, ?)
-ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth, user_agent=excluded.user_agent, active=1, updated_at=excluded.updated_at`, value.Endpoint, value.P256DH, value.Auth, value.UserAgent, now, now)
+	_, err := s.db.Exec(`INSERT INTO push_subscriptions(endpoint, workspace_id, p256dh, auth, user_agent, active, created_at, updated_at) VALUES(?, ?, ?, ?, ?, 1, ?, ?)
+ON CONFLICT(endpoint) DO UPDATE SET workspace_id=excluded.workspace_id, p256dh=excluded.p256dh, auth=excluded.auth, user_agent=excluded.user_agent, active=1, updated_at=excluded.updated_at`, value.Endpoint, s.defaultWorkspaceID(), value.P256DH, value.Auth, value.UserAgent, now, now)
 	return err
 }
 
 func (s *Store) listPushSubscriptions() ([]PushSubscription, error) {
-	rows, err := s.db.Query("SELECT endpoint, p256dh, auth, user_agent FROM push_subscriptions WHERE active=1")
+	rows, err := s.db.Query("SELECT endpoint, p256dh, auth, user_agent FROM push_subscriptions WHERE workspace_id=? AND active=1", s.defaultWorkspaceID())
 	if err != nil {
 		return nil, err
 	}
@@ -1118,7 +1518,7 @@ func (s *Store) listPushSubscriptions() ([]PushSubscription, error) {
 }
 
 func (s *Store) deactivatePushSubscription(endpoint string) error {
-	_, err := s.db.Exec("UPDATE push_subscriptions SET active=0, updated_at=? WHERE endpoint=?", nowString(), endpoint)
+	_, err := s.db.Exec("UPDATE push_subscriptions SET active=0, updated_at=? WHERE endpoint=? AND workspace_id=?", nowString(), endpoint, s.defaultWorkspaceID())
 	return err
 }
 

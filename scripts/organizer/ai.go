@@ -17,22 +17,28 @@ import (
 )
 
 type AIClient struct {
-	baseURL string
-	apiKey  string
-	model   string
-	zone    string
-	client  *http.Client
+	baseURL           string
+	apiKey            string
+	model             string
+	zone              string
+	allowPrivateProxy bool
+	client            *http.Client
 }
+
+const (
+	aiResponseHeaderTimeout = 90 * time.Second
+	aiRequestTimeout        = 120 * time.Second
+)
 
 func newAIClient(cfg Config) *AIClient {
 	transport := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 45 * time.Second,
+		ResponseHeaderTimeout: aiResponseHeaderTimeout,
 		IdleConnTimeout:       90 * time.Second,
 	}
-	return &AIClient{baseURL: cfg.AIBaseURL, apiKey: cfg.AIAPIKey, model: cfg.AIModel, zone: cfg.Timezone, client: &http.Client{Transport: transport, Timeout: 60 * time.Second}}
+	return &AIClient{baseURL: cfg.AIBaseURL, apiKey: cfg.AIAPIKey, model: cfg.AIModel, zone: cfg.Timezone, allowPrivateProxy: cfg.AIAllowPrivateProxy, client: &http.Client{Transport: transport, Timeout: aiRequestTimeout}}
 }
 
 func fallbackParse(capture Capture, zone, reason string) ParseResult {
@@ -54,7 +60,8 @@ func fallbackParse(capture Capture, zone, reason string) ParseResult {
 }
 
 func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...string) (ParseResult, error) {
-	if strings.TrimSpace(capture.RawText) == "" && capture.AttachmentPath == "" {
+	attachments := captureAttachmentValues(capture)
+	if strings.TrimSpace(capture.RawText) == "" && len(attachments) == 0 {
 		return ParseResult{}, errors.New("capture has no text or attachment")
 	}
 	if a.apiKey == "" {
@@ -63,7 +70,7 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...
 
 	location, _ := time.LoadLocation(a.zone)
 	now := time.Now().In(location).Format(time.RFC3339)
-	hasAttachment := capture.AttachmentPath != ""
+	hasAttachment := len(attachments) > 0
 	systemPrompt := `你是 Faber 的个人日程与项目整理助手。把用户输入转换为结构化事项。只输出 JSON 对象，格式为 {"items":[...]}。每个事项字段：type(task|event|reminder|note)、title、description、startAt、endAt、dueAt、reminderAt、timezone、allDay、recurrenceRule、priority(0-3)、certainty(confirmed|tentative)、durationMinutes、availableFrom、availableUntil、project、tags、location、people、confidence(0-1)、ambiguities。时间使用 RFC3339 并带时区。startAt 表示实际开始或发生时间，dueAt 表示最晚完成时间，reminderAt 表示通知时间；不要混淆。没有日期时保留为空，模糊信息写入 ambiguities，不要伪造。一个输入可以拆成多个事项。默认时区为 ` + a.zone + `。当前时间为 ` + now + `。`
 	if hasAttachment {
 		systemPrompt = `你是 Faber 的截图事项整理助手。阅读截图，只提取需要行动、安排、跟进或保留的重要信息，不要输出无关的界面文字或完整 OCR。只输出 JSON：{"items":[...]}。每项可用字段：type(task|event|reminder|note)、title、description、startAt、endAt、dueAt、reminderAt、timezone、allDay、priority(0-3)、certainty(confirmed|tentative)、durationMinutes、project、tags、location、people、confidence(0-1)、ambiguities。时间用 RFC3339；无法确认的日期、对象或行动写入 ambiguities，绝不猜测。默认时区 ` + a.zone + `，当前时间 ` + now + `。`
@@ -78,18 +85,19 @@ func (a *AIClient) Parse(ctx context.Context, capture Capture, memoryContext ...
 
 	var userContent any = "请整理以下内容：\n" + capture.RawText
 	if hasAttachment {
-		data, err := os.ReadFile(capture.AttachmentPath)
-		if err != nil {
-			return ParseResult{}, err
+		content := []map[string]any{{"type": "text", "text": "请结合这些截图整理事项；多张图片可能属于同一段连续内容，请综合理解并避免重复。用户补充文字：\n" + capture.RawText}}
+		for _, attachment := range attachments {
+			data, err := os.ReadFile(attachment.Path)
+			if err != nil {
+				return ParseResult{}, err
+			}
+			mime := attachment.Mime
+			if mime == "" {
+				mime = "image/png"
+			}
+			content = append(content, map[string]any{"type": "image_url", "image_url": map[string]string{"url": "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)}})
 		}
-		mime := capture.AttachmentMime
-		if mime == "" {
-			mime = "image/png"
-		}
-		userContent = []map[string]any{
-			{"type": "text", "text": "请结合截图整理事项。用户补充文字：\n" + capture.RawText},
-			{"type": "image_url", "image_url": map[string]string{"url": "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)}},
-		}
+		userContent = content
 	}
 	maxTokens := 2200
 	payload := map[string]any{

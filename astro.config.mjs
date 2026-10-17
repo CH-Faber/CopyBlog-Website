@@ -37,6 +37,7 @@ export default defineConfig({
   vite: {
     server: {
       proxy: {
+        "/api/agenda": "http://127.0.0.1:3020",
         "/api/organizer": "http://127.0.0.1:3020",
       },
     },

@@ -17,53 +17,24 @@ import (
 )
 
 type Server struct {
-	cfg     Config
-	store   *Store
-	ai      *AIClient
-	push    *PushSender
-	limiter *loginLimiter
+	cfg      Config
+	store    *Store
+	ai       *AIClient
+	executor *AssistantExecutor
+	push     *PushSender
+	limiter  *loginLimiter
 }
 
+const maxCaptureAttachments = 10
+
 func newServer(cfg Config, store *Store) *Server {
-	return &Server{cfg: cfg, store: store, ai: newAIClient(cfg), push: newPushSender(cfg, store), limiter: newLoginLimiter()}
+	return &Server{cfg: cfg, store: store, ai: newAIClient(cfg), executor: NewAssistantExecutor(store), push: newPushSender(cfg, store), limiter: newLoginLimiter()}
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/organizer/v1/health", s.handleHealth)
-	mux.HandleFunc("POST /api/organizer/v1/auth/login", s.handleLogin)
-	mux.HandleFunc("POST /api/organizer/v1/auth/logout", s.authorized(s.handleLogout))
-	mux.HandleFunc("GET /api/organizer/v1/session", s.authorized(s.handleSession))
-	mux.HandleFunc("PUT /api/organizer/v1/password", s.authorized(s.handleChangePassword))
-	mux.HandleFunc("POST /api/organizer/v1/device-tokens", s.authorized(s.handleCreateDeviceToken))
-	mux.HandleFunc("POST /api/organizer/v1/captures", s.authorized(s.handleCreateCapture))
-	mux.HandleFunc("GET /api/organizer/v1/captures", s.authorized(s.handleListCaptures))
-	mux.HandleFunc("GET /api/organizer/v1/captures/{id}", s.authorized(s.handleGetCapture))
-	mux.HandleFunc("DELETE /api/organizer/v1/captures/{id}", s.authorized(s.handleDeleteCapture))
-	mux.HandleFunc("GET /api/organizer/v1/captures/{id}/attachment", s.authorized(s.handleCaptureAttachment))
-	mux.HandleFunc("POST /api/organizer/v1/captures/{id}/parse", s.authorized(s.handleParseCapture))
-	mux.HandleFunc("POST /api/organizer/v1/captures/{id}/confirm", s.authorized(s.handleConfirmCapture))
-	mux.HandleFunc("GET /api/organizer/v1/items", s.authorized(s.handleListItems))
-	mux.HandleFunc("POST /api/organizer/v1/items", s.authorized(s.handleCreateItem))
-	mux.HandleFunc("GET /api/organizer/v1/items/{id}", s.authorized(s.handleGetItem))
-	mux.HandleFunc("PUT /api/organizer/v1/items/{id}", s.authorized(s.handleUpdateItem))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/complete", s.authorized(s.handleCompleteItem))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/cancel", s.authorized(s.handleCancelItem))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/reopen", s.authorized(s.handleReopenItem))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/archive", s.authorized(s.handleArchiveItem))
-	mux.HandleFunc("GET /api/organizer/v1/items/{id}/events", s.authorized(s.handleListItemEvents))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/snooze", s.authorized(s.handleSnoozeItem))
-	mux.HandleFunc("GET /api/organizer/v1/projects", s.authorized(s.handleListProjects))
-	mux.HandleFunc("POST /api/organizer/v1/projects", s.authorized(s.handleCreateProject))
-	mux.HandleFunc("GET /api/organizer/v1/projects/{id}", s.authorized(s.handleGetProject))
-	mux.HandleFunc("PUT /api/organizer/v1/projects/{id}", s.authorized(s.handleUpdateProject))
-	mux.HandleFunc("GET /api/organizer/v1/events", s.authorized(s.handleListEvents))
-	mux.HandleFunc("GET /api/organizer/v1/memories", s.authorized(s.handleListMemories))
-	mux.HandleFunc("POST /api/organizer/v1/memories", s.authorized(s.handleCreateMemory))
-	mux.HandleFunc("PUT /api/organizer/v1/memories/{id}", s.authorized(s.handleUpdateMemory))
-	mux.HandleFunc("GET /api/organizer/v1/push/vapid-key", s.authorized(s.handleVAPIDKey))
-	mux.HandleFunc("POST /api/organizer/v1/push/subscriptions", s.authorized(s.handlePushSubscription))
-	mux.HandleFunc("GET /api/organizer/v1/export", s.authorized(s.handleExport))
+	s.registerAgendaRoutes(mux, "/api/organizer/v1")
+	s.registerAgendaRoutes(mux, "/api/agenda/v1")
 	return s.commonHeaders(mux)
 }
 
@@ -72,12 +43,42 @@ func (s *Server) commonHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		origin := strings.TrimRight(r.Header.Get("Origin"), "/")
+		// Capacitor has used both http and https localhost origins across
+		// Android WebView versions. These are local app origins, not public
+		// origins, and native requests authenticate with a bearer token.
+		if origin == "https://localhost" || origin == "http://localhost" || origin == "capacitor://localhost" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Add("Vary", "Origin")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "pushEnabled": s.push.enabled(), "time": nowString()})
+}
+
+func (s *Server) handleHealthZ(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleReadyZ(w http.ResponseWriter, _ *http.Request) {
+	if err := s.store.db.Ping(); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready", "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+}
+
+func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"service": "agenda-api", "version": "dev", "schemaVersion": 1})
 }
 
 func remoteIP(r *http.Request) string {
@@ -124,15 +125,63 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "save session")
 		return
 	}
-	setSessionCookie(w, token, expires)
+	s.setSessionCookie(w, token, expires)
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "expiresAt": expires.UTC().Format(time.RFC3339)})
 }
 
+func (s *Server) handleDeviceLogin(w http.ResponseWriter, r *http.Request) {
+	key := remoteIP(r)
+	if !s.limiter.allow(key) {
+		writeError(w, http.StatusTooManyRequests, "too many login attempts")
+		return
+	}
+	var request struct {
+		Password   string `json:"password"`
+		DeviceName string `json:"deviceName"`
+	}
+	if err := decodeJSON(r, &request, 32<<10); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	hash, err := s.store.adminPasswordHash(s.cfg.AdminPasswordHash)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "load credentials")
+		return
+	}
+	if !verifyPassword(hash, request.Password) {
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	name := strings.TrimSpace(request.DeviceName)
+	if name == "" {
+		name = "Agenda Android"
+	}
+	if len([]rune(name)) > 80 {
+		writeError(w, http.StatusBadRequest, "device name is too long")
+		return
+	}
+	s.limiter.clear(key)
+	id, token, err := s.store.createDeviceToken(name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "create device token")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"authenticated": true, "deviceId": id, "token": token})
+}
+
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if token := bearerToken(r); token != "" {
+		if err := s.store.revokeDeviceToken(token); err != nil {
+			writeError(w, http.StatusInternalServerError, "revoke device token")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
+		return
+	}
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		_ = s.store.deleteSession(cookie.Value)
 	}
-	clearSessionCookie(w)
+	s.clearSessionCookie(w)
 	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
 }
 
@@ -174,7 +223,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "save session")
 		return
 	}
-	setSessionCookie(w, token, expires)
+	s.setSessionCookie(w, token, expires)
 	writeJSON(w, http.StatusOK, map[string]bool{"updated": true})
 }
 
@@ -205,9 +254,7 @@ func (s *Server) handleCreateCapture(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.store.createCapture(capture)
 	if err != nil {
-		if capture.AttachmentPath != "" {
-			_ = os.Remove(capture.AttachmentPath)
-		}
+		removeCaptureAttachmentFiles(capture)
 		writeError(w, http.StatusInternalServerError, "save capture")
 		return
 	}
@@ -217,29 +264,42 @@ func (s *Server) handleCreateCapture(w http.ResponseWriter, r *http.Request) {
 func (s *Server) captureFromRequest(w http.ResponseWriter, r *http.Request) (Capture, error) {
 	contentType := r.Header.Get("Content-Type")
 	if strings.HasPrefix(contentType, "multipart/form-data") {
-		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxUploadBytes+(1<<20))
+		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxUploadBytes*maxCaptureAttachments+(1<<20))
 		if err := r.ParseMultipartForm(s.cfg.MaxUploadBytes); err != nil {
 			return Capture{}, fmt.Errorf("invalid multipart request: %w", err)
 		}
+		defer r.MultipartForm.RemoveAll()
 		capture := Capture{ID: newID("capture"), SourceType: strings.TrimSpace(r.FormValue("sourceType")), RawText: strings.TrimSpace(r.FormValue("rawText"))}
-		file, header, err := r.FormFile("attachment")
-		if err != nil && !errors.Is(err, http.ErrMissingFile) {
-			return Capture{}, err
+		headers := append([]*multipart.FileHeader{}, r.MultipartForm.File["attachments"]...)
+		headers = append(headers, r.MultipartForm.File["attachment"]...)
+		if len(headers) > maxCaptureAttachments {
+			return Capture{}, fmt.Errorf("at most %d images are allowed", maxCaptureAttachments)
 		}
-		if err == nil {
-			defer file.Close()
-			if err := s.saveCaptureAttachment(&capture, file, header); err != nil {
+		for ordinal, header := range headers {
+			file, err := header.Open()
+			if err != nil {
+				removeCaptureAttachmentFiles(capture)
 				return Capture{}, err
+			}
+			err = s.saveCaptureAttachment(&capture, file, header, ordinal)
+			closeErr := file.Close()
+			if err != nil {
+				removeCaptureAttachmentFiles(capture)
+				return Capture{}, err
+			}
+			if closeErr != nil {
+				removeCaptureAttachmentFiles(capture)
+				return Capture{}, closeErr
 			}
 		}
 		if capture.SourceType == "" {
-			if capture.AttachmentPath != "" {
+			if len(capture.Attachments) > 0 {
 				capture.SourceType = "image"
 			} else {
 				capture.SourceType = "text"
 			}
 		}
-		if capture.RawText == "" && capture.AttachmentPath == "" {
+		if capture.RawText == "" && len(capture.Attachments) == 0 {
 			return Capture{}, errors.New("text or attachment is required")
 		}
 		return capture, nil
@@ -261,14 +321,14 @@ func (s *Server) captureFromRequest(w http.ResponseWriter, r *http.Request) (Cap
 	return Capture{ID: newID("capture"), SourceType: request.SourceType, RawText: request.RawText}, nil
 }
 
-func (s *Server) saveCaptureAttachment(capture *Capture, file multipart.File, header *multipart.FileHeader) error {
+func (s *Server) saveCaptureAttachment(capture *Capture, file multipart.File, header *multipart.FileHeader, ordinal int) error {
 	mime := header.Header.Get("Content-Type")
 	extensions := map[string]string{"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif"}
 	extension, ok := extensions[mime]
 	if !ok {
 		return errors.New("attachment must be PNG, JPEG, WebP, or GIF")
 	}
-	path := filepath.Join(s.cfg.AttachmentDir, capture.ID+extension)
+	path := filepath.Join(s.cfg.AttachmentDir, fmt.Sprintf("%s-%d%s", capture.ID, ordinal, extension))
 	target, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
@@ -283,9 +343,31 @@ func (s *Server) saveCaptureAttachment(capture *Capture, file multipart.File, he
 		_ = os.Remove(path)
 		return errors.New("attachment is too large")
 	}
-	capture.AttachmentName = filepath.Base(header.Filename)
-	capture.AttachmentMime = mime
-	capture.AttachmentPath = path
+	attachment := CaptureAttachment{Name: filepath.Base(header.Filename), Mime: mime, Path: path}
+	capture.Attachments = append(capture.Attachments, attachment)
+	if len(capture.Attachments) == 1 {
+		capture.AttachmentName = attachment.Name
+		capture.AttachmentMime = attachment.Mime
+		capture.AttachmentPath = attachment.Path
+	}
+	return nil
+}
+
+func removeCaptureAttachmentFiles(capture Capture) {
+	for _, attachment := range captureAttachmentValues(capture) {
+		if attachment.Path != "" {
+			_ = os.Remove(attachment.Path)
+		}
+	}
+}
+
+func captureAttachmentValues(capture Capture) []CaptureAttachment {
+	if len(capture.Attachments) > 0 {
+		return capture.Attachments
+	}
+	if capture.AttachmentPath != "" {
+		return []CaptureAttachment{{Name: capture.AttachmentName, Mime: capture.AttachmentMime, Path: capture.AttachmentPath}}
+	}
 	return nil
 }
 
@@ -323,29 +405,37 @@ func (s *Server) handleDeleteCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stagedAttachment := ""
-	if value.AttachmentPath != "" {
-		path, ok := attachmentPathWithin(s.cfg.AttachmentDir, value.AttachmentPath)
+	type stagedFile struct{ original, staged string }
+	stagedAttachments := make([]stagedFile, 0, len(value.Attachments))
+	for index, attachment := range captureAttachmentValues(value) {
+		path, ok := attachmentPathWithin(s.cfg.AttachmentDir, attachment.Path)
 		if !ok {
+			for _, staged := range stagedAttachments {
+				_ = os.Rename(staged.staged, staged.original)
+			}
 			writeError(w, http.StatusInternalServerError, "invalid attachment path")
 			return
 		}
-		stagedAttachment = path + ".deleting-" + value.ID
-		if err := os.Rename(path, stagedAttachment); err != nil && !errors.Is(err, os.ErrNotExist) {
+		staged := path + ".deleting-" + value.ID + "-" + strconv.Itoa(index)
+		if err := os.Rename(path, staged); err != nil && !errors.Is(err, os.ErrNotExist) {
+			for _, previous := range stagedAttachments {
+				_ = os.Rename(previous.staged, previous.original)
+			}
 			writeError(w, http.StatusInternalServerError, "remove attachment")
 			return
 		}
+		stagedAttachments = append(stagedAttachments, stagedFile{original: path, staged: staged})
 	}
 
 	if err := s.store.deleteCapture(value.ID); err != nil {
-		if stagedAttachment != "" {
-			_ = os.Rename(stagedAttachment, value.AttachmentPath)
+		for _, staged := range stagedAttachments {
+			_ = os.Rename(staged.staged, staged.original)
 		}
 		writeError(w, http.StatusInternalServerError, "delete capture")
 		return
 	}
-	if stagedAttachment != "" {
-		_ = os.Remove(stagedAttachment)
+	for _, staged := range stagedAttachments {
+		_ = os.Remove(staged.staged)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -368,11 +458,21 @@ func attachmentPathWithin(root, value string) (string, bool) {
 
 func (s *Server) handleCaptureAttachment(w http.ResponseWriter, r *http.Request) {
 	value, err := s.store.getCapture(r.PathValue("id"))
-	if err != nil || value.AttachmentPath == "" {
+	if err != nil {
 		writeError(w, http.StatusNotFound, "attachment not found")
 		return
 	}
-	file, err := os.Open(value.AttachmentPath)
+	index := 0
+	if rawIndex := r.PathValue("index"); rawIndex != "" {
+		index, err = strconv.Atoi(rawIndex)
+	}
+	attachments := captureAttachmentValues(value)
+	if err != nil || index < 0 || index >= len(attachments) {
+		writeError(w, http.StatusNotFound, "attachment not found")
+		return
+	}
+	attachment := attachments[index]
+	file, err := os.Open(attachment.Path)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "attachment not found")
 		return
@@ -383,9 +483,9 @@ func (s *Server) handleCaptureAttachment(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, "read attachment")
 		return
 	}
-	w.Header().Set("Content-Type", value.AttachmentMime)
+	w.Header().Set("Content-Type", attachment.Mime)
 	w.Header().Set("Content-Disposition", `inline; filename="attachment"`)
-	http.ServeContent(w, r, value.AttachmentName, info.ModTime(), file)
+	http.ServeContent(w, r, attachment.Name, info.ModTime(), file)
 }
 
 func (s *Server) handleParseCapture(w http.ResponseWriter, r *http.Request) {
@@ -634,6 +734,10 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "project not found")
 		return
 	}
+	if errors.Is(err, errConflict) {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -769,6 +873,9 @@ func validateCandidates(values []Candidate, defaultTimezone string) error {
 	}
 	for index, value := range values {
 		value = normalizeCandidate(value, defaultTimezone)
+		if value.Type != "task" && value.Type != "event" && value.Type != "reminder" && value.Type != "note" {
+			return fmt.Errorf("item %d has invalid type", index+1)
+		}
 		if value.Title == "" {
 			return fmt.Errorf("item %d title is required", index+1)
 		}
@@ -783,6 +890,13 @@ func validateCandidates(values []Candidate, defaultTimezone string) error {
 				if _, err := time.Parse(time.RFC3339, pair.value); err != nil {
 					return fmt.Errorf("item %d %s must be RFC3339", index+1, pair.name)
 				}
+			}
+		}
+		if value.StartAt != "" && value.EndAt != "" {
+			start, _ := time.Parse(time.RFC3339, value.StartAt)
+			end, _ := time.Parse(time.RFC3339, value.EndAt)
+			if end.Before(start) {
+				return fmt.Errorf("item %d endAt must not be before startAt", index+1)
 			}
 		}
 	}

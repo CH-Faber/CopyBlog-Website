@@ -74,6 +74,48 @@ func TestAIParseUsesOptimizedImageRequest(t *testing.T) {
 	}
 }
 
+func TestAIParseSendsAllCaptureImagesTogether(t *testing.T) {
+	dir := t.TempDir()
+	firstPath := dir + "/first.png"
+	secondPath := dir + "/second.jpg"
+	if err := os.WriteFile(firstPath, []byte("first image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(secondPath, []byte("second image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		messages := payload["messages"].([]any)
+		user := messages[1].(map[string]any)
+		content := user["content"].([]any)
+		if len(content) != 3 {
+			t.Fatalf("content parts = %d; want text plus two images: %#v", len(content), content)
+		}
+		for index, part := range content[1:] {
+			value := part.(map[string]any)
+			if value["type"] != "image_url" {
+				t.Fatalf("content part %d is not an image: %#v", index+1, value)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"items\":[{\"type\":\"task\",\"title\":\"合并识别\"}]}"}}]}`))
+	}))
+	defer upstream.Close()
+
+	client := &AIClient{baseURL: upstream.URL, apiKey: "test-key", model: "test-model", zone: "Asia/Shanghai", client: upstream.Client()}
+	result, err := client.Parse(context.Background(), Capture{Attachments: []CaptureAttachment{{Name: "first.png", Mime: "image/png", Path: firstPath}, {Name: "second.jpg", Mime: "image/jpeg", Path: secondPath}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Items) != 1 || result.Items[0].Title != "合并识别" {
+		t.Fatalf("unexpected multi-image parse result: %#v", result)
+	}
+}
+
 func TestFallbackTitleIsBounded(t *testing.T) {
 	result := fallbackParse(Capture{RawText: strings.Repeat("事项", 150)}, "Asia/Shanghai", "test")
 	if length := len([]rune(result.Items[0].Title)); length > 201 {

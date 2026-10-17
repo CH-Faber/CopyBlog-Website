@@ -56,12 +56,14 @@ test("Agenda keeps a complete item lifecycle and renders responsively", async ({
 
 test("the unified Agenda AI entry answers questions without creating an item", async ({ page }, testInfo) => {
   const turns: { id: string; role: string; content: string; structuredResult?: unknown }[] = []
-  await page.route(/\/assistant\/conversations$/, async (route) => {
-    if (route.request().method() === "POST") await route.fulfill({ json: { id: "ai-test-conversation" } })
+  const conversation = { id: "ai-test-conversation", title: "新对话", status: "active", createdAt: "2026-09-29T00:00:00Z", updatedAt: "2026-09-29T00:00:00Z" }
+  await page.route(/\/assistant\/conversations(?:\?limit=100)?$/, async (route) => {
+    if (route.request().method() === "POST") await route.fulfill({ json: conversation })
+    else if (route.request().method() === "GET") await route.fulfill({ json: { conversations: [conversation] } })
     else await route.continue()
   })
   await page.route(/\/assistant\/conversations\/ai-test-conversation$/, async (route) => {
-    if (route.request().method() === "GET") await route.fulfill({ json: { id: "ai-test-conversation", turns } })
+    if (route.request().method() === "GET") await route.fulfill({ json: { ...conversation, turns } })
     else await route.continue()
   })
   await page.route(/\/assistant\/conversations\/ai-test-conversation\/turns$/, async (route) => {

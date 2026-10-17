@@ -9,6 +9,7 @@ export default defineConfig({
   fullyParallel: false,
   use: {
     baseURL: process.env.AGENDA_TEST_URL ?? "http://127.0.0.1:4322",
+    serviceWorkers: "block",
     trace: "retain-on-failure",
   },
 })

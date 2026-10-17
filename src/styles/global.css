@@ -1061,6 +1061,29 @@ a.card-github:hover .github-logo {
   background: color-mix(in oklab, var(--card), var(--agenda-surface) 22%);
 }
 
+.agenda-assistant-shell {
+  background: var(--agenda-surface);
+}
+
+.agenda-assistant-sidebar {
+  background: color-mix(in oklab, var(--card), var(--agenda-surface) 28%);
+}
+
+.agenda-assistant-shell .agenda-assistant-panel {
+  min-height: calc(100vh - 8rem);
+  border: 1px solid var(--agenda-border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  box-shadow: 0 8px 26px oklch(0 0 0 / 0.05);
+}
+
+.agenda-assistant-shell .agenda-assistant-panel > form {
+  position: sticky;
+  bottom: 0;
+  background: color-mix(in oklab, var(--card), transparent 4%);
+  backdrop-filter: blur(14px);
+}
+
 .agenda-surface,
 .agenda-hero-card,
 .agenda-focus-card,
