@@ -1,4 +1,4 @@
-const CACHE_NAME = "faber-agenda-v2"
+const CACHE_NAME = "faber-agenda-v3"
 const APP_SHELL = ["/agenda/", "/agenda/manifest.webmanifest", "/icon.svg", "/apple-icon.png"]
 
 self.addEventListener("install", (event) => {
@@ -29,11 +29,13 @@ self.addEventListener("fetch", (event) => {
         .then((response) => {
           if (response.ok) {
             const copy = response.clone()
-            event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put("/agenda/", copy)))
+            // Keep each Agenda route in its own cache entry. A failed request
+            // for /agenda/ must never replay the assistant workspace.
+            event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)))
           }
           return response
         })
-        .catch(() => caches.match("/agenda/")),
+        .catch(() => caches.match(request)),
     )
     return
   }
