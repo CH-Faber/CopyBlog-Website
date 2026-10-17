@@ -11,6 +11,8 @@ test("Agenda keeps a complete item lifecycle and renders responsively", async ({
   await page.getByLabel("登录密码").fill(process.env.AGENDA_TEST_PASSWORD ?? "agenda-local-test-password")
   await page.getByRole("button", { name: "登录" }).click()
   await expect(page.getByRole("heading", { name: "Agenda" })).toBeVisible()
+  await expect(page.getByRole("textbox", { name: "发送给 Agenda AI" })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "AI 工作台" })).toBeVisible()
 
   await page.getByRole("button", { name: "项目", exact: true }).click()
   await page.getByRole("button", { name: "新项目" }).click()
@@ -49,7 +51,8 @@ test("Agenda keeps a complete item lifecycle and renders responsively", async ({
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole("button", { name: "今天", exact: true }).click()
-  await expect(page.getByRole("heading", { name: "Agenda AI" })).toBeVisible()
+  await expect(page.getByRole("textbox", { name: "发送给 Agenda AI" })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "AI" })).toBeVisible()
   await expect(page.getByRole("navigation").last()).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath("agenda-mobile.png"), fullPage: true })
 })
@@ -71,7 +74,7 @@ test("the unified Agenda AI entry answers questions without creating an item", a
     turns.push({ id: "assistant-1", role: "assistant", content: "可以先把任务拆成一个五分钟内能完成的动作。", structuredResult: { kind: "answer", reply: "可以先把任务拆成一个五分钟内能完成的动作。", intentSummary: "回答如何开始任务", riskLevel: "low", ambiguityQuestions: [], requiresConfirmation: false, actions: [] } })
     await route.fulfill({ json: { requestId: "test-request", kind: "answer", reply: turns[1].content } })
   })
-  await page.goto("/agenda/")
+  await page.goto("/agenda/assistant/")
   await page.getByLabel("登录密码").fill(process.env.AGENDA_TEST_PASSWORD ?? "agenda-local-test-password")
   await page.getByRole("button", { name: "登录" }).click()
   const input = page.getByRole("textbox", { name: "发送给 Agenda AI" })
