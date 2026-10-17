@@ -1,0 +1,30 @@
+{
+  "name": "agenda-android",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "sync": "pnpm build && cap sync android",
+    "apk": "pnpm sync && cd android && gradlew.bat assembleDebug",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "8.0.0",
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/local-notifications": "8.3.1",
+    "lucide-react": "^0.454.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "4.7.0",
+    "typescript": "^5",
+    "vite": "6.4.3"
+  }
+}

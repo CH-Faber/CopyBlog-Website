@@ -23,7 +23,7 @@ func (s *Store) migrate() error {
 		return err
 	}
 
-	migrations := []migration{{version: 1, apply: migrateV1}}
+	migrations := []migration{{version: 1, apply: migrateV1}, {version: 2, apply: migrateV2}, {version: 3, apply: migrateV3}, {version: 4, apply: migrateV4}, {version: 5, apply: migrateV5}, {version: 6, apply: migrateV6}, {version: 7, apply: migrateV7}, {version: 8, apply: migrateV8}, {version: 9, apply: migrateV9}, {version: 10, apply: migrateV10}, {version: 11, apply: migrateV11}}
 	for _, migration := range migrations {
 		var applied int
 		err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version=?", migration.version).Scan(&applied)
@@ -50,6 +50,226 @@ func (s *Store) migrate() error {
 		}
 	}
 	return nil
+}
+
+func migrateV10(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+CREATE TABLE capture_attachments (
+  capture_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  path TEXT NOT NULL,
+  PRIMARY KEY(capture_id, ordinal),
+  FOREIGN KEY(capture_id) REFERENCES captures(id) ON DELETE CASCADE
+);
+INSERT INTO capture_attachments(capture_id, ordinal, name, mime, path)
+SELECT id, 0, attachment_name, attachment_mime, attachment_path
+FROM captures WHERE attachment_path <> '';
+`)
+	return err
+}
+
+func migrateV11(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+CREATE TABLE IF NOT EXISTS recurrence_series (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  item_id TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,
+  rule_version INTEGER NOT NULL DEFAULT 1,
+  rule_json TEXT NOT NULL,
+  timezone TEXT NOT NULL,
+  starts_at TEXT NOT NULL,
+  ends_at TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_recurrence_series_workspace_status ON recurrence_series(workspace_id, status);
+CREATE TABLE IF NOT EXISTS recurrence_occurrences (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  series_id TEXT NOT NULL,
+  occurrence_key TEXT NOT NULL,
+  scheduled_start TEXT NOT NULL,
+  scheduled_end TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'scheduled',
+  override_json TEXT NOT NULL DEFAULT '',
+  completed_at TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(series_id, occurrence_key),
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY(series_id) REFERENCES recurrence_series(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_recurrence_occurrences_range ON recurrence_occurrences(workspace_id, scheduled_start);
+CREATE TABLE IF NOT EXISTS recurrence_exceptions (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  series_id TEXT NOT NULL,
+  occurrence_key TEXT NOT NULL,
+  action TEXT NOT NULL,
+  override_json TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE(series_id, occurrence_key),
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY(series_id) REFERENCES recurrence_series(id) ON DELETE CASCADE
+);
+`)
+	return err
+}
+
+func migrateV4(tx *sql.Tx) error {
+	return ensureColumnTx(tx, "projects", "version", "INTEGER NOT NULL DEFAULT 1")
+}
+
+func migrateV5(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+CREATE TABLE assistant_plans (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL DEFAULT '',
+  turn_id TEXT NOT NULL DEFAULT '',
+  idempotency_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL,
+  state TEXT NOT NULL,
+  plan_json TEXT NOT NULL,
+  requires_confirmation INTEGER NOT NULL DEFAULT 0,
+  confirmation_expires_at TEXT NOT NULL DEFAULT '',
+  actor TEXT NOT NULL DEFAULT 'assistant',
+  error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  started_at TEXT NOT NULL DEFAULT '',
+  completed_at TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX idx_assistant_plans_workspace_idempotency
+  ON assistant_plans(workspace_id, idempotency_key);
+CREATE INDEX idx_assistant_plans_workspace_updated
+  ON assistant_plans(workspace_id, updated_at DESC);
+CREATE TABLE assistant_plan_actions (
+  plan_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  action_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  operation TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending',
+  error TEXT NOT NULL DEFAULT '',
+  before_json TEXT NOT NULL DEFAULT '',
+  after_json TEXT NOT NULL DEFAULT '',
+  result_json TEXT NOT NULL DEFAULT '',
+  event_ids_json TEXT NOT NULL DEFAULT '[]',
+  actor TEXT NOT NULL DEFAULT 'assistant',
+  conversation_id TEXT NOT NULL DEFAULT '',
+  turn_id TEXT NOT NULL DEFAULT '',
+  started_at TEXT NOT NULL DEFAULT '',
+  completed_at TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(plan_id, action_id),
+  FOREIGN KEY(plan_id) REFERENCES assistant_plans(id) ON DELETE CASCADE,
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_assistant_plan_actions_workspace ON assistant_plan_actions(workspace_id, plan_id, ordinal);
+`)
+	return err
+}
+
+func migrateV6(tx *sql.Tx) error {
+	if err := ensureColumnTx(tx, "projects", "archived_at", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := ensureColumnTx(tx, "projects", "archived_from_status", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := ensureColumnTx(tx, "assistant_plans", "lease_until", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := ensureColumnTx(tx, "assistant_plans", "lease_token", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`
+CREATE TABLE IF NOT EXISTS project_events (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_project_events_project_created ON project_events(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_project_events_workspace_created ON project_events(workspace_id, created_at DESC);
+`)
+	return err
+}
+
+func migrateV7(tx *sql.Tx) error {
+	if err := ensureColumnTx(tx, "assistant_plan_actions", "lease_token", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := ensureColumnTx(tx, "assistant_plan_actions", "lease_until", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func migrateV8(tx *sql.Tx) error {
+	return ensureColumnTx(tx, "assistant_plans", "source_request_hash", "TEXT NOT NULL DEFAULT ''")
+}
+
+func migrateV9(tx *sql.Tx) error {
+	if err := ensureColumnTx(tx, "assistant_conversations", "title", "TEXT NOT NULL DEFAULT '新对话'"); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`UPDATE assistant_conversations
+SET title=COALESCE(NULLIF(SUBSTR((SELECT content FROM assistant_turns
+  WHERE assistant_turns.workspace_id=assistant_conversations.workspace_id
+    AND assistant_turns.conversation_id=assistant_conversations.id
+    AND role='user' ORDER BY rowid LIMIT 1), 1, 40), ''), '新对话')
+WHERE title='' OR title='新对话'`)
+	return err
+}
+
+func migrateV3(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+CREATE TABLE assistant_conversations (
+  id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  provider TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(workspace_id, id),
+  FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_assistant_conversations_workspace_updated ON assistant_conversations(workspace_id, updated_at DESC);
+CREATE TABLE assistant_turns (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  structured_result TEXT NOT NULL DEFAULT '',
+  structured_result_ref TEXT NOT NULL DEFAULT '',
+  provider TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(workspace_id, conversation_id) REFERENCES assistant_conversations(workspace_id, id) ON DELETE CASCADE
+);
+CREATE INDEX idx_assistant_turns_workspace_conversation_created ON assistant_turns(workspace_id, conversation_id, created_at);
+`)
+	return err
+}
+
+func migrateV2(tx *sql.Tx) error {
+	return ensureColumnTx(tx, "items", "archived_from_status", "TEXT NOT NULL DEFAULT ''")
 }
 
 func (s *Store) defaultWorkspaceID() string { return defaultPersonalWorkspaceID }

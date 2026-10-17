@@ -186,7 +186,7 @@ function offsetLabel(value: Date, base: Date) {
   return "后天"
 }
 
-function Login({ onAuthenticated }: { onAuthenticated: () => void }) {
+export function AgendaLogin({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -210,16 +210,29 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function CandidateEditor({ value, projects, onChange, onRemove }: { value: Candidate; projects: Project[]; onChange: (value: Candidate) => void; onRemove: () => void }) {
   const types: Array<[Candidate["type"], string]> = [["task", "任务"], ["event", "日程"], ["reminder", "提醒"], ["note", "记录"]]
+  let recurrence = { frequency: "none", weekdays: [] as number[] }
+  if (value.recurrenceRule) {
+    try {
+      const parsed = JSON.parse(value.recurrenceRule)
+      if (["daily", "weekly", "monthly"].includes(parsed.frequency)) recurrence = { frequency: parsed.frequency, weekdays: parsed.weekdays ?? [] }
+    } catch { /* Legacy recurrence formats stay untouched until explicitly migrated. */ }
+  }
+  const setRecurrence = (frequency: string) => {
+    if (frequency === "none") onChange({ ...value, recurrenceRule: undefined })
+    else onChange({ ...value, recurrenceRule: JSON.stringify({ frequency, interval: 1, ...(frequency === "weekly" ? { weekdays: recurrence.weekdays.length ? recurrence.weekdays : [1] } : {}) }) })
+  }
+  const toggleWeekday = (day: number) => {
+    const weekdays = recurrence.weekdays.includes(day) ? recurrence.weekdays.filter((item) => item !== day) : [...recurrence.weekdays, day].sort((a, b) => a - b)
+    onChange({ ...value, recurrenceRule: JSON.stringify({ frequency: "weekly", interval: 1, weekdays: weekdays.length ? weekdays : [day] }) })
+  }
   return <div className="agenda-editor-card space-y-4 p-4 sm:space-y-5 sm:p-5">
     <div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">事项类型</p><div className="agenda-segmented grid grid-cols-4 gap-1 p-1">{types.map(([type, label]) => <button type="button" key={type} onClick={() => onChange({ ...value, type })} className={`rounded-md px-2 py-2 text-xs font-medium transition ${value.type === type ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>)}</div></div><button type="button" onClick={onRemove} className="agenda-icon-button rounded-lg p-2 text-muted-foreground" title="移除事项" aria-label="移除事项"><Trash2 className="h-4 w-4" /></button></div>
     <input value={value.title} onChange={(e) => onChange({ ...value, title: e.target.value })} className="w-full border-0 border-b-2 border-border bg-transparent px-0 py-2 text-xl font-semibold outline-none placeholder:text-muted-foreground/50 focus:border-primary" placeholder="输入事项标题" />
     <textarea value={value.description ?? ""} onChange={(e) => onChange({ ...value, description: e.target.value })} className="agenda-description min-h-20 w-full resize-y px-3 py-3 text-sm outline-none placeholder:text-muted-foreground/60" placeholder="补充说明（可选）" />
-    <div><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">时间与提醒</p><div className="grid gap-3 sm:grid-cols-2">
-      <Field label="开始时间"><input type="datetime-local" value={localInput(value.startAt)} onChange={(e) => onChange({ ...value, startAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field>
-      <Field label="截止时间"><input type="datetime-local" value={localInput(value.dueAt)} onChange={(e) => onChange({ ...value, dueAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field>
-      <Field label="提醒时间"><input type="datetime-local" value={localInput(value.reminderAt)} onChange={(e) => onChange({ ...value, reminderAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field>
-      <Field label="预计用时（分钟）"><input type="number" min={0} value={value.durationMinutes ?? 0} onChange={(e) => onChange({ ...value, durationMinutes: Number(e.target.value) })} className="field rounded-lg" /></Field>
+    <div><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{value.type === "event" ? "日程时间" : value.type === "task" ? "任务安排" : "时间与提醒"}</p><div className="grid gap-3 sm:grid-cols-2">
+      {value.type === "event" ? <><Field label="开始时间"><input type="datetime-local" value={localInput(value.startAt)} onChange={(e) => onChange({ ...value, startAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field><Field label="结束时间"><input type="datetime-local" value={localInput(value.endAt)} onChange={(e) => onChange({ ...value, endAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field><Field label="提醒时间"><input type="datetime-local" value={localInput(value.reminderAt)} onChange={(e) => onChange({ ...value, reminderAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field><Field label="地点"><input value={value.location ?? ""} onChange={(e) => onChange({ ...value, location: e.target.value })} className="field rounded-lg" placeholder="可选" /></Field></> : value.type === "task" ? <><Field label="计划开始"><input type="datetime-local" value={localInput(value.startAt)} onChange={(e) => onChange({ ...value, startAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field><Field label="最晚完成"><input type="datetime-local" value={localInput(value.dueAt)} onChange={(e) => onChange({ ...value, dueAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field><Field label="预计用时（分钟）"><input type="number" min={0} value={value.durationMinutes ?? 0} onChange={(e) => onChange({ ...value, durationMinutes: Number(e.target.value) })} className="field rounded-lg" /></Field><Field label="提醒时间"><input type="datetime-local" value={localInput(value.reminderAt)} onChange={(e) => onChange({ ...value, reminderAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field></> : <><Field label="日期时间"><input type="datetime-local" value={localInput(value.startAt || value.dueAt)} onChange={(e) => onChange({ ...value, startAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field><Field label="提醒时间"><input type="datetime-local" value={localInput(value.reminderAt)} onChange={(e) => onChange({ ...value, reminderAt: fromLocalInput(e.target.value) })} className="field rounded-lg" /></Field></>}
     </div></div>
+    {value.type === "event" ? <div><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">重复安排</p><Field label="重复"><select value={recurrence.frequency} onChange={(event) => setRecurrence(event.target.value)} className="field rounded-lg"><option value="none">不重复</option><option value="daily">每天</option><option value="weekly">每周</option><option value="monthly">每月</option></select></Field>{recurrence.frequency === "weekly" ? <div className="mt-2 grid grid-cols-7 gap-1">{[[1, "一"], [2, "二"], [3, "三"], [4, "四"], [5, "五"], [6, "六"], [0, "日"]].map(([day, label]) => <button type="button" key={day} onClick={() => toggleWeekday(Number(day))} className={`border px-1 py-2 text-xs ${recurrence.weekdays.includes(Number(day)) ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>周{label}</button>)}</div> : null}</div> : null}
     <div><p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">归类与优先级</p><div className="grid gap-3 sm:grid-cols-2">
       <Field label="项目"><input list="agenda-projects" value={value.project ?? ""} onChange={(e) => onChange({ ...value, project: e.target.value })} className="field rounded-lg" placeholder="未归类" /></Field>
       <Field label="确定性"><select value={value.certainty ?? "confirmed"} onChange={(e) => onChange({ ...value, certainty: e.target.value as Candidate["certainty"] })} className="field rounded-lg"><option value="confirmed">正式</option><option value="tentative">暂定</option></select></Field>
@@ -234,7 +247,24 @@ function CaptureCard({ capture, projects, onChanged }: { capture: Capture; proje
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   async function parse() { setBusy(true); setError(""); try { const result = await organizerApi.parseCapture(capture.id); setCandidates(result.items); await onChanged() } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) } }
-  async function confirm() { setBusy(true); setError(""); try { await organizerApi.confirmCapture(capture.id, candidates); await onChanged() } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) } }
+  async function confirm() {
+    setBusy(true); setError("")
+    try {
+      const { items } = await organizerApi.confirmCapture(capture.id, candidates)
+      for (const [index, candidate] of candidates.entries()) {
+        if (candidate.type !== "event" || !candidate.recurrenceRule || !candidate.startAt || !items[index]) continue
+        try {
+          const rule = JSON.parse(candidate.recurrenceRule)
+          if (!["daily", "weekly", "monthly"].includes(rule.frequency)) continue
+          await organizerApi.createRecurrenceSeries({ itemId: items[index].id, kind: "event", rule, timezone: candidate.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, startsAt: candidate.startAt, endsAt: candidate.endAt })
+        } catch (error) {
+          setError(`“${candidate.title}”已保存，但循环规则未能创建：${errorMessage(error)}`)
+          return
+        }
+      }
+      await onChanged()
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   async function remove() {
     if (!window.confirm("彻底删除这条快速记录？原文、AI 整理结果和截图附件都会永久删除，无法恢复。")) return
     setBusy(true); setError("")
@@ -260,7 +290,14 @@ function ItemDialog({ item, projects, onClose, onSaved }: { item?: OrganizerItem
   async function save() {
     if (!value.title.trim()) return
     setBusy(true); setError("")
-    try { if (item) await organizerApi.updateItem({ ...item, ...value, status }); else await organizerApi.createItem(value); await onSaved(); onClose() }
+    try {
+      const saved = item ? await organizerApi.updateItem({ ...item, ...value, status }) : await organizerApi.createItem(value)
+      if (!item && value.type === "event" && value.recurrenceRule && value.startAt) {
+        const rule = JSON.parse(value.recurrenceRule)
+        await organizerApi.createRecurrenceSeries({ itemId: saved.id, kind: "event", rule, timezone: value.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, startsAt: value.startAt, endsAt: value.endAt })
+      }
+      await onSaved(); onClose()
+    }
     catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   return <div className="agenda-dialog-backdrop fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6" onMouseDown={(e) => { if (e.currentTarget === e.target) onClose() }}>
@@ -448,12 +485,12 @@ export function AgendaApp() {
   }
 
   if (!authChecked) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>
-  if (!session) return <Login onAuthenticated={() => void checkSession()} />
+  if (!session) return <AgendaLogin onAuthenticated={() => void checkSession()} />
   const title = navItems.find((item) => item.id === view)?.label ?? "Agenda"
 
   return <main className="agenda-root min-h-screen bg-background text-foreground">
     <div className="min-h-screen md:grid md:grid-cols-[216px_minmax(0,1fr)]">
-      <aside className="agenda-sidebar hidden border-r border-border md:flex md:flex-col"><div className="border-b border-border px-5 py-5"><p className="text-xs text-muted-foreground">个人工作台</p><h1 className="mt-1 text-xl font-semibold">Agenda</h1></div><nav className="flex-1 space-y-1 p-3">{navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className={`agenda-nav-item flex w-full items-center gap-3 px-3 py-2 text-sm ${view === id ? "is-active" : "text-muted-foreground"}`}><Icon className="h-4 w-4" />{label}{id === "inbox" && pending.length ? <span className="ml-auto text-xs">{pending.length}</span> : null}{id === "memory" && memories.some((m) => m.status === "proposed") ? <CircleDashed className="ml-auto h-3.5 w-3.5" /> : null}</button>)}</nav><div className="border-t border-border p-3"><button onClick={() => setSettingsOpen(true)} className="agenda-nav-item flex w-full items-center gap-3 px-3 py-2 text-sm text-muted-foreground"><Settings className="h-4 w-4" />设置</button></div></aside>
+      <aside className="agenda-sidebar hidden border-r border-border md:flex md:flex-col"><div className="border-b border-border px-5 py-5"><p className="text-xs text-muted-foreground">个人工作台</p><h1 className="mt-1 text-xl font-semibold">Agenda</h1></div><nav className="flex-1 space-y-1 p-3"><a href="/agenda/assistant/" className="agenda-nav-item flex w-full items-center gap-3 px-3 py-2 text-sm text-muted-foreground"><Sparkles className="h-4 w-4" />AI 工作台</a>{navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className={`agenda-nav-item flex w-full items-center gap-3 px-3 py-2 text-sm ${view === id ? "is-active" : "text-muted-foreground"}`}><Icon className="h-4 w-4" />{label}{id === "inbox" && pending.length ? <span className="ml-auto text-xs">{pending.length}</span> : null}{id === "memory" && memories.some((m) => m.status === "proposed") ? <CircleDashed className="ml-auto h-3.5 w-3.5" /> : null}</button>)}</nav><div className="border-t border-border p-3"><button onClick={() => setSettingsOpen(true)} className="agenda-nav-item flex w-full items-center gap-3 px-3 py-2 text-sm text-muted-foreground"><Settings className="h-4 w-4" />设置</button></div></aside>
        <div className="agenda-content min-w-0 pb-20 md:pb-0"><header className="agenda-topbar flex h-16 items-center justify-between border-b border-border px-4 sm:px-6"><div className="flex items-center gap-3"><Menu className="h-5 w-5 md:hidden" /><div><h1 className="font-semibold">{title}</h1><p className="hidden text-xs text-muted-foreground sm:block">{view === "today" ? new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(new Date()) : "管理你的日程、项目与历史"}</p></div></div><div className="flex items-center gap-1"><button onClick={() => setEditing("new")} className="agenda-primary-action flex items-center gap-2 rounded-md px-3 py-2 text-sm text-primary-foreground"><Plus className="h-4 w-4" /><span className="hidden sm:inline">新增</span></button><button onClick={() => void refresh()} className="agenda-icon-button rounded-md p-2.5" aria-label="刷新"><RefreshCw className="h-4 w-4" /></button><button onClick={enablePush} className="agenda-icon-button rounded-md p-2.5" aria-label="通知"><Bell className="h-4 w-4" /></button><button onClick={() => setSettingsOpen(true)} className="agenda-icon-button rounded-md p-2.5 md:hidden" aria-label="设置"><Settings className="h-4 w-4" /></button><button onClick={async () => { await organizerApi.logout(); setSession(null) }} className="agenda-icon-button rounded-md p-2.5" aria-label="退出"><LogOut className="h-4 w-4" /></button></div></header>
         {(view === "today" || view === "calendar" || view === "projects") ? <AssistantPanel embedded onChanged={refresh} /> : null}
         <div className="agenda-content-inner mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -474,7 +511,7 @@ export function AgendaApp() {
         </div>
       </div>
     </div>
-    <nav className="agenda-bottom-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-border md:hidden">{navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className={`agenda-bottom-nav-item flex h-16 flex-col items-center justify-center gap-1 text-[10px] ${view === id ? "is-active" : "text-muted-foreground"}`}><Icon className="h-4 w-4" />{label}</button>)}</nav>
+    <nav className="agenda-bottom-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-border md:hidden"><a href="/agenda/assistant/" className="agenda-bottom-nav-item flex h-16 flex-col items-center justify-center gap-1 text-[10px] text-muted-foreground"><Sparkles className="h-4 w-4" />AI</a>{navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setView(id)} className={`agenda-bottom-nav-item flex h-16 flex-col items-center justify-center gap-1 text-[10px] ${view === id ? "is-active" : "text-muted-foreground"}`}><Icon className="h-4 w-4" />{label}</button>)}</nav>
     {editing ? <ItemDialog item={editing === "new" ? undefined : editing} projects={projects} onClose={() => setEditing(null)} onSaved={refresh} /> : null}
     {settingsOpen ? <SettingsPanel items={items} onClose={() => setSettingsOpen(false)} onMessage={setMessage} /> : null}
     {quickAction?.kind === "project" ? <QuickProjectSheet item={quickAction.item} projects={projects} onClose={() => setQuickAction(null)} onSaved={refresh} /> : null}

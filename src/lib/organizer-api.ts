@@ -52,6 +52,39 @@ export type OrganizerItem = Candidate & {
   updatedAt: string
 }
 
+export type RecurrenceRule = {
+  frequency: "daily" | "weekly" | "monthly"
+  interval?: number
+  weekdays?: number[]
+  day?: number
+  count?: number
+  until?: string
+}
+
+export type RecurrenceSeries = {
+  id: string
+  itemId: string
+  kind: "task" | "event"
+  ruleVersion: number
+  rule: RecurrenceRule
+  timezone: string
+  startsAt: string
+  endsAt?: string
+  status: string
+}
+
+export type RecurrenceOccurrence = {
+  id: string
+  seriesId: string
+  occurrenceKey: string
+  scheduledStart: string
+  scheduledEnd?: string
+  status: "scheduled" | "completed" | "skipped" | "cancelled" | string
+  override?: unknown
+  completedAt?: string
+  version: number
+}
+
 export type Project = {
   id: string
   name: string
@@ -189,11 +222,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json")
   if (runtime.token) headers.set("Authorization", `Bearer ${runtime.token}`)
-  const response = await fetch(`${runtime.baseUrl}${path}`, {
-    ...init,
-    headers,
-    credentials: runtime === browserRuntime ? "same-origin" : "omit",
-  })
+  let response: Response
+  try {
+    response = await fetch(`${runtime.baseUrl}${path}`, {
+      ...init,
+      headers,
+      credentials: runtime === browserRuntime ? "same-origin" : "omit",
+    })
+  } catch (error) {
+    // Browsers intentionally expose CORS, DNS and TLS failures as the same
+    // opaque TypeError. Keep the useful context for the UI and native logs.
+    const detail = error instanceof Error && error.message && error.message !== "Failed to fetch"
+      ? `（${error.message}）`
+      : ""
+    throw new OrganizerApiError(0, `无法连接 Agenda 服务，请检查网络或服务器地址${detail}`)
+  }
   const text = await response.text()
   let body: unknown = null
   if (text) {
@@ -260,6 +303,17 @@ export const organizerApi = {
   listEvents: () => request<{ events: ItemEvent[] }>("/events?limit=1000"),
   snoozeItem: (id: string, minutes = 10) =>
     request<OrganizerItem>(`/items/${encodeURIComponent(id)}/snooze`, { method: "POST", body: JSON.stringify({ minutes }) }),
+  createRecurrenceSeries: (series: Pick<RecurrenceSeries, "itemId" | "kind" | "rule" | "timezone" | "startsAt"> & Partial<RecurrenceSeries>) =>
+    request<RecurrenceSeries>("/recurrence/series", { method: "POST", body: JSON.stringify(series) }),
+  getRecurrenceSeries: (id: string) => request<RecurrenceSeries>(`/recurrence/series/${encodeURIComponent(id)}`),
+  listRecurrenceOccurrences: (id: string, from?: string, to?: string) => {
+    const query = new URLSearchParams()
+    if (from) query.set("from", from)
+    if (to) query.set("to", to)
+    return request<{ occurrences: RecurrenceOccurrence[] }>(`/recurrence/series/${encodeURIComponent(id)}/occurrences?${query}`)
+  },
+  updateRecurrenceOccurrence: (id: string, update: { action: "skip" | "move" | "cancel" | "complete"; scheduledStart?: string; scheduledEnd?: string; override?: unknown; expectedVersion?: number }) =>
+    request<RecurrenceOccurrence>(`/recurrence/occurrences/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(update) }),
   listProjects: () => request<{ projects: Project[] }>("/projects"),
   createProject: (project: Pick<Project, "name"> & Partial<Project>) => request<Project>("/projects", { method: "POST", body: JSON.stringify(project) }),
   updateProject: (project: Project) => request<Project>(`/projects/${encodeURIComponent(project.id)}`, { method: "PUT", body: JSON.stringify(project) }),

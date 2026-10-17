@@ -1,0 +1,16 @@
+---
+import { AssistantWorkspace } from "@/components/agenda/AssistantWorkspace"
+import BaseLayout from "@/layouts/BaseLayout.astro"
+---
+
+<BaseLayout
+  title="Agenda AI 工作台"
+  description="使用 AI 管理你的任务、日程和项目"
+  robots="noindex,nofollow,noarchive"
+  analytics={false}
+>
+  <meta slot="head" name="theme-color" content="#2f8f59" />
+  <div data-pagefind-ignore>
+    <AssistantWorkspace client:load />
+  </div>
+</BaseLayout>
