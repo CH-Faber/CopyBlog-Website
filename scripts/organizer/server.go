@@ -30,40 +30,8 @@ func newServer(cfg Config, store *Store) *Server {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/organizer/v1/health", s.handleHealth)
-	mux.HandleFunc("POST /api/organizer/v1/auth/login", s.handleLogin)
-	mux.HandleFunc("POST /api/organizer/v1/auth/logout", s.authorized(s.handleLogout))
-	mux.HandleFunc("GET /api/organizer/v1/session", s.authorized(s.handleSession))
-	mux.HandleFunc("PUT /api/organizer/v1/password", s.authorized(s.handleChangePassword))
-	mux.HandleFunc("POST /api/organizer/v1/device-tokens", s.authorized(s.handleCreateDeviceToken))
-	mux.HandleFunc("POST /api/organizer/v1/captures", s.authorized(s.handleCreateCapture))
-	mux.HandleFunc("GET /api/organizer/v1/captures", s.authorized(s.handleListCaptures))
-	mux.HandleFunc("GET /api/organizer/v1/captures/{id}", s.authorized(s.handleGetCapture))
-	mux.HandleFunc("DELETE /api/organizer/v1/captures/{id}", s.authorized(s.handleDeleteCapture))
-	mux.HandleFunc("GET /api/organizer/v1/captures/{id}/attachment", s.authorized(s.handleCaptureAttachment))
-	mux.HandleFunc("POST /api/organizer/v1/captures/{id}/parse", s.authorized(s.handleParseCapture))
-	mux.HandleFunc("POST /api/organizer/v1/captures/{id}/confirm", s.authorized(s.handleConfirmCapture))
-	mux.HandleFunc("GET /api/organizer/v1/items", s.authorized(s.handleListItems))
-	mux.HandleFunc("POST /api/organizer/v1/items", s.authorized(s.handleCreateItem))
-	mux.HandleFunc("GET /api/organizer/v1/items/{id}", s.authorized(s.handleGetItem))
-	mux.HandleFunc("PUT /api/organizer/v1/items/{id}", s.authorized(s.handleUpdateItem))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/complete", s.authorized(s.handleCompleteItem))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/cancel", s.authorized(s.handleCancelItem))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/reopen", s.authorized(s.handleReopenItem))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/archive", s.authorized(s.handleArchiveItem))
-	mux.HandleFunc("GET /api/organizer/v1/items/{id}/events", s.authorized(s.handleListItemEvents))
-	mux.HandleFunc("POST /api/organizer/v1/items/{id}/snooze", s.authorized(s.handleSnoozeItem))
-	mux.HandleFunc("GET /api/organizer/v1/projects", s.authorized(s.handleListProjects))
-	mux.HandleFunc("POST /api/organizer/v1/projects", s.authorized(s.handleCreateProject))
-	mux.HandleFunc("GET /api/organizer/v1/projects/{id}", s.authorized(s.handleGetProject))
-	mux.HandleFunc("PUT /api/organizer/v1/projects/{id}", s.authorized(s.handleUpdateProject))
-	mux.HandleFunc("GET /api/organizer/v1/events", s.authorized(s.handleListEvents))
-	mux.HandleFunc("GET /api/organizer/v1/memories", s.authorized(s.handleListMemories))
-	mux.HandleFunc("POST /api/organizer/v1/memories", s.authorized(s.handleCreateMemory))
-	mux.HandleFunc("PUT /api/organizer/v1/memories/{id}", s.authorized(s.handleUpdateMemory))
-	mux.HandleFunc("GET /api/organizer/v1/push/vapid-key", s.authorized(s.handleVAPIDKey))
-	mux.HandleFunc("POST /api/organizer/v1/push/subscriptions", s.authorized(s.handlePushSubscription))
-	mux.HandleFunc("GET /api/organizer/v1/export", s.authorized(s.handleExport))
+	s.registerAgendaRoutes(mux, "/api/organizer/v1")
+	s.registerAgendaRoutes(mux, "/api/agenda/v1")
 	return s.commonHeaders(mux)
 }
 
@@ -72,12 +40,38 @@ func (s *Server) commonHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		if strings.TrimRight(r.Header.Get("Origin"), "/") == "https://localhost" {
+			w.Header().Set("Access-Control-Allow-Origin", "https://localhost")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Add("Vary", "Origin")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "pushEnabled": s.push.enabled(), "time": nowString()})
+}
+
+func (s *Server) handleHealthZ(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleReadyZ(w http.ResponseWriter, _ *http.Request) {
+	if err := s.store.db.Ping(); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready", "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+}
+
+func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"service": "agenda-api", "version": "dev", "schemaVersion": 1})
 }
 
 func remoteIP(r *http.Request) string {
@@ -124,15 +118,63 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "save session")
 		return
 	}
-	setSessionCookie(w, token, expires)
+	s.setSessionCookie(w, token, expires)
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "expiresAt": expires.UTC().Format(time.RFC3339)})
 }
 
+func (s *Server) handleDeviceLogin(w http.ResponseWriter, r *http.Request) {
+	key := remoteIP(r)
+	if !s.limiter.allow(key) {
+		writeError(w, http.StatusTooManyRequests, "too many login attempts")
+		return
+	}
+	var request struct {
+		Password   string `json:"password"`
+		DeviceName string `json:"deviceName"`
+	}
+	if err := decodeJSON(r, &request, 32<<10); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	hash, err := s.store.adminPasswordHash(s.cfg.AdminPasswordHash)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "load credentials")
+		return
+	}
+	if !verifyPassword(hash, request.Password) {
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	name := strings.TrimSpace(request.DeviceName)
+	if name == "" {
+		name = "Agenda Android"
+	}
+	if len([]rune(name)) > 80 {
+		writeError(w, http.StatusBadRequest, "device name is too long")
+		return
+	}
+	s.limiter.clear(key)
+	id, token, err := s.store.createDeviceToken(name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "create device token")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"authenticated": true, "deviceId": id, "token": token})
+}
+
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if token := bearerToken(r); token != "" {
+		if err := s.store.revokeDeviceToken(token); err != nil {
+			writeError(w, http.StatusInternalServerError, "revoke device token")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
+		return
+	}
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		_ = s.store.deleteSession(cookie.Value)
 	}
-	clearSessionCookie(w)
+	s.clearSessionCookie(w)
 	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
 }
 
@@ -174,7 +216,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "save session")
 		return
 	}
-	setSessionCookie(w, token, expires)
+	s.setSessionCookie(w, token, expires)
 	writeJSON(w, http.StatusOK, map[string]bool{"updated": true})
 }
 

@@ -8,6 +8,13 @@ dist
 .gosync/
 test-results/
 playwright-report/
+apps/agenda-android/dist/
+apps/agenda-android/android/local.properties
+apps/agenda-android/android/.gradle/
+.android-sdk-*/
+.android-cmdline-tools-*.zip
+.android-cmdline-extract-*/
+.worktrees/
 
 AGENTS.md
 CLAUDE.md

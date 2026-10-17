@@ -69,6 +69,33 @@ func loginCookie(t *testing.T, handler http.Handler, password string) *http.Cook
 	return cookies[0]
 }
 
+func TestSessionCookieSecurityFollowsPublicOrigin(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		origin string
+		secure bool
+	}{
+		{name: "production HTTPS", origin: "https://faberhu.top", secure: true},
+		{name: "local HTTP preview", origin: "http://127.0.0.1:4322", secure: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server, _, password := testServer(t)
+			server.cfg.PublicOrigin = test.origin
+			login := requestJSON(t, server.Handler(), http.MethodPost, "/api/agenda/v1/auth/login", map[string]string{"password": password}, nil)
+			if login.Code != http.StatusOK {
+				t.Fatalf("login failed: %d %s", login.Code, login.Body.String())
+			}
+			cookies := login.Result().Cookies()
+			if len(cookies) != 1 {
+				t.Fatalf("expected one session cookie, got %d", len(cookies))
+			}
+			if cookies[0].Secure != test.secure {
+				t.Fatalf("Secure=%t for %s, want %t", cookies[0].Secure, test.origin, test.secure)
+			}
+		})
+	}
+}
+
 func requestJSON(t *testing.T, handler http.Handler, method, path string, body any, cookie *http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 	var data []byte
@@ -138,6 +165,52 @@ func TestDeviceTokenCanUseOrganizerAPI(t *testing.T) {
 	listed := bearerJSON(t, handler, http.MethodGet, "/api/organizer/v1/items", nil, tokenResponse.Token)
 	if listed.Code != http.StatusOK || !bytes.Contains(listed.Body.Bytes(), []byte("来自 Obsidian")) {
 		t.Fatalf("bearer list failed: %d %s", listed.Code, listed.Body.String())
+	}
+}
+
+func TestAndroidDeviceLoginAndLogout(t *testing.T) {
+	_, handler, password := testServer(t)
+	login := requestJSON(t, handler, http.MethodPost, "/api/organizer/v1/auth/device", map[string]string{
+		"password":   password,
+		"deviceName": "vivo test phone",
+	}, nil)
+	if login.Code != http.StatusCreated {
+		t.Fatalf("device login failed: %d %s", login.Code, login.Body.String())
+	}
+	var response struct {
+		DeviceID string `json:"deviceId"`
+		Token    string `json:"token"`
+	}
+	if err := json.Unmarshal(login.Body.Bytes(), &response); err != nil || response.DeviceID == "" || response.Token == "" {
+		t.Fatalf("invalid device login response: %v %s", err, login.Body.String())
+	}
+	session := bearerJSON(t, handler, http.MethodGet, "/api/organizer/v1/session", nil, response.Token)
+	if session.Code != http.StatusOK {
+		t.Fatalf("device session failed: %d %s", session.Code, session.Body.String())
+	}
+	logout := bearerJSON(t, handler, http.MethodPost, "/api/organizer/v1/auth/logout", map[string]any{}, response.Token)
+	if logout.Code != http.StatusOK {
+		t.Fatalf("device logout failed: %d %s", logout.Code, logout.Body.String())
+	}
+	rejected := bearerJSON(t, handler, http.MethodGet, "/api/organizer/v1/session", nil, response.Token)
+	if rejected.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked token still works: %d %s", rejected.Code, rejected.Body.String())
+	}
+}
+
+func TestAndroidOriginPreflight(t *testing.T) {
+	_, handler, _ := testServer(t)
+	request := httptest.NewRequest(http.MethodOptions, "/api/organizer/v1/items", nil)
+	request.Header.Set("Origin", "https://localhost")
+	request.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	request.Header.Set("Access-Control-Request-Headers", "authorization")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("preflight failed: %d %s", recorder.Code, recorder.Body.String())
+	}
+	if origin := recorder.Header().Get("Access-Control-Allow-Origin"); origin != "https://localhost" {
+		t.Fatalf("unexpected CORS origin: %q", origin)
 	}
 }
 
