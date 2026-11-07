@@ -38,15 +38,38 @@ jobs:
 
       - name: Build Static Site
         run: pnpm run build
-        
+
+      # Agenda is built and deployed by its own repository workflow. A stale
+      # copy inside this site's dist would silently replace the live app, so it
+      # is removed before upload and excluded from the sync below.
+      - name: Drop any stale Agenda build from the artifact
+        run: |
+          if [ -d dist/agenda ]; then
+            echo "Removing dist/agenda — the Agenda app deploys separately"
+            rm -rf dist/agenda
+          fi
+
       # 以下是将打包后的产物部署到您的私有服务器
       # 需要您在 GitHub 仓库的 Settings -> Secrets and variables -> Actions 中设置相关秘钥
       - name: Deploy to Server via SSH
         uses: easingthemes/ssh-deploy@main
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
-          ARGS: "-rltgoDzvO --delete"
+          ARGS: "-rltgoDzvO --delete --exclude=agenda/ --exclude=agenda"
           SOURCE: "dist/"
           REMOTE_HOST: ${{ secrets.SERVER_HOST }}
           REMOTE_USER: ${{ secrets.SERVER_USERNAME }}
           TARGET: ${{ secrets.SERVER_STATIC_DIR }} # 例如：/var/www/html
+
+      # Fail loudly instead of silently serving an old Agenda build.
+      - name: Verify the Agenda app survived the deploy
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS https://faberhu.top/agenda/ | grep -q '/agenda/_astro/'; then
+              echo "Agenda build intact"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "Agenda was overwritten by this deploy" >&2
+          exit 1
