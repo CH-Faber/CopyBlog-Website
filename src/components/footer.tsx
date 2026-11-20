@@ -1,13 +1,6 @@
-import { Github, MessageCircle, Twitter, Rss, Mail, Music } from "lucide-react"
-import { profile, type ProfileLinkType } from "@/data/profile"
-
-const iconMap: Record<ProfileLinkType, React.ElementType> = {
-  qq: MessageCircle,
-  music: Music,
-  github: Github,
-  twitter: Twitter,
-  email: Mail,
-}
+import { Github, Rss } from "lucide-react"
+import { profile } from "@/data/profile"
+import { ProfileIcon } from "@/components/profile-icon"
 
 export function Footer() {
   return (
@@ -66,21 +59,18 @@ export function Footer() {
             <div>
               <h4 className="text-sm font-medium text-foreground mb-4 uppercase tracking-wide">联系</h4>
               <div className="flex items-center gap-4">
-                {profile.links.map((link) => {
-                  const Icon = iconMap[link.type]
-                  return (
-                    <a
-                      key={link.name}
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all duration-200"
-                      aria-label={link.name}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </a>
-                  )
-                })}
+                {profile.links.map((link) => (
+                  <a
+                    key={link.name}
+                    href={link.url}
+                    target={link.type === "email" ? undefined : "_blank"}
+                    rel="noreferrer"
+                    className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all duration-200"
+                    aria-label={link.name}
+                  >
+                    <ProfileIcon type={link.type} className="w-4 h-4" />
+                  </a>
+                ))}
               </div>
               <p className="text-muted-foreground text-sm mt-6">通过 RSS 订阅，获取最新文章更新。</p>
               <a

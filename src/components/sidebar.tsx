@@ -2,8 +2,9 @@
 
 import { useState, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { Calendar, Github, MessageCircle, Music } from "lucide-react"
+import { Calendar } from "lucide-react"
 import { profile } from "@/data/profile"
+import { ProfileIcon } from "@/components/profile-icon"
 
 interface SidebarProps {
   categories: { id: string; name: string; count: number }[]
@@ -54,22 +55,19 @@ export function Sidebar({
         <p className="text-sm text-muted-foreground leading-relaxed mb-4">{profile.bio}</p>
 
         {/* Social Links */}
-        <div className="flex items-center justify-center gap-3 mb-4">
-          {profile.links.map((link) => {
-            const Icon = link.type === "qq" ? MessageCircle : link.type === "music" ? Music : Github
-            return (
-              <a
-                key={link.name}
-                href={link.url}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2 rounded-full bg-secondary hover:bg-primary hover:text-primary-foreground transition-colors"
-                aria-label={link.name}
-              >
-                <Icon className="w-4 h-4" />
-              </a>
-            )
-          })}
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
+          {profile.links.map((link) => (
+            <a
+              key={link.name}
+              href={link.url}
+              target={link.type === "email" ? undefined : "_blank"}
+              rel="noreferrer"
+              className="p-2 rounded-full bg-secondary hover:bg-primary hover:text-primary-foreground transition-colors"
+              aria-label={link.name}
+            >
+              <ProfileIcon type={link.type} className="w-4 h-4" />
+            </a>
+          ))}
         </div>
 
         {/* Quick Stats */}
