@@ -85,29 +85,36 @@ export default function AboutPage({
                 <cite className="mt-3 block text-sm not-italic text-muted-foreground">— 村上春树</cite>
               </blockquote>
               <p>
-                你好，我是胡展榕（{profile.name}），欢迎来到我的博客。
-              </p>
-              <p>
-                现在是一名就读于
+                胡展榕，也叫 {profile.name}。来自广东茂名信宜，06 年的小孩，目前就读于
                 <a href="https://www.jlu.edu.cn" target="_blank" rel="noopener noreferrer">
-                  JLU
+                  吉林大学
                 </a>
-                的 25 届本科生，来自广东茂名信宜。
+                （JLU），生物技术专业，辅修软件工程。
               </p>
 
-              <div className="not-prose my-7">
-                <p className="mb-3 text-sm text-muted-foreground">平时在这些事情上花时间：</p>
-                <ul className="flex list-none flex-wrap gap-2 pl-0">
-                  {profile.interests.map((interest) => (
-                    <li
-                      key={interest}
-                      className="rounded-full border border-border bg-secondary/60 px-3.5 py-1.5 text-sm text-foreground/80"
-                    >
-                      {interest}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <p>
+                自我记事起，到我有自己的认知之前，我的生活一直就是不断去接受新的环境。小学一年级之前都一直在常州生活，之后就是漂泊不定的四处转学，甚至后来初高中入团的时候我还需要填六七行受教育经历。在常州待过，在惠州待过，也在贵州待过，最后还是回到了家乡信宜。并不是家庭生活丰富，而是因家庭经济情况四处奔波。
+              </p>
+
+              <p>
+                我对于自我的认知，至少是在初高中那段个性被压得几乎没有余地的日子里，才慢慢产生的。大部分时候我连一个能躲的角落都没有——教室、宿舍、家，都是别人安排好的地方。但初三和高三那两年，对应的教学楼顶楼都有一间阁楼。很多时候我就静静待在那里，看着小说，又或者偷偷摸摸地玩玩手机。
+              </p>
+
+              <p>
+                人越是被压抑，就越想做些什么。我开始不断去尝试体验，去感受：玩 Minecraft、学习 CS 写写代码、打打羽毛球、骑一下公路车、读一读知乎认知小文章、喝喝小茶、饮饮小咖，再到后来滑滑板、写写小文章小日记，跑跑步、跳跳绳、健健身、做做小网站、剪剪视频什么的。不过不少都只是探索，浅尝辄止，到最后我坚持下来的也就只有滑滑板，写些什么。
+              </p>
+
+              <p>
+                二六上半年依旧母胎单身，却在大学的第三学期体验了两次分手。似乎我还是需要更多的成长，以及向内建设。
+              </p>
+
+              <p>
+                本博客叫「一个闪念」。有很多时候，我们生活中会突然有一个乍现的想法闪过，但是如果不勤于记录，它的确就会一闪而过，故此取这个名字来勉励自己珍惜自己的每一个想法。
+              </p>
+
+              <p>
+                虽然说目前我的闪念页很像朋友圈，但我会更希望接下来我能把它真正地利用起来，记录好自己的每一个想法。关于文章部分，我有心情就写，没心情的话基本 N 年不更新。但如果你看到了我目前的文字，并且让你有一点感触，或者说更加了解了我这个人，那这就是我的最大荣幸。
+              </p>
 
               <p>
                 📬 联系我：<a href="mailto:hufaber120@gmail.com">hufaber120@gmail.com</a>
