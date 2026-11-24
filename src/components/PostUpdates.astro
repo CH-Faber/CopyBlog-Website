@@ -1,0 +1,52 @@
+---
+export interface PostUpdateItem {
+  date: Date
+  text: string
+}
+
+interface Props {
+  updates: PostUpdateItem[]
+  heading?: string
+}
+
+const { updates, heading = "更新记录" } = Astro.props as Props
+
+const ordered = [...updates].sort((left, right) => left.date.getTime() - right.date.getTime())
+const formatDate = (date: Date) => date.toISOString().slice(0, 10)
+---
+
+<section class="post-updates" aria-labelledby="updates">
+  <h2 id="updates">
+    {heading}
+    <a class="anchor" href="#updates" aria-label={`链接到「${heading}」`} data-pagefind-ignore>
+      <span class="anchor-icon">#</span>
+    </a>
+  </h2>
+
+  <ol class="not-prose mt-5 ps-1 sm:ps-2">
+    {
+      ordered.map((item, index) => (
+        <li class="group relative flex gap-3">
+          <span class="relative flex w-3 shrink-0 justify-center" aria-hidden="true">
+            {index > 0 && (
+              <span class="absolute left-1/2 top-0 h-[0.45rem] w-px -translate-x-1/2 bg-muted-foreground/30" />
+            )}
+            {index < ordered.length - 1 && (
+              <span class="absolute bottom-0 left-1/2 top-[0.45rem] w-px -translate-x-1/2 bg-muted-foreground/30" />
+            )}
+            <span class="relative z-10 mt-[0.45rem] h-3 w-3 shrink-0 rounded-full border-2 border-muted-foreground/70 bg-background transition-all duration-200 group-hover:scale-125 group-hover:border-primary" />
+          </span>
+
+          <div class="flex flex-col gap-1 pb-5 sm:flex-row sm:items-baseline sm:gap-2">
+            <samp class="w-fit shrink-0 rounded-md py-0.5 font-mono text-sm text-muted-foreground max-sm:bg-muted/60 max-sm:px-2 sm:min-w-[5.25rem] sm:text-right">
+              {formatDate(item.date)}
+            </samp>
+            <p class="m-0 text-[0.95rem] leading-7 text-foreground/85">
+              {item.text}
+            </p>
+          </div>
+        </li>
+      ))
+    }
+  </ol>
+</section>

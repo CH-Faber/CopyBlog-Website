@@ -1,6 +1,7 @@
 ---
 import type { CollectionEntry } from "astro:content"
 import { TableOfContents } from "./table-of-contents"
+import PostUpdates from "./PostUpdates.astro"
 
 interface Props {
   post: CollectionEntry<"posts">
@@ -19,6 +20,11 @@ const categoryLabel = data.category?.toString().trim() || "未分类"
 const categoryHref = `/?category=${encodeURIComponent(categoryLabel)}#home-main`
 const primaryTag = tags[0]
 const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#home-main` : null
+const updates: Array<{ date: Date; text: string }> = data.updates ?? []
+let updatedDate: Date | undefined = data.updated
+for (const item of updates) {
+  if (!updatedDate || item.date.getTime() > updatedDate.getTime()) updatedDate = item.date
+}
 ---
 
 <main class="pt-24 pb-4" data-pagefind-body>
@@ -50,6 +56,14 @@ const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#hom
           </svg>
           {formattedDate}
         </span>
+        {updatedDate && (
+          <span class="flex items-center gap-2" title="最后更新">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+            更新于 {updatedDate.toISOString().slice(0, 10)}
+          </span>
+        )}
         <a href={categoryHref} class="inline-flex items-center gap-2 hover:text-primary transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10" />
@@ -133,6 +147,7 @@ const primaryTagHref = primaryTag ? `/?tag=${encodeURIComponent(primaryTag)}#hom
         prose-hr:border-border prose-hr:my-8"
       >
         {hasSlot ? <slot /> : Content ? <Content /> : null}
+        {updates.length > 0 && <PostUpdates updates={updates} />}
       </article>
 
       {hasTableOfContents && (

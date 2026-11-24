@@ -22,6 +22,15 @@ const posts = defineCollection({
     title: z.string(),
     published: z.date(),
     updated: z.date().optional(),
+    updates: z
+      .array(
+        z.object({
+          date: z.coerce.date(),
+          text: z.string(),
+        }),
+      )
+      .optional()
+      .default([]),
     draft: z.boolean().optional().default(false),
     description: z.string().optional().default(""),
     image: z.string().optional().default(""),

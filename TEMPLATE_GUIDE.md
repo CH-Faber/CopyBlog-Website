@@ -28,6 +28,22 @@
 
 *   **博客文章 (`src/content/posts/`)**:
     所有的长篇博客文章都存放在这里。你可以参考 `hello-world.mdx` 的 frontmatter（文章属性，如 title, date, category 等）来创建新的文章。
+*   **文章更新记录 (`updates`)**:
+    在文章 frontmatter 中加入 `updates` 数组后，文章末尾会按时间先后渲染一条「更新记录」时间线，标题信息里同时显示「更新于」（没有填 `updated` 时自动取最新一条更新日期）：
+
+    ```yaml
+    ---
+    title: 示例文章
+    published: 2025-06-22
+    updates:
+      - date: 2025-07-11
+        text: 红牛架构调整，移除 Christian Horner 霍纳
+      - date: 2025-11-06
+        text: 追更部分车手外号
+    ---
+    ```
+
+    日期写 `YYYY-MM-DD` 即可，条目会按日期升序展示；不写 `updates` 的文章不会出现这个模块。
 *   **短文/想法 (`src/content/thoughts/`)**:
     这里适合用来记录零碎的思考、日常动态或者短篇笔记。
 *   **书架记录 (`public/data/books.json`)**:
