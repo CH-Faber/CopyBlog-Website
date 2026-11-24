@@ -17,6 +17,7 @@ export function ArticleCard({
   className?: string
   style?: CSSProperties
 }) {
+  const images = article.images?.length ? article.images : article.image ? [article.image] : []
   const primaryTag = article.tags?.[0]
   const wordCount = article.wordCount ? `${article.wordCount} 字` : "——"
   const readTime = article.readTime ?? "——"
@@ -102,15 +103,46 @@ export function ArticleCard({
           </div>
         </div>
 
-        {/* Thumbnail (optional) */}
-        {article.image ? (
-          <div className="hidden sm:block w-28 h-20 shrink-0 rounded-lg overflow-hidden">
-            <img
-              src={thumbnailImageSrc(article.image)}
-              alt=""
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              loading="lazy"
-            />
+        {/* Thumbnail gallery (optional) */}
+        {images.length > 0 ? (
+          <div
+            className={cn(
+              "hidden sm:block shrink-0 self-start overflow-hidden rounded-lg",
+              images.length === 1 ? "w-28" : "w-36",
+            )}
+          >
+            {images.length === 1 ? (
+              <img
+                src={thumbnailImageSrc(images[0])}
+                alt=""
+                className="h-20 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+              />
+            ) : (
+              <div
+                className={cn(
+                  "grid gap-1",
+                  images.length <= 4 ? "grid-cols-2" : "grid-cols-3",
+                )}
+              >
+                {images.map((src, index) => (
+                  <div
+                    key={`${src}-${index}`}
+                    className={cn(
+                      "overflow-hidden bg-muted",
+                      images.length === 3 && index === 0 ? "col-span-2 aspect-[2/1]" : "aspect-square",
+                    )}
+                  >
+                    <img
+                      src={thumbnailImageSrc(src)}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
 

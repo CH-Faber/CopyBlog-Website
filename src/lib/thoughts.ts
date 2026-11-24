@@ -74,12 +74,16 @@ export const toThoughtPreview = (thought: ThoughtEntry, maxLength = 96) => {
   const rendered = extractImages(md.render(body))
   const text = stripHtml(rendered.content)
 
+  const images = rendered.images.slice(0, 9)
+
   return {
     slug: thought.slug,
     title: thought.data.title,
     date: thought.data.published.toISOString(),
     excerpt: truncateText(text, maxLength),
-    image: rendered.images[0]?.src,
+    image: images[0]?.src,
+    images,
+    imageCount: rendered.images.length,
   }
 }
 

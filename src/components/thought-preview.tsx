@@ -1,4 +1,5 @@
 import { profile } from "@/data/profile"
+import { cn } from "@/lib/utils"
 
 const thumbnailImageSrc = (src: string) => src.replace(/(\/obsidian-assets\/[^/]+\/[^/]+)(\.[a-z0-9]+)$/i, "$1-thumb$2")
 
@@ -8,6 +9,8 @@ export type ThoughtPreviewItem = {
   date: string
   excerpt: string
   image?: string
+  images?: { src: string; alt: string }[]
+  imageCount?: number
 }
 
 function formatDate(dateStr: string) {
@@ -40,7 +43,13 @@ export function ThoughtPreview({
 
       {items.length > 0 ? (
         <div className="space-y-3">
-          {items.map((thought) => (
+          {items.map((thought) => {
+            const images = thought.images?.length
+              ? thought.images
+              : thought.image
+                ? [{ src: thought.image, alt: "" }]
+                : []
+            return (
             <a
               key={thought.slug}
               href={`/thoughts/#thought-${thought.slug}`}
@@ -54,10 +63,47 @@ export function ThoughtPreview({
                 </div>
                 {thought.title ? <div className="mt-1 line-clamp-1 text-xs font-medium text-foreground">{thought.title}</div> : null}
                 <div className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-3 whitespace-pre-line">{thought.excerpt}</div>
-                {thought.image ? <img src={thumbnailImageSrc(thought.image)} alt="" loading="lazy" className="mt-2 h-16 w-16 rounded-lg object-cover" /> : null}
+                {images.length === 1 ? (
+                  <img
+                    src={thumbnailImageSrc(images[0].src)}
+                    alt={images[0].alt || ""}
+                    loading="lazy"
+                    className="mt-2 h-16 w-16 rounded-lg object-cover"
+                  />
+                ) : images.length > 1 ? (
+                  <div
+                    className={cn(
+                      "mt-2 grid w-32 gap-1 overflow-hidden rounded-lg",
+                      images.length <= 4 ? "grid-cols-2" : "grid-cols-3",
+                    )}
+                  >
+                    {images.map((image, index) => (
+                      <div
+                        key={`${image.src}-${index}`}
+                        className={cn(
+                          "relative overflow-hidden bg-muted",
+                          images.length === 3 && index === 0 ? "col-span-2 aspect-[2/1]" : "aspect-square",
+                        )}
+                      >
+                        <img
+                          src={thumbnailImageSrc(image.src)}
+                          alt={image.alt || ""}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                        {index === 8 && (thought.imageCount ?? images.length) > 9 ? (
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-lg font-semibold text-white">
+                            +{(thought.imageCount ?? images.length) - 9}
+                          </span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </a>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <div className="text-sm text-muted-foreground">暂无闪念</div>

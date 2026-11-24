@@ -26,6 +26,7 @@ export type ArticleMeta = {
   wordCount?: number
   readTime?: string
   image?: string
+  images?: string[]
   pinned?: boolean
 }
 

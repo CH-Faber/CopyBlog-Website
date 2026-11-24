@@ -20,6 +20,32 @@ const formatDate = (date?: Date) => {
   return date.toISOString().slice(0, 10)
 }
 
+const IMAGE_MARKDOWN_RE = /!\[[^\]]*\]\(\s*<?([^\s)>]+)>?(?:\s+["'][^"']*["'])?\s*\)/g
+const IMAGE_HTML_RE = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi
+const MAX_CARD_IMAGES = 9
+
+// Cards preview up to nine images: with a real multi-image body the gallery order wins,
+// otherwise the cover (if any) is the single thumbnail.
+const collectPostImages = (post: PostEntry): string[] => {
+  const cover = (post.data.image ?? "").trim()
+  const rawBody = typeof post.body === "string" ? post.body : String(post.body || "")
+  const body = rawBody.replace(/```[\s\S]*?```/g, "")
+  const bodyImages: string[] = []
+  for (const match of body.matchAll(IMAGE_MARKDOWN_RE)) bodyImages.push(match[1])
+  for (const match of body.matchAll(IMAGE_HTML_RE)) bodyImages.push(match[1])
+
+  // A real gallery in the body wins; otherwise the cover is the single preview.
+  const candidates = bodyImages.length >= 2 ? bodyImages : cover ? [cover] : bodyImages.slice(0, 1)
+  const images: string[] = []
+  for (const candidate of candidates) {
+    const src = candidate.trim()
+    if (!src || images.includes(src)) continue
+    images.push(src)
+    if (images.length >= MAX_CARD_IMAGES) break
+  }
+  return images
+}
+
 export async function getSortedPosts(ignorePinned = false): Promise<PostEntry[]> {
   const allPosts = await getCollection("posts", (post: PostEntry) => {
     return import.meta.env.PROD ? post.data.draft !== true : true
@@ -73,6 +99,7 @@ export const toPostMeta = (post: PostEntry) => {
     wordCount: words,
     readTime: `${minutes} 分钟`,
     image: post.data.image || undefined,
+    images: collectPostImages(post),
     pinned: post.data.pinned ?? false,
   }
 }
